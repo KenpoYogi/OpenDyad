@@ -192,9 +192,9 @@ string(STRIP ${LINK} LINK)
 # -------------------------------------------------------------------------------------------------------------------------------------------
 # Specific set of compilation flag
 
-set (F_O1_AXSSE3 " -O1 -axsse3 -no-fma -qopenmp -fp-model precise ${precision_flag} ${Fortran} ${mumps_flags} ${mpi_flag} ${cppmach} ${cpprel}")
-set (F_O2_AXSSE3 " -O2 -axsse3 -no-fma -qopenmp -fp-model precise ${precision_flag} ${Fortran} ${mumps_flags} ${mpi_flag} ${cppmach} ${cpprel}")
-set (F_O3_AXSSE3 " -O3 -axsse3 -no-fma -qopenmp -fp-model precise ${precision_flag} ${Fortran} ${mumps_flags} ${mpi_flag} ${cppmach} ${cpprel}")
+set (F_O1_AXSSE3 " -O1 -axsse3 -no-fma -qopenmp -fp-model precise ${precision_flag} ${Fortran} ${mumps_flag} ${mumps_inc} ${mpi_flag} ${cppmach} ${cpprel}")
+set (F_O2_AXSSE3 " -O2 -axsse3 -no-fma -qopenmp -fp-model precise ${precision_flag} ${Fortran} ${mumps_flag} ${mumps_inc} ${mpi_flag} ${cppmach} ${cpprel}")
+set (F_O3_AXSSE3 " -O3 -axsse3 -no-fma -qopenmp -fp-model precise ${precision_flag} ${Fortran} ${mumps_flag} ${mumps_inc} ${mpi_flag} ${cppmach} ${cpprel}")
 
 # rad2rad_c.c 
 set (C_BASIC "${cppmach} ${cpprel}" )
