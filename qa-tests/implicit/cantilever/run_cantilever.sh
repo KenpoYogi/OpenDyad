@@ -17,13 +17,21 @@ case $engine in
 esac
 [ -x "$root/exec/$starter" ] || starter=$(basename "$(ls "$root"/exec/starter_linux64* | head -n 1)")
 
+# A release bundle carries the Intel runtime; then only Intel MPI is needed from oneAPI.
+bundle_runtime=$root/extlib/intelOneAPI_runtime/linux64
 case $engine in
     *_impi*)
         if ! mpiexec --version 2>/dev/null | grep -q Intel; then
+            oneapi=${ONEAPI_ROOT:-/opt/intel/oneapi}
             set +u
-            source "${ONEAPI_ROOT:-/opt/intel/oneapi}/setvars.sh" --force >/dev/null
+            if [ -d "$bundle_runtime" ] && [ -f "$oneapi/mpi/latest/env/vars.sh" ]; then
+                source "$oneapi/mpi/latest/env/vars.sh" >/dev/null
+            else
+                source "$oneapi/setvars.sh" --force >/dev/null
+            fi
             set -u
         fi
+        [ -d "$bundle_runtime" ] && export LD_LIBRARY_PATH=$bundle_runtime:${LD_LIBRARY_PATH:-}
         ;;
     *_ompi*)
         ompi=${OPENMPI_ROOT:-/usr/lib64/mpi/gcc/openmpi4}

@@ -20,14 +20,21 @@ With nu = 0 the strip behaves exactly like a beam, so the expected tip
 deflection is P·L³/(3EI) = 1e6 / (3 · 200000 · 10/12) = **2.000 mm**. Shear adds
 0.006 %. The checker also compares nodes at x = 25, 50 and 75 mm.
 
-Results with the Intel 2026.1 builds, on Windows and Linux, at 1 and 2 MPI
-ranks: tip DZ = 1.999808 mm (−0.010 %), relative residual about 1.2e-9.
+Tip DZ = 1.999808 mm (−0.010 %), relative residual about 1.2e-9 to 1.3e-9, at 1
+and 2 MPI ranks, for all three builds:
+- Intel 2026.1 + Intel MPI on Windows
+- Intel 2026.1 + Intel MPI on Linux
+- GCC 16 + OpenMPI 4.1 on Linux
 
 ## Run it
 
-Build first (`build_windows_mumps.bat` or `build_linux_mumps.sh` in the repo
-root). The scripts copy the decks to a scratch folder, run Starter and Engine
-there, and then run the checker.
+Build first, with one of these scripts in the repo root:
+- `build_windows_mumps.bat`
+- `build_linux_mumps.sh` (Intel)
+- `build_linux_gf_mumps.sh` (GNU + OpenMPI)
+
+The run scripts copy the decks to a scratch folder, run Starter and Engine
+there, and then run the checker. They also work from an unzipped release bundle.
 
 ```bat
 qa-tests\implicit\cantilever\run_cantilever.bat [engine] [ranks]

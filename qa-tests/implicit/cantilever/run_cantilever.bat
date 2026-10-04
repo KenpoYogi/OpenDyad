@@ -12,6 +12,10 @@ if not defined OPENRADIOSS_PATH for %%I in ("%here%..\..\..") do set "OPENRADIOS
 set "RAD_CFG_PATH=%OPENRADIOSS_PATH%\hm_cfg_files"
 set "RAD_H3D_PATH=%OPENRADIOSS_PATH%\extlib\h3d\lib\win64"
 set "PATH=%OPENRADIOSS_PATH%\extlib\hm_reader\win64;%PATH%"
+rem A release bundle carries the OpenMP and MKL DLLs; then only Intel MPI is needed from oneAPI.
+set "bundle_runtime="
+if exist "%OPENRADIOSS_PATH%\extlib\intelOneAPI_runtime\win64\libiomp5md.dll" set "bundle_runtime=1"
+if defined bundle_runtime set "PATH=%OPENRADIOSS_PATH%\extlib\intelOneAPI_runtime\win64;%PATH%"
 if not defined KMP_STACKSIZE set "KMP_STACKSIZE=400m"
 if not defined OMP_NUM_THREADS set "OMP_NUM_THREADS=1"
 
@@ -44,6 +48,10 @@ exit /b %ERRORLEVEL%
 rem setvars.bat calls vars.bat by bare name, which fails when this is set.
 set NoDefaultCurrentDirectoryInExePath=
 if not defined ONEAPI_ROOT set "ONEAPI_ROOT=%ProgramFiles(x86)%\Intel\oneAPI"
+if defined bundle_runtime if exist "%ONEAPI_ROOT%\mpi\latest\env\vars.bat" goto :load_mpi
 if not exist "%ONEAPI_ROOT%\setvars.bat" exit /b 0
 call "%ONEAPI_ROOT%\setvars.bat" intel64 >nul 2>&1
+exit /b 0
+:load_mpi
+call "%ONEAPI_ROOT%\mpi\latest\env\vars.bat" >nul 2>&1
 exit /b 0

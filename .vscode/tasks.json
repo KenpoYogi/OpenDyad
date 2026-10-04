@@ -2,11 +2,17 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Windows: build Starter + Engine (Intel MPI, MUMPS)",
-      "detail": "build_windows_mumps.bat; loads oneAPI itself, outputs to exec\\",
+      "label": "Build Starter + Engine (Intel MPI, MUMPS)",
+      "detail": "build_windows_mumps.bat / build_linux_mumps.sh (Linux: open the folder in Remote-WSL); outputs to exec/",
       "type": "process",
-      "command": "cmd.exe",
-      "args": ["/d", "/c", "${workspaceFolder}\\build_windows_mumps.bat"],
+      "windows": {
+        "command": "cmd.exe",
+        "args": ["/d", "/c", "${workspaceFolder}\\build_windows_mumps.bat"]
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["${workspaceFolder}/build_linux_mumps.sh"]
+      },
       "options": { "cwd": "${workspaceFolder}" },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": {
@@ -20,6 +26,47 @@
           "message": 4
         }
       }
+    },
+    {
+      "label": "Linux: build Starter + Engine (GNU + OpenMPI, MUMPS)",
+      "detail": "build_linux_gf_mumps.sh; builds LAPACK, ScaLAPACK and MUMPS first",
+      "type": "process",
+      "command": "bash",
+      "args": ["${workspaceFolder}/build_linux_gf_mumps.sh"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Package release bundle",
+      "detail": "Compiling_tools/script/make_bundle.py; writes bundles/OpenRadioss_<os>.zip",
+      "type": "process",
+      "windows": {
+        "command": "python",
+        "args": ["${workspaceFolder}\\Compiling_tools\\script\\make_bundle.py", "--os", "win64"]
+      },
+      "linux": {
+        "command": "python3",
+        "args": ["${workspaceFolder}/Compiling_tools/script/make_bundle.py", "--os", "linux64"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test implicit cantilever (MUMPS)",
+      "detail": "qa-tests/implicit/cantilever/run_cantilever.*; prints PASS or FAIL",
+      "type": "process",
+      "windows": {
+        "command": "cmd.exe",
+        "args": ["/d", "/c", "${workspaceFolder}\\qa-tests\\implicit\\cantilever\\run_cantilever.bat"]
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["${workspaceFolder}/qa-tests/implicit/cantilever/run_cantilever.sh"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": []
     }
   ]
 }
