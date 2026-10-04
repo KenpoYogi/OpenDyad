@@ -32,6 +32,7 @@ engine/extlib/GraphBLAS/
 .vscode/settings.json
 *.sif
 extlib.zip
+bundles/
 *.F.json
 *.F90.json
 *.cpp.json
