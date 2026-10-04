@@ -1,7 +1,51 @@
+> Vendored from [OpenCourant/Tools](https://github.com/OpenCourant/Tools/tree/4e52942e191d3b1ede4b320fb0f1780f4e41b59a/output_converters/th_to_csv)
+> at commit 4e52942e. That repository carries the history of the deleted
+> OpenRadioss/Tools repository. License: MIT (LICENSE.md).
+
 # th_to_csv
 
-th_to_csv is an external tool to convert OpenRadioss time history files to CSV format.
+anim_to_vtk is an external tool to convert OpenRadioss time history files to csv format
 
-## Source Code repository
+## How to build
 
-Source code has moved to [OpenRadioss/Tools/output_converters/th_to_csv](https://github.com/OpenRadioss/Tools/tree/main/output_converters/th_to_csv) repository
+### Linux
+
+gcc installation is required
+
+Enter the platform directory : linux64
+Apply the build script : ./build.bash
+
+Executable will be copied in [OpenRadioss]/exec directory
+
+### Linux ARM64
+
+gcc installation is required
+
+Enter the platform directory : linuxa64
+Apply the build script : ./build.bash
+
+Executable will be copied in [OpenRadioss]/exec directory
+
+### Windows
+
+Visual Studio Community, Enterprise or Professional Edition installation is required.
+Launch Visual Studio Shell for X86-64 Native tools.
+
+Enter the platform directory : win64
+Apply the build script : ./build.bat
+
+Executable will be copied in [OpenRadioss]/exec directory
+
+## How to use
+
+Launch the converter after the simulation :
+
+        ./th_to_csv [TimeHistory_File]
+
+## Note
+
+To have full variable names in .csv file, add /TH/TITLE in 1.rad file when running engine :
+/TH/TITLE write some _TITLES file that contains additional information allowing to have full titles in writen .csv file
+
+OpenRadioss time history files do not contain any forces curves , but only impulses
+In addition to titles , /TH/TITLE write some information that allows the converter to derivate impulses and write forces
