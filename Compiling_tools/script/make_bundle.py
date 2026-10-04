@@ -39,12 +39,12 @@ EXECUTABLES = {
 }
 # Intel runtime shipped in extlib/intelOneAPI_runtime/<os>, as (oneAPI component, subfolder, patterns).
 # MKL loads its CPU-specific kernels at run time, so they do not show up as imports.
-# On Linux, -static-intel still leaves libirng.so dynamic in the ifx Engine.
+# On Linux, -static-intel still leaves libirng.so dynamic in the ifx Engine; it needs libintlc.so.5.
 RUNTIME = {
     "win64": [("compiler", "bin", ["libiomp5md.dll"]),
               ("mkl", "bin", ["mkl_core.*.dll", "mkl_intel_thread.*.dll", "mkl_def.*.dll",
                               "mkl_mc3.*.dll", "mkl_avx*.dll", "mkl_vml_*.dll"])],
-    "linux64": [("compiler", "lib", ["libirng.so"])],
+    "linux64": [("compiler", "lib", ["libirng.so", "libintlc.so.5"])],
 }
 
 
