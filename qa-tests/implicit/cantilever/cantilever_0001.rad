@@ -1,0 +1,31 @@
+#RADIOSS ENGINE
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+# Implicit linear static, MUMPS direct solver.  One increment from t=0 to TSTOP.
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+/RUN/cantilever/1
+                 1.0
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+#  Linear static (no /IMPL/DYNA -> static; /IMPL/LINEAR -> ILINE=1, one step DT=TSTOP)
+/IMPL/LINEAR
+#  Linear solver 2 = direct MUMPS (internally ISOLV=3 with IMUMPSV=1)
+/IMPL/SOLVER/2
+#    IPREC     L_LIM      ITOL               L_TOL
+         0         0         0                 0.0
+#  Print the direct-solver relative residual ||K.u-F||/||F|| to listing and stdout
+/IMPL/PRINT/LINEAR/-1
+#  MUMPS ICNTL(3)=listing unit, ICNTL(4)=2 (errors, warnings, main statistics)
+/IMPL/MUMPS/MSGLV/2
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+/PRINT/-1
+/TFILE/4
+#             dT_HIS
+                 0.5
+/ANIM/DT
+#             Tstart               Tfreq
+                 0.0                 0.5
+/ANIM/VECT/DISP
+#  ASCII nodal displacement dump (cantilever_000n.sty), first one at t >= Tstart
+/OUTP/DT
+#             Tstart               Tfreq
+                 0.5                 0.5
+/OUTP/VECT/DISP
