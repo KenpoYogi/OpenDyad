@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Windows: build Starter + Engine (Intel MPI, MUMPS)",
+      "detail": "build_windows_mumps.bat; loads oneAPI itself, outputs to exec\\",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": ["/d", "/c", "${workspaceFolder}\\build_windows_mumps.bat"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": {
+        "owner": "ifx",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.*)\\((\\d+)\\):\\s+(error|warning)\\s+#\\d+:\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    }
+  ]
+}
