@@ -1,0 +1,414 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_anim_ply_init   ../starter/source/spmd/spmd_anim_ply_init.F
+!||--- called by ------------------------------------------------------
+!||    lectur               ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod          ../starter/share/modules1/plyxfem_mod.F
+!||    stack_mod            ../starter/share/modules1/stack_mod.F
+!||====================================================================
+      SUBROUTINE SPMD_ANIM_PLY_INIT (IGEO, GEO  ,IPARG  ,IXC  ,IXTG ,
+     .                          IPARTC,IPARTQ,IPARTTG,STACK)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE PLYXFEM_MOD
+      USE STACK_MOD
+      use element_mod , only : nixc,nixtg
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+C     REAL
+      my_real
+     .  GEO(NPROPG,*)
+      INTEGER IXC(NIXC,*),IPARTQ(*),IPARTTG(*),IXTG(NIXTG,*),
+     .        IPARG(NPARG,*), IPARTC(*),IGEO(NPROPGI,*)
+C     
+      TYPE (STACK_PLY) :: STACK
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      LOGICAL :: COMPUTATION_NEEDED
+      INTEGER IE,NG, ITY, LFT, LLT, NPT, N, I,
+     .        IPRT, NEL, IAD, NFT,MTN,
+     .         K, IHBE,ISHPLYXFEM,IPID,IPT,
+     .        IPLY,IPPID,JPID,
+     .        NCOUNT,SHCOUNT,MATER(NPART),ISUBSTACK
+      INTEGER, DIMENSION(:), ALLOCATABLE :: TAG_ARRAY,TAG_SHELLS
+
+C-----------------------------------------------
+      call my_alloc(TAG_ARRAY, NUMNOD, "TAG_ARRAY")
+      call my_alloc(TAG_SHELLS, NUMELC, "TAG_SHELLS")
+      DO I=1,NPART
+        MATER(I)=0
+      ENDDO
+
+      COMPUTATION_NEEDED = .FALSE.
+      DO NG = 1, NGROUP
+          NEL   =IPARG(2,NG)
+          NFT   =IPARG(3,NG)
+          ITY   =IPARG(5,NG)
+          IF(ITY==2)THEN
+            DO I = 1, NEL
+              N = I + NFT
+              MATER(IPARTQ(N)) = 1
+            ENDDO
+          ELSEIF(ITY==3)THEN
+            DO I = 1, NEL
+              N = I + NFT
+              MATER(IPARTC(N)) = 1
+            ENDDO
+          ELSEIF(ITY==7)THEN
+            DO I = 1, NEL
+              N = I + NFT
+              MATER(IPARTTG(N)) = 1
+            ENDDO
+          ENDIF
+          ISHPLYXFEM = IPARG(50,NG)
+          IF(ISHPLYXFEM/=0) COMPUTATION_NEEDED = .TRUE.
+      ENDDO
+
+c
+
+C     INITIALISATION
+
+      allocate(PLYNOD(NPLYMAX))
+
+      DO I=1,NPLYMAX
+        PLYNOD(I)%PLYNUMNODS = 0
+      ENDDO
+
+      allocate(PLYSHELL(NPLYMAX))
+      DO I=1,NPLYMAX
+        PLYSHELL(I)%PLYNUMSHELL = 0
+      ENDDO
+C-----------------------------------------------
+C     NORMALE
+C-----------------------------------------------
+      IE = 0
+C-----------------------------------------------
+      IPPID = 100
+C-----------------------------------------------
+C     PART
+C----------------------------------------------- 
+      call my_alloc(IDPID_PLY, NPLYMAX, "IDPID_PLY")
+      IDPID_PLY= 0
+      IF(COMPUTATION_NEEDED) THEN
+        DO K=1,NPLYMAX
+          TAG_ARRAY=0
+          TAG_SHELLS=0
+          SHCOUNT=0
+          DO 500 IPRT=1,NPART
+            IF(MATER(IPRT) == 0)GOTO 500
+            DO 490 NG=1,NGROUP
+               MTN   =IPARG(1,NG)
+               NEL   =IPARG(2,NG)
+               NFT   =IPARG(3,NG)
+               IAD   =IPARG(4,NG)
+               ITY   =IPARG(5,NG)
+               ISHPLYXFEM = IPARG(50,NG)
+               LFT=1
+               LLT=NEL
+
+               IF(ISHPLYXFEM > 0) THEN
+C-----------------------------------------------
+C       COQUES
+C-----------------------------------------------
+                 IF(ITY==3)THEN
+                   NPT   =IPARG(6,NG)
+                   IHBE = IPARG(23,NG)
+                   ISUBSTACK = IPARG(71,NG)
+                   IPPID = 2
+                   DO 130 I=LFT,LLT
+                     N = I + NFT
+                     IF(IPARTC(N)/=IPRT)GOTO 130
+                      IPID = IXC(6,N)
+                      DO IPT=1,NPT
+                        JPID = STACK%IGEO(IPPID + IPT, ISUBSTACK)
+                        IPLY = IGEO(102  ,JPID)
+                        IDPID_PLY(IPLY) =IGEO(1  ,JPID) 
+                        IF (IPLY == K) THEN
+                           TAG_ARRAY(IXC(2,N))=1
+                           TAG_ARRAY(IXC(3,N))=1
+                           TAG_ARRAY(IXC(4,N))=1
+                           TAG_ARRAY(IXC(5,N))=1
+
+                           TAG_SHELLS(N) = IPT
+                           PLYSHELL(K)%PLYNUMSHELL = PLYSHELL(K)%PLYNUMSHELL+1
+                        ENDIF
+
+                      ENDDO
+130                CONTINUE
+
+C-----------------------------------------------
+C       COQUES 3 NOEUDS
+C-----------------------------------------------
+                 ELSEIF(ITY==7)THEN
+C
+                 ENDIF
+               ENDIF
+ 490      CONTINUE
+C
+ 500    CONTINUE
+C
+C Ply Nodes Post treatments
+C
+          DO I=1,NUMNOD
+             IF (TAG_ARRAY(I)==1) PLYNOD(K)%PLYNUMNODS = PLYNOD(K)%PLYNUMNODS + 1
+          ENDDO
+          call my_alloc(PLYNOD(K)%NODES, PLYNOD(K)%PLYNUMNODS, "PLYNOD(K)%NODES")
+
+          NCOUNT = 0
+          DO I=1,NUMNOD
+             IF (TAG_ARRAY(I)==1) THEN
+               NCOUNT=NCOUNT+1
+               PLYNOD(K)%NODES(NCOUNT)=I
+             ENDIF
+          ENDDO
+C
+C Ply Shells Post treatments
+C
+          call my_alloc(PLYSHELL(K)%SHID, PLYSHELL(K)%PLYNUMSHELL, "PLYSHELL(K)%SHID")
+          call my_alloc(PLYSHELL(K)%SHELLIPT, PLYSHELL(K)%PLYNUMSHELL, "PLYSHELL(K)%SHELLIPT")
+
+C debugs    print*,'PLYSHELL : ',PLYSHELL(K)%plynumshell,NUMELC
+
+          SHCOUNT=0
+          DO I=1, NUMELC
+             IF (TAG_SHELLS(I) > 0)THEN
+                 SHCOUNT=SHCOUNT+1
+                 PLYSHELL(K)%SHID(SHCOUNT)=I
+                 PLYSHELL(K)%SHELLIPT(SHCOUNT)=TAG_SHELLS(I)
+             ENDIF
+          ENDDO
+        ENDDO
+
+      ELSE
+        DO K=1,NPLYMAX
+          call my_alloc(PLYNOD(K)%NODES, PLYNOD(K)%PLYNUMNODS, "PLYNOD(K)%NODES")
+          call my_alloc(PLYSHELL(K)%SHID, PLYSHELL(K)%PLYNUMSHELL, "PLYSHELL(K)%SHID")
+          call my_alloc(PLYSHELL(K)%SHELLIPT, PLYSHELL(K)%PLYNUMSHELL, "PLYSHELL(K)%SHELLIPT")
+        ENDDO
+      ENDIF
+C-------------------------------
+C Numeros globaux des shell ply
+C-------------------------------
+      NCOUNT = 0
+      DO K=1,NPLYMAX
+        call my_alloc(PLYSHELL(K)%SHELLID, PLYSHELL(K)%PLYNUMSHELL, "PLYSHELL(K)%SHELLID")
+        DO I=1,PLYSHELL(K)%PLYNUMSHELL
+           NCOUNT=NCOUNT+1
+           PLYSHELL(K)%SHELLID(I)=NCOUNT
+        ENDDO
+      ENDDO
+
+C-------------------------------
+C Global numbers of the ply nodes
+C-------------------------------
+      NCOUNT = 0
+      DO K=1,NPLYMAX
+        call my_alloc(PLYNOD(K)%PLYNODID, PLYNOD(K)%PLYNUMNODS, "PLYNOD(K)%PLYNODID")
+        DO I=1,PLYNOD(K)%PLYNUMNODS
+           NCOUNT=NCOUNT+1
+           PLYNOD(K)%PLYNODID(I)=NCOUNT
+        ENDDO
+      ENDDO
+
+C-------------------------------
+C Plyparts
+C-------------------------------
+      call my_alloc(INDX_PLY, NPLYMAX, "INDX_PLY")
+      NPLYPART = 0
+      INDX_PLY = 0
+      DO K=1,NPLYMAX
+        IF ( PLYSHELL(K)%PLYNUMSHELL >0) THEN
+          NPLYPART = NPLYPART + 1
+          INDX_PLY(NPLYPART) = K
+          IDPID_PLY(NPLYPART) = IDPID_PLY(K)
+        ENDIF
+      ENDDO
+
+      NPLYNODG = 0
+      DO K=1,NPLYMAX
+        NPLYNODG = NPLYNODG + PLYNOD(K)%PLYNUMNODS
+      ENDDO
+
+      CALL MY_DEALLOC(TAG_ARRAY)
+      CALL MY_DEALLOC(TAG_SHELLS)
+
+
+      RETURN
+      END
+!||====================================================================
+!||    get_ply_nod   ../starter/source/spmd/spmd_anim_ply_init.F
+!||--- called by ------------------------------------------------------
+!||    w_anim_ply    ../starter/source/restart/ddsplit/w_anim_ply.F
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod   ../starter/share/modules1/plyxfem_mod.F
+!||====================================================================
+      INTEGER FUNCTION GET_PLY_NOD(IPLY,NODID)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE PLYXFEM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPLY,NODID
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER I,BINF,BSUP,MILIEU,SIZE,EMPL,TAILLE
+C-----------------------------------------------
+      SIZE=PLYNOD(IPLY)%PLYNUMNODS
+
+      BINF=1
+      EMPL = - HUGE(EMPL)
+      BSUP=SIZE
+
+      IF (PLYNOD(IPLY)%NODES(BINF)==NODID)THEN
+        EMPL=BINF
+        GOTO 100
+      ENDIF
+
+      IF (PLYNOD(IPLY)%NODES(BSUP)==NODID)THEN
+        EMPL=BSUP
+        GOTO 100
+      ENDIF
+
+      TAILLE = BSUP-BINF+1
+      DO WHILE ( TAILLE > 5)
+         MILIEU = (BSUP-BINF)/2 + BINF
+
+         IF (PLYNOD(IPLY)%NODES(MILIEU) == NODID) THEN
+           EMPL = MILIEU
+           GOTO 100
+         ENDIF
+         IF ( PLYNOD(IPLY)%NODES(MILIEU) < NODID) THEN
+           BINF = MILIEU
+         ELSE
+           BSUP = MILIEU
+         ENDIF
+         TAILLE = BSUP-BINF+1
+      ENDDO
+
+      DO I=BINF,BSUP
+        IF  (PLYNOD(IPLY)%NODES(I) == NODID) THEN
+           EMPL = I
+           GOTO 100
+        ENDIF
+      ENDDO
+
+ 100  CONTINUE
+
+      GET_PLY_NOD = EMPL
+
+      RETURN
+      END
+
+
+!||====================================================================
+!||    get_ply_nodid   ../starter/source/spmd/spmd_anim_ply_init.F
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod     ../starter/share/modules1/plyxfem_mod.F
+!||====================================================================
+      INTEGER FUNCTION GET_PLY_NODID(IPLY,NODID,OFFSET)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE PLYXFEM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPLY,NODID,OFFSET
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER I,BINF,BSUP,MILIEU,SIZE,EMPL,TAILLE
+C-----------------------------------------------
+      SIZE=PLYNOD(IPLY)%PLYNUMNODS
+
+      BINF=1
+      BSUP=SIZE
+
+      IF (PLYNOD(IPLY)%NODES(BINF)==NODID)THEN
+        EMPL=BINF
+        GOTO 100
+      ENDIF
+
+      IF (PLYNOD(IPLY)%NODES(BSUP)==NODID)THEN
+        EMPL=BSUP
+        GOTO 100
+      ENDIF
+
+      TAILLE = BSUP-BINF+1
+      DO WHILE ( TAILLE > 5)
+         MILIEU = (BSUP-BINF)/2 + BINF
+
+         IF (PLYNOD(IPLY)%NODES(MILIEU) == NODID) THEN
+           EMPL = MILIEU
+           GOTO 100
+         ENDIF
+         IF ( PLYNOD(IPLY)%NODES(MILIEU) < NODID) THEN
+           BINF = MILIEU
+         ELSE
+           BSUP = MILIEU
+         ENDIF
+         TAILLE = BSUP-BINF+1
+      ENDDO
+
+      DO I=BINF,BSUP
+        IF  (PLYNOD(IPLY)%NODES(I) == NODID) THEN
+           EMPL = I
+           GOTO 100
+        ENDIF
+      ENDDO
+
+ 100  CONTINUE
+
+      GET_PLY_NODID = PLYNOD(IPLY)%PLYNODID(EMPL)+OFFSET
+
+      RETURN
+      END

@@ -1,0 +1,291 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    fxbypid           ../engine/source/constraints/fxbody/fxbypid.F
+!||--- called by ------------------------------------------------------
+!||    resol             ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_chkw         ../engine/source/mpi/generic/spmd_chkw.F
+!||    spmd_glob_isum9   ../engine/source/mpi/interfaces/spmd_th.F
+!||    spmd_ibcast       ../engine/source/mpi/generic/spmd_ibcast.F
+!||    spmd_wiout        ../engine/source/mpi/generic/spmd_wiout.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod      ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod       ../common_source/modules/elements/element_mod.F90
+!||    output_mod        ../common_source/modules/output/output_mod.F90
+!||====================================================================
+      SUBROUTINE FXBYPID(OUTPUT,IPARG ,         IXS   , IXQ   , IXC       ,
+     .                   IXT   , IXP   , IXR   , IXTG  , FXBIPM    , 
+     .                   FXBNOD, ONOF  , ITAG  , ONFELT, ELBUF_STR )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD            
+      USE OUTPUT_MOD
+      use element_mod , only : nixs,nixq,nixc,nixt,nixp,nixr,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "units_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(OUTPUT_), INTENT(INOUT) :: OUTPUT
+      INTEGER IPARG(NPARG,*),IXS(NIXS,*), IXQ(NIXQ,*),IXC(NIXC,*), 
+     .        IXT(NIXT,*),IXP(NIXP,*),IXR(NIXR,*),IXTG(NIXTG,*),
+     .        FXBIPM(*),FXBNOD(*),ONOF,ITAG(*),ONFELT
+      TYPE(ELBUF_STRUCT_),TARGET ,DIMENSION(NGROUP)     :: ELBUF_STR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      
+      INTEGER NSN,NG,MLW,ITY,NEL,NFT,IAD,I,II,NALL,IGOF,IWIOUT
+      my_real,
+     .    DIMENSION(:), POINTER :: OFFG
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+C
+      IF (ISPMD == 0) WRITE(IOUT,*) ' BEGINNING FXBYPID'
+      IF (ONOF == 0) THEN
+C-----------------------
+C Flexible body de-activation (to be done)
+C-----------------------
+      ELSEIF (ONOF == 1) THEN
+C-----------------------
+C Flexible body activation
+C-----------------------
+      ENDIF
+C      
+      IF(ONFELT == 0.OR.ONFELT == 1)THEN
+      NSN=FXBIPM(3)
+C-----------------------
+C Tag secondary nodes
+C-----------------------
+      DO I=1,NUMNOD
+       ITAG(I)=0
+      ENDDO
+      DO I=1,NSN
+       ITAG(FXBNOD(I))=1
+      ENDDO
+C-----------------------
+C Change OFF to -OFF
+C-----------------------
+      DO NG=1,NGROUP
+       MLW=IPARG(1,NG)
+       ITY=IPARG(5,NG)
+       NEL=IPARG(2,NG)
+       NFT=IPARG(3,NG)
+       IAD=IPARG(4,NG) - 1
+C-----------------------
+C     1. Solid elements
+C-----------------------
+       IF (ITY == 1 .AND. MLW /= 0) THEN       ! loi0, no off
+         OFFG => ELBUF_STR(NG)%GBUF%OFF
+        DO I=1,NEL
+         II=I+NFT
+         NALL = ITAG(IXS(2,II)) * ITAG(IXS(3,II)) *
+     +          ITAG(IXS(4,II)) * ITAG(IXS(5,II)) *
+     +          ITAG(IXS(6,II)) * ITAG(IXS(7,II)) *
+     +          ITAG(IXS(8,II)) * ITAG(IXS(9,II)) 
+          IF(NALL /= 0)THEN
+            IF(ONFELT == 1)THEN
+             OFFG(I)= ABS(OFFG(I))
+             WRITE(IOUT,*)' BRICK ACTIVATION:',IXS(11,II)
+            ELSEIF(ONFELT == 0)THEN
+             OFFG(I) = -ABS(OFFG(I))
+             WRITE(IOUT,*)' BRICK DEACTIVATION:',IXS(11,II)
+           ENDIF
+         ENDIF
+        ENDDO
+C----------------------------------------
+C Test group elimination
+C----------------------------------------
+        IGOF = 1
+        DO I = 1,NEL
+          IF (OFFG(I) > ZERO) IGOF=0
+        ENDDO
+        IPARG(8,NG) = IGOF
+C-------------------------------
+C     3. 4-nodes shell elements
+C-------------------------------
+       ELSEIF(ITY == 3 .and. MLW /= 0)THEN       ! loi0, no off
+         OFFG => ELBUF_STR(NG)%GBUF%OFF
+         DO I=1,NEL
+          II=I+NFT
+          NALL = ITAG(IXC(2,II)) * ITAG(IXC(3,II)) *
+     +           ITAG(IXC(4,II)) * ITAG(IXC(5,II)) 
+           IF (NALL /= 0) THEN
+             IF (ONFELT == 1) THEN
+               OFFG(I) = ABS(OFFG(I))
+              WRITE(IOUT,*)' SHELL ACTIVATION:',IXC(7,II)
+             ELSEIF (ONFELT == 0) THEN
+               OFFG(I) = -ABS(OFFG(I))
+              WRITE(IOUT,*)' SHELL DEACTIVATION:',IXC(7,II)
+            ENDIF
+          ENDIF
+         ENDDO
+C----------------------------------------
+C Test group elimination
+C----------------------------------------
+        IGOF = 1
+        DO I = 1,NEL
+          IF (OFFG(I) > ZERO) IGOF=0
+        ENDDO
+        IPARG(8,NG) = IGOF
+C-----------------------
+C     4. Truss elements
+C-----------------------
+       ELSEIF(ITY == 4)THEN
+        OFFG => ELBUF_STR(NG)%GBUF%OFF
+        DO I=1,NEL
+         II=I+NFT
+         NALL = ITAG(IXT(2,II)) * ITAG(IXT(3,II)) 
+         IF(NALL /= 0)THEN
+           IF(ONFELT == 1)THEN
+             OFFG(I) = ONE
+             WRITE(IOUT,*)' TRUSS ACTIVATION:',IXT(5,II)
+           ELSEIF(ONFELT == 0)THEN
+             OFFG(I) = ZERO
+             WRITE(IOUT,*)' TRUSS DEACTIVATION:',IXT(5,II)
+           ENDIF
+         ENDIF
+        ENDDO
+C----------------------------------------
+C Test group elimination
+C----------------------------------------
+        IGOF = 1
+        DO I = 1,NEL
+          IF (OFFG(I) /= ZERO) IGOF=0
+        ENDDO
+        IPARG(8,NG) = IGOF
+C-----------------------
+C     5. Beam elements
+C-----------------------
+       ELSEIF(ITY == 5)THEN
+        OFFG => ELBUF_STR(NG)%GBUF%OFF
+        DO I=1,NEL
+         II=I+NFT
+         NALL = ITAG(IXP(2,II)) * ITAG(IXP(3,II)) 
+         IF(NALL /= 0)THEN
+           IF(ONFELT == 1)THEN
+             OFFG(I)= ABS(OFFG(I))
+             WRITE(IOUT,*)' BEAM ACTIVATION:',IXP(6,II)
+           ELSEIF(ONFELT == 0)THEN
+             OFFG(I)= -ABS(OFFG(I))
+             WRITE(IOUT,*)' BEAM DEACTIVATION:',IXP(6,II)
+           ENDIF
+         ENDIF
+        ENDDO
+C----------------------------------------
+C Test group elimination
+C----------------------------------------
+        IGOF = 1
+        DO I = 1,NEL
+         IF(OFFG(I)>ZERO) IGOF=0
+        ENDDO
+        IPARG(8,NG) = IGOF
+C-----------------------
+C     6. Spring elements
+C-----------------------
+       ELSEIF(ITY == 6.AND.MLW /= 3)THEN
+        OFFG => ELBUF_STR(NG)%GBUF%OFF
+        DO I=1,NEL
+         II=I+NFT
+         NALL = ITAG(IXR(2,II)) * ITAG(IXR(3,II)) 
+         IF(NALL /= 0)THEN
+           IF(ONFELT == 1)THEN
+             OFFG(I)= ONE
+             WRITE(IOUT,*)' SPRING ACTIVATION:',IXR(NIXR,II)
+           ELSEIF(ONFELT == 0)THEN
+             OFFG(I)= ZERO
+             WRITE(IOUT,*)' SPRING DEACTIVATION:',IXR(NIXR,II)
+           ENDIF
+         ENDIF
+        ENDDO
+C----------------------------------------
+C Test group elimination
+C----------------------------------------
+        IGOF = 1
+        DO I = 1,NEL
+         IF(OFFG(I) /= ZERO) IGOF=0
+        ENDDO
+        IPARG(8,NG) = IGOF
+C------------------------------
+C     7. 3-nodes shell elements
+C------------------------------
+       ELSEIF(ITY == 7 .and. MLW /= 0)THEN       ! law0, no off
+         OFFG => ELBUF_STR(NG)%GBUF%OFF
+         DO I=1,NEL
+          II=I+NFT
+          NALL = ITAG(IXTG(2,II)) * ITAG(IXTG(3,II)) *
+     +           ITAG(IXTG(4,II))
+           IF(NALL /= 0)THEN
+             IF (ONFELT == 1) THEN
+               OFFG(I) = ABS(OFFG(I))
+              WRITE(IOUT,*)' SH_3N ACTIVATION:',IXTG(6,II)
+             ELSEIF (ONFELT == 0) THEN
+               OFFG(I) = -ABS(OFFG(I))
+              WRITE(IOUT,*)' SH_3N DEACTIVATION:',IXTG(6,II)
+            ENDIF
+          ENDIF
+         ENDDO
+C----------------------------------------
+C Test group elimination
+C----------------------------------------
+        IGOF = 1
+        DO I = 1,NEL
+          IF (OFFG(I) > ZERO) IGOF=0
+        ENDDO
+        IPARG(8,NG) = IGOF
+C----------------------------------------
+       ENDIF
+      ENDDO
+      IF(NSPMD>1) THEN
+C
+C Recovery of active or de-activated elements in the right order
+        IWIOUT = 0
+        IF (ISPMD /= 0) CALL SPMD_CHKW(IWIOUT,IOUT)
+        CALL SPMD_GLOB_ISUM9(IWIOUT,1)
+        CALL SPMD_IBCAST(IWIOUT,IWIOUT,1,1,0,2)
+        IF (IWIOUT>0) THEN
+          CALL SPMD_WIOUT(IOUT,IWIOUT)
+          IWIOUT = 0
+        ENDIF
+      ENDIF
+C
+      ENDIF
+      IF (ISPMD == 0) WRITE(IOUT,*) ' END FXBYPID'
+c-----------
+      RETURN
+      END SUBROUTINE FXBYPID
+                  

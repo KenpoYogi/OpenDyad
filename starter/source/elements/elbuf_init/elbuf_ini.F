@@ -1,0 +1,2592 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    elbuf_ini          ../starter/source/elements/elbuf_init/elbuf_ini.F
+!||--- called by ------------------------------------------------------
+!||    lectur             ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    allocbuf_auto      ../starter/source/elements/elbuf_init/allocbuf_auto.F
+!||    ini_outmax_auto    ../starter/source/elements/elbuf_init/ini_outmax_auto.F
+!||    initvars_auto      ../starter/source/elements/elbuf_init/initvars_auto.F
+!||    zerovars_auto      ../starter/source/elements/elbuf_init/zerovars_auto.F
+!||--- uses       -----------------------------------------------------
+!||    defaults_mod       ../starter/source/modules/defaults_mod.F90
+!||    elbuftag_mod       ../starter/share/modules1/elbuftag_mod.F
+!||    message_mod        ../starter/share/message_module/message_mod.F
+!||    stack_mod          ../starter/share/modules1/stack_mod.F
+!||====================================================================
+      SUBROUTINE ELBUF_INI(ELBUF_TAB ,MAT_PARAM,
+     .           MLAW_TAG  ,PROP_TAG ,FAIL_TAG ,
+     .           IGEO      ,IPM      ,IPARG    ,IPART     ,
+     .           IPARTSP   ,IXS      ,IXQ      ,IXC      ,IXTG      ,
+     .           FLAG_XFEM ,IPARTIG3D,STACK    ,IGEO_STACK,
+     .           IXT       ,IXP      ,IXR      ,KXX      ,GEO       ,
+     .           EOS_TAG   ,ISTR_24  ,PRINT_FLAG,DEFAULTS)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE MAT_ELEM_MOD            
+      USE ELBUFTAG_MOD            
+      USE MESSAGE_MOD       
+      USE STACK_MOD
+      USE DEFAULTS_MOD
+      use element_mod , only : nixs,nixq,nixc,nixt,nixp,nixr,nixtg
+      USE Q1NP_RESTART_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "units_c.inc"
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com_xfem1.inc"
+#include      "scr17_c.inc"
+#include      "scr23_c.inc"
+#include      "sphcom.inc"
+#include      "tablen_c.inc"
+#include      "sms_c.inc"
+#include      "boltpr_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER , INTENT(IN) :: ISTR_24
+      INTEGER IPARG(NPARG,NGROUP),IPART(LIPART1,*),
+     .        IPARTSP(*),IPM(NPROPMI,NUMMAT),IGEO(NPROPGI,NUMGEO),
+     .        IXS(NIXS,NUMELS),IXQ(NIXQ,NUMELQ),IXC(NIXC,NUMELC),IXTG(NIXTG,NUMELTG),
+     .        FLAG_XFEM,IPARTIG3D(*),IGEO_STACK(NPROPGI,*),
+     .        IXT(NIXT,NUMELT),IXP(NIXP,NUMELP),IXR(NIXR,NUMELR),KXX(NIXX,*)
+      my_real :: GEO(NPROPG,NUMGEO)
+      INTEGER, INTENT(IN) :: PRINT_FLAG !< flag to print the element group data
+      TYPE(ELBUF_STRUCT_),TARGET ,DIMENSION(NGROUP)     :: ELBUF_TAB
+      TYPE(MATPARAM_STRUCT_) ,DIMENSION(NUMMAT) ,INTENT(IN) :: MAT_PARAM
+      TYPE(MLAW_TAG_)    ,TARGET ,DIMENSION(NUMMAT)     :: MLAW_TAG
+      TYPE(EOS_TAG_)     ,TARGET ,DIMENSION(0:MAXEOS)   :: EOS_TAG
+      TYPE(PROP_TAG_)    ,TARGET ,DIMENSION(0:MAXPROP)  :: PROP_TAG
+      TYPE(FAIL_TAG_)    ,TARGET ,DIMENSION(NUMMAT,MAXFAIL) :: FAIL_TAG
+      TYPE (STACK_PLY) :: STACK
+      TYPE(DEFAULTS_), INTENT(INOUT) :: DEFAULTS
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I,J,IL,IR,IS,IT,NG,BUFLEN,IRUPT,IPID,IMID,IPRT,IAD,
+     .   NEL,NPT,NPG,MLW,MX,ISORTH,ISRATE,ISROT,IREP,ISVIS,NLAY,
+     .   ISTRA,IFAIL,NFAIL,IEOS,IXFEM,NPTR,NPTS,NPTT,ISHPLYXFEM,
+     .   NFT,NFT0,KFTS,ITY,JALE,OFF,ISMSTR,ICPRE,NSG,ICNOD,ISNOD,JEUL,
+     .   JTUR,JTHE,JLAG,IRS,IRE,ICSTR,NVC,JMULT,IADM1,IADM2,
+     .   MMAT1,MMAT2,JHBE,JIVF,JPOR,IPLA,PROC,JCLOS,CODCONV,
+     .   IINT,JCVT,ICSEN,ILEV,IEXPAN,IGRE,JSMS,MAXFLAY,IVISC,
+     .   NUVAR,NUVARM,NVARTMP,NVARTMP_EOS,NUVARV,IGTYP,TSHELL,TSH_ORT,
+     .   NPAR_LAY,NPAR_TAB,NPAR_LBUF,NIP_LAY,NINTLAY,LIMAT,
+     .   LIFAIL,LGLOB,LLAY,LLOC,LFAIL,GFAIL,LVISC,LMAT,LPORO,LEOS,NCTRL,
+     .   IEL_Q1NP,II,ISUBSTACK,IPPID,IPIDL,NPT_LAY,LEN_PLAPT,LEN_SIGPT,
+     .   IPMAT,IPMAT_IPLY,NPTTOT,NUVARN,NX,IBOLTP,CRKDIR,INLOC,LNLOC,
+     .   NONL, DEBUG_PRINT,IPINCH,NVAR_EOS,IEOS_TYPE,IDRAPE,LLOC_SLICE,
+     .   IPNPT_LAY,IDFAIL,LNLOCTS,ICONTROL,IDAMP_FREQ_RANGE,
+     .   LDAMP_FREQ_RANGE,NVAR_DAMP_FREQ_RANGE,NPT0,L_EPS  ,L_SIG ,LY_EINT, LY_COUNT,
+     .   IEL, LQ1NP, I_Q1NP_GROUP
+      LOGICAL :: IS_ELEMENT_Q1NP, IS_Q1NP_CHECK
+      my_real :: XI_GP, ETA_GP, ZETA_GP, GP_WEIGHT, GP_WT_CHECK
+      INTEGER, ALLOCATABLE, DIMENSION(:,:) :: TFAIL,FAILID
+      INTEGER, ALLOCATABLE, DIMENSION(:)   :: IMAT,ILAW
+      TYPE(BUF_LAY_)     , POINTER :: BUFLY
+      TYPE(BUF_INTLAY_)  , POINTER :: INTLAY
+      TYPE(G_BUFEL_)     , POINTER :: GBUF
+      TYPE(FAIL_LOC_)    , POINTER :: FLOC
+      TYPE(BUF_NLOC_)    , POINTER :: BUFNL
+      TYPE(BUF_NLOCTS_)  , POINTER :: BUFNLTS
+      TYPE(BUF_INTLOC_)  , POINTER :: ILBUF
+C=======================================================================
+c      Element Buffer Routine (Solid) 
+c------
+c      1) size of the ELBUF array for restart
+c      2) allocation of the ELBUF_TAB structure
+C=======================================================================
+      DEBUG_PRINT = 0
+c      
+      IF(PRINT_FLAG>6) WRITE(IOUT, 1001)
+c
+      DO NG = 1,NGROUP 
+c---      read IPARG
+c
+        MLW     = IPARG(1,NG)     ! material law type
+        NEL     = IPARG(2,NG)                                             
+        NFT     = IPARG(3,NG)                                             
+        ITY     = IPARG(5,NG)   
+        NPT     = IPARG(6,NG)                                       
+        JALE    = IPARG(7,NG)                                       
+        OFF     = IPARG(8,NG)                                       
+        ISMSTR  = IPARG(9,NG)                                       
+        ICPRE   = IPARG(10,NG)
+        NSG     = ICPRE                                             
+        ICNOD   = IPARG(11,NG)                                      
+        JEUL    = ICNOD                                             
+        JTUR    = IPARG(12,NG)                                      
+        JTHE    = IPARG(13,NG)                                      
+        JLAG    = IPARG(14,NG)                                      
+        IRS     = IPARG(15,NG)                                      
+        IRE     = IPARG(16,NG)                                      
+        ICSTR   = IPARG(17,NG)                                      
+        NVC     = IPARG(19,NG)                                      
+        JMULT   = IPARG(20,NG)                                      
+        IADM1   = IPARG(21,NG)                                      
+        IADM2   = IPARG(22,NG)                                      
+        JHBE    = IPARG(23,NG)                                      
+        JIVF    = IPARG(24,NG)                                      
+        MMAT1   = IPARG(25,NG)                                      
+        MMAT2   = IPARG(26,NG)                                      
+        JPOR    = IPARG(27,NG)                                      
+        ISNOD   = IPARG(28,NG)                                      
+        IPLA    = IPARG(29,NG)                                      
+        KFTS    = IPARG(30,NG)                                      
+        NFT0    = IPARG(31,NG)                                      
+        PROC    = IPARG(32,NG)                                      
+        JCLOS   = IPARG(33,NG)                                      
+        CODCONV = IPARG(34,NG)  ! pm(10)                            
+        IREP    = IPARG(35,NG)                                                
+        IINT    = IPARG(36,NG)                                                
+        JCVT    = IPARG(37,NG)                                                
+        IGTYP   = IPARG(38,NG)                                           
+        ICSEN   = IPARG(39,NG)                                              
+        ISRATE  = IPARG(40,NG)                                             
+        ISROT   = IPARG(41,NG) 
+        IF (ISNOD == 10) ISROT = IPARG(74,NG)                                             
+        ISORTH  = IPARG(42,NG)                                             
+        IFAIL   = IPARG(43,NG)                                             
+        ISTRA   = IPARG(44,NG)                                             
+        ILEV    = IPARG(45,NG)                                             
+        NPG     = IPARG(48,NG)                                             
+        IEXPAN  = IPARG(49,NG) 
+        ISHPLYXFEM  = IPARG(50,NG)                                  
+        IGRE    = IPARG(51,NG)                                            
+        JSMS    = IPARG(52,NG)                                            
+        INVOL   = IPARG(53,NG)                                            
+        IXFEM   = IPARG(54,NG)  ! flag XFEM                                                  
+        IEOS    = IPARG(55,NG)                                            
+        NPTR    = IPARG(56,NG)                                      
+        NPTS    = IPARG(57,NG)                                      
+        NPTT    = IPARG(58,NG)                          
+        NLAY    = IPARG(59,NG)                                      
+        ISVIS   = IPARG(60,NG)  ! viscous stress flag                              
+        IVISC   = IPARG(61,NG)  ! /VISC models   flag                              
+        IPID    = IPARG(62,NG)  ! property number
+        NCTRL   = IPARG(75,NG)  ! Control point number , iso-geometric elements   
+        INLOC   = IPARG(78,NG)  ! Flag for non-local regularization
+        ISUBSTACK = IPARG(71,NG)
+        IBOLTP  = IPARG(72,NG)  ! Bolt preloading flag
+        IPINCH    = IPARG(90,NG)  ! Batoz shell pinching flag
+        IDRAPE    = IPARG(92,NG)  ! Drape group shell flag
+        IDAMP_FREQ_RANGE = IPARG(93,NG)  ! Damping frequency range group flag
+        LDAMP_FREQ_RANGE = 6*MIN(1,IDAMP_FREQ_RANGE)
+        IF (NPT == 0) THEN
+          NVAR_DAMP_FREQ_RANGE = (28+16)*MIN(1,IDAMP_FREQ_RANGE)
+        ELSE  
+          NVAR_DAMP_FREQ_RANGE = 21*MIN(1,IDAMP_FREQ_RANGE)
+        ENDIF  
+        I_Q1NP_GROUP = IPARG(94,NG)
+c        
+        NINTLAY = 0
+        NPT0 = NPT
+cc        NXEL    = 0
+c----
+        NPAR_TAB  = 10 ! number of integer parameters at top structure level
+        NPAR_LAY  = 14 ! number of integer parameters at layer level
+        NPAR_LBUF = 2  ! number of integer parameters at LBUF layer
+c----
+c----
+c if xfem, count buffer's length only in the groups with xfem phantom elements  
+cc        IF (ICRACK3D > 0 .AND. IXFEM == 0) CYCLE
+c----
+                                                      
+         IF (DEBUG_PRINT == 1) THEN
+            print*,'**** GROUP,ITY,IGTYP,MLW=',ng,ity,igtyp,mlw
+            print*,'     NPAR_TAB,NPAR_LAY,NPAR_LBUF=',NPAR_TAB,NPAR_LAY,NPAR_LBUF
+         ENDIF
+c
+        BUFLEN = 0                                                              
+        NFAIL  = 0                                     
+        LFAIL  = 0                                  
+        LVISC  = 0                                  
+        LMAT   = 0                                  
+        LPORO  = 0                                  
+        LEOS   = 0                                  
+        LIMAT  = 0  
+        LIFAIL = 0  
+        NUVARN = 0
+        CRKDIR = 0
+        LNLOC  = 0 
+        LNLOCTS= 0      
+        
+        IF (IXFEM == 0 .AND. FLAG_XFEM == 1) CYCLE ! no "XFEM_TAB" buffer for non xfem PARTS
+c
+c=======================================================================
+c
+        IF (ITY == 1 .OR. ITY == 2 .OR. ITY == 51 .OR. ITY == 101) THEN  !
+c
+c         solid, quad & SPH cell elements
+c
+c=======================================================================
+
+          TSHELL  = 0
+          TSH_ORT = 0
+          IF (IGTYP==20 .OR. IGTYP==21 .OR. IGTYP==22 .or. 
+     .        ISNOD == 16) TSHELL = 1
+          IF (IGTYP==21 .OR. IGTYP==22) TSH_ORT = 1
+c
+c---------ELEMENT PROPERTY
+          IF (ITY == 101) THEN
+            NLAY = 1
+          ELSEIF (I_Q1NP_GROUP == 1) THEN
+c           Set Q1NP Gauss scheme parameters for Q1NP elements
+            IF (Q1NP_NP_U_G > 0 .AND. Q1NP_NP_V_G > 0 .AND. Q1NP_NP_T_G > 0) THEN
+              NPTR = Q1NP_NP_U_G
+              NPTS = Q1NP_NP_V_G
+              NPTT = Q1NP_NP_T_G
+            ELSE
+C             Error: Gauss scheme not properly initialized
+              NPTR = 3
+              NPTS = 3
+              NPTT = 2
+            ENDIF
+            NLAY = 1
+          ELSEIF (NPT == 1) THEN
+            NPTR  = 1                           
+            NPTS  = 1                          
+            NPTT  = 1 
+            IF (JMULT > 0) THEN   ! multimateriau 
+              NLAY = 2
+            ELSE     
+              NLAY = 1
+            ENDIF      
+C           Multifluid law
+            IF (MLW == 151) THEN
+               NLAY = IPARG(20, NG)
+            ENDIF
+          ELSEIF (TSHELL == 1) THEN    ! NLAY >= 1
+            NPTS = NPT/100
+            NPTT = MOD(NPT/10,10)
+            NPTR = MOD(NPT,10)
+            IF (JHBE==15) THEN   ! Thick shell HSPH                                                         
+              NLAY = NPT
+              NPTR = 1
+              NPTS = 1
+              NPTT = 1
+            ELSEIF (JHBE == 14) THEN     !  Thick shell H8
+c              plan = (r,s), layers = t    
+c              ICS=ICSIG/100
+c              ICT=MOD(ICSIG/10,10)
+c              ICR=MOD(ICSIG,10)
+              IF (ICSTR == 1) THEN   
+                 NLAY = NPTR
+                 NPTR = NPTS
+                 NPTS = NPTT
+                 NPTT = 1                 
+              ELSEIF (ICSTR == 100) THEN   
+                 NLAY = NPTS
+                 NPTS = NPTR
+                 NPTR = NPTT
+                 NPTT = 1
+              ELSE
+                 NLAY = NPTT
+                 NPTT = 1
+              ENDIF
+              IF (NLAY == 0) THEN
+                IPID = IXS(10,NFT+1)                                                
+                NLAY = IGEO(15,IPID)
+              ENDIF
+            ELSEIF (JHBE==16) THEN   ! Thick shell 16 nodes          
+              NPTR = NPT/100
+              NPTS = MOD(NPT/10,10)
+              NPTT = MOD(NPT,10)
+c              IF (TSH_ORT == 0) THEN
+c                NLAY = NPTT
+c                NPTT = 1
+c              ELSE
+                NLAY = NPTS
+                NPTS = 1
+c              ENDIF
+            ENDIF
+c---------
+          ELSE  ! Solid property
+            NLAY = 1    
+            IF (JHBE == 16 .AND. ISNOD == 20) THEN
+              NPTR = NPT/100
+              NPTS = MOD(NPT/10,10)
+              NPTT = MOD(NPT,10)  
+            ELSEIF (JHBE == 14) THEN
+              NPTS = ABS(NPT)/100         
+              NPTT = MOD(ABS(NPT)/10,10)  
+              NPTR = MOD(ABS(NPT),10)
+            ELSEIF (JHBE == 12) THEN
+              NPTR = 1
+              NPTS = 1
+              NPTT = NPT
+              NPG  = NPT
+            ELSEIF (JHBE == 17) THEN
+              NPTS = 2
+              NPTT = 2
+              NPTR = 2
+            ELSE
+              NPTR = NPT
+              NPTS = 1
+              NPTT = 1
+            ENDIF
+            IF (N2D>0 .AND.(JHBE==17.OR.JHBE==22)) THEN
+              NPTS = 2
+              NPTT = 1
+              NPTR = 2
+              NPG  = NPT
+            END IF
+          ENDIF
+c---------
+c
+          IPARG(56,NG) = NPTR                              
+          IPARG(57,NG) = NPTS                              
+          IPARG(58,NG) = NPTT                              
+          IPARG(59,NG) = NLAY
+          NPT = NPTR*NPTS*NPTT*NLAY
+          IPARG(6,NG)  = NPT
+        
+          MAXFLAY = 7          ! max Nb of failure models per mat
+          CALL MY_ALLOC(TFAIL,NLAY,MAXFLAY,"TFAIL")
+          CALL MY_ALLOC(FAILID,NLAY,MAXFLAY,"FAILID")
+          CALL MY_ALLOC(IMAT,NLAY,"IMAT")
+          CALL MY_ALLOC(ILAW,NLAY,"ILAW")
+          TFAIL(:,:) = 0
+          FAILID(:,:) = 0
+          ILAW(:)  = 0
+          IMAT(:)  = 0
+          IF (ITY == 1) THEN
+            IMID = IXS(1 ,NFT+1)                                                
+            IPID = IXS(10,NFT+1)                                                
+          ELSEIF (ITY == 2) THEN 
+            IMID = IXQ(1,NFT+1)                                                
+            IPID = IXQ(6,NFT+1)                                                
+          ELSEIF (ITY == 51) THEN
+            IPRT = IPARTSP(NFT+1)
+            IMID = IPART(1,IPRT)                                            
+            IPID = IPART(2,IPRT)
+          ELSEIF (ITY == 101) THEN
+            IPRT = IPARTIG3D(NFT+1)
+            IMID = IPART(1,IPRT)                                            
+            IPID = IPART(2,IPRT)                                         
+          ENDIF
+c----------------------------------------------------
+c       allocation of element buffer sub-structures 
+c----------------------------------------------------
+          call my_alloc(ELBUF_TAB(NG)%INTLAY, NINTLAY, "ELBUF_TAB(NG)%INTLAY")
+          call my_alloc(ELBUF_TAB(NG)%BUFLY, NLAY, "ELBUF_TAB(NG)%BUFLY")
+          DO IL = 1, NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+            BUFLY%NPTT = NPTT
+            ALLOCATE(BUFLY%LBUF(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%MAT(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%FAIL(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%PROP(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%EOS(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%VISC(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%PORO(NPTR, NPTS, NPTT))
+            
+C           Q1NP buffer allocation (only for Q1NP groups)
+            IF (I_Q1NP_GROUP==1) THEN
+              ALLOCATE(BUFLY%Q1NP(NPTR,NPTS,NPTT))
+            ELSE
+              ALLOCATE(BUFLY%Q1NP(0,0,0))  ! Empty allocation for non-Q1NP groups
+            ENDIF
+            
+          ENDDO
+c          ALLOCATE (ELBUF_TAB(NG)%XFEM(NPTR,NPTS,NPTT) ,STAT=Stat)   
+          ELBUF_TAB(NG)%IGTYP = IGTYP                       
+          ELBUF_TAB(NG)%NEL   = NEL                                          
+          ELBUF_TAB(NG)%NLAY  = NLAY                        
+          ELBUF_TAB(NG)%NINTLAY= NINTLAY                        
+          ELBUF_TAB(NG)%NPTR  = NPTR                         
+          ELBUF_TAB(NG)%NPTS  = NPTS                         
+          ELBUF_TAB(NG)%NPTT  = NPTT                         
+          ELBUF_TAB(NG)%IXFEM = IXFEM
+          ELBUF_TAB(NG)%NXEL  = NXEL
+          ELBUF_TAB(NG)%IDRAPE = IDRAPE
+c                                  
+          NPG = NPTR*NPTS*NPTT         
+c--------------------------------------------------------
+c       no non-local structure allocation if not needed
+c--------------------------------------------------------
+          IF (INLOC == 0) THEN 
+            ALLOCATE(ELBUF_TAB(NG)%NLOCTS(0, 0))
+          ENDIF                  
+c-------------------------------------------------
+          CALL ZEROVARS_AUTO(ELBUF_TAB(NG))
+c-------------------------------------------------
+          CALL INI_OUTMAX_AUTO(ELBUF_TAB(NG),ITY,NG) 
+c
+c---  User Mat Buffer, Fail buffer - structure parameters
+c
+         IF (IGTYP == 22) THEN                         
+            DO IL = 1,NLAY                            
+              IMAT(IL) = IGEO(100+IL,IPID)                                        
+              ILAW(IL) = IPM(2,IMAT(IL)) 
+              NUVAR    = MLAW_TAG(IMAT(IL))%NUVAR
+              NVAR_EOS = 0
+              NVARTMP_EOS = 0
+              IEOS_TYPE = IPM(4,IMAT(IL))
+              IF(IEOS_TYPE>0)NVAR_EOS = EOS_TAG(IEOS_TYPE)%NVAR
+              IF(IEOS_TYPE>0)NVARTMP_EOS = EOS_TAG(IEOS_TYPE)%NVARTMP
+              NVARTMP  = MLAW_TAG(IMAT(IL))%NVARTMP                                
+              NFAIL    = MAT_PARAM(IMAT(IL))%NFAIL
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW = ILAW(IL)        
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT = IMAT(IL)        
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS = IEOS        
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC= MAT_PARAM(IMAT(IL))%VISC%ILAW
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO= 0        
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL= NFAIL  
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT  = NUVAR
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS  = NVAR_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP   = NVARTMP
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS = NVARTMP_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = MAT_PARAM(IMAT(IL))%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+              DO J = 1, NFAIL                                            
+                IRUPT  = MAT_PARAM(IMAT(IL))%FAIL(J)%IRUPT   ! rupture model
+                IDFAIL = MAT_PARAM(IMAT(IL))%FAIL(J)%FAIL_ID
+                TFAIL(IL,J)  = IRUPT 
+                FAILID(IL,J) = IDFAIL      
+              ENDDO                                                           
+              IF (MLAW_TAG(IMAT(IL))%L_PLA == 0 .and. IPARG(10,NG) == 2) THEN
+                IPARG(10,NG) = 0  ! ICPRE
+              ENDIF                                   
+            ENDDO                                       
+c---
+         ELSEIF (IGTYP > 28 .and. IGTYP < 32) THEN    ! User solid property                       
+            NUVAR    = MLAW_TAG(IMID)%NUVAR  
+            NVARTMP  = MLAW_TAG(IMID)%NVARTMP                                
+            NVAR_EOS = 0
+            NVARTMP_EOS = 0
+            IEOS_TYPE = IPM(4,IMID)
+            IF(IEOS_TYPE>0)NVAR_EOS = EOS_TAG(IEOS_TYPE)%NVAR
+            IF(IEOS_TYPE>0)NVARTMP_EOS = EOS_TAG(IEOS_TYPE)%NVARTMP
+            ELBUF_TAB(NG)%BUFLY(1)%ILAW = MLW                                          
+            ELBUF_TAB(NG)%BUFLY(1)%IMAT = IMID                                        
+            ELBUF_TAB(NG)%BUFLY(1)%IEOS = 0                                      
+            ELBUF_TAB(NG)%BUFLY(1)%IVISC= 0                                     
+            ELBUF_TAB(NG)%BUFLY(1)%IPORO= 0                                           
+            ELBUF_TAB(NG)%BUFLY(1)%NFAIL = 0                                     
+            ELBUF_TAB(NG)%BUFLY(1)%NVAR_MAT= NUVAR
+            ELBUF_TAB(NG)%BUFLY(1)%NVAR_EOS= NVAR_EOS
+            ELBUF_TAB(NG)%BUFLY(1)%NVARTMP = NVARTMP
+            ELBUF_TAB(NG)%BUFLY(1)%NVARTMP_EOS = NVARTMP_EOS
+            IF (MLAW_TAG(IMID)%L_PLA == 0 .and. IPARG(10,NG) == 2) THEN
+              IPARG(10,NG) = 0  ! ICPRE
+            ENDIF                                   
+c---
+          ELSEIF (MLW == 20) THEN      ! Bimat  
+            DO IL = 1,2
+              ILAW(IL) = IPARG(24+IL,NG)
+              MX = MAT_PARAM(IMID)%MULTIMAT%MID(IL)
+              NFAIL = MAT_PARAM(MX)%NFAIL             
+              IEOS_TYPE = IPM(4, MX)
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW = ILAW(IL)
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT = MX
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS = IEOS        
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO= 0        
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC=0
+              DO J = 1,NFAIL                                              
+                IRUPT  = MAT_PARAM(MX)%FAIL(J)%IRUPT   ! rupture model
+                IDFAIL = MAT_PARAM(MX)%FAIL(J)%FAIL_ID
+                TFAIL(IL,J)  = IRUPT  
+                FAILID(IL,J) = IDFAIL    
+              ENDDO                                                         
+            ENDDO                      
+c---
+          ELSEIF (MLW == 151) THEN   !  multiphase 151                                    
+            DO IL = 1,NLAY
+              IMAT(IL) = MAT_PARAM(IMID)%MULTIMAT%MID(IL)  ! submaterial MID                         
+              ILAW(IL) = IPM(2,IMAT(IL))                   ! submaterial law type
+              NUVAR   = MLAW_TAG(IMID)%NUVAR                                
+              NVARTMP = MLAW_TAG(IMID)%NVARTMP 
+              NVAR_EOS = 0
+              NVARTMP_EOS = 0
+              IEOS_TYPE = MAT_PARAM(IMAT(IL))%IEOS
+              IF(IEOS_TYPE>0)NVAR_EOS = EOS_TAG(IEOS_TYPE)%NVAR
+              IF(IEOS_TYPE>0)NVARTMP_EOS = EOS_TAG(IEOS_TYPE)%NVARTMP
+              NFAIL = MAT_PARAM(IMAT(IL))%NFAIL
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW = ILAW(IL)
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT = IMAT(IL)       
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS = IEOS_TYPE ! submaterial eos type       
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC= MAT_PARAM(IMAT(IL))%VISC%ILAW      
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT  = NUVAR
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS  = NVAR_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP   = NVARTMP              
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS = NVARTMP_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = MAT_PARAM(IMAT(IL))%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO= 0  
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL = NFAIL                          
+              DO J = 1,NFAIL                                              
+                IRUPT  = MAT_PARAM(IMAT(IL))%FAIL(J)%IRUPT   ! rupture model
+                IDFAIL = MAT_PARAM(IMAT(IL))%FAIL(J)%FAIL_ID
+                TFAIL(IL,J)  = IRUPT
+                FAILID(IL,J) = IDFAIL      
+              ENDDO                                                         
+              IF (MLAW_TAG(IMAT(IL))%L_PLA == 0 .and. IPARG(10,NG) == 2) THEN
+                IPARG(10,NG) = 0  ! ICPRE
+              ENDIF                                   
+            ENDDO 
+c---
+          ELSEIF (NLAY > 1) THEN   ! thick shells,  multiphase                                     
+            DO IL = 1,NLAY
+              IMAT(IL) = IMID   ! global MID in all pts                          
+              ILAW(IL) = MLW    ! same law type everywhere
+              NUVAR   = MLAW_TAG(IMID)%NUVAR                                
+              NVARTMP = MLAW_TAG(IMID)%NVARTMP                                
+              NFAIL   = MAT_PARAM(IMAT(IL))%NFAIL
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW = MLW
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT = IMID       
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS = IEOS        
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC= MAT_PARAM(IMID)%VISC%ILAW   
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT= NUVAR
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP = NVARTMP
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC=MAT_PARAM(IMID)%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO= 0  
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL = NFAIL                          
+              DO J = 1,NFAIL                                              
+                IRUPT  = MAT_PARAM(IMAT(IL))%FAIL(J)%IRUPT   ! rupture model
+                IDFAIL = MAT_PARAM(IMAT(IL))%FAIL(J)%FAIL_ID
+                TFAIL(IL,J)  = IRUPT 
+                FAILID(IL,J) = IDFAIL      
+              ENDDO                                                         
+              IF (MLAW_TAG(IMAT(IL))%L_PLA == 0 .and. IPARG(10,NG) == 2) THEN
+                IPARG(10,NG) = 0  ! ICPRE
+              ENDIF                                   
+            ENDDO      
+C---
+            ! Non-local regularization in the shell thickness
+            IF (INLOC > 0) THEN 
+              ! Allocation of the non-local in thickness structural data
+              ALLOCATE(ELBUF_TAB(NG)%NLOCTS(NPTR, NPTS))
+              ! Number of non-local nodes in the thickness
+              NONL = NLAY+1
+              ! Loop over Gauss points in the plane of the shell
+              DO IR = 1,ELBUF_TAB(NG)%NPTR
+                DO IS = 1,ELBUF_TAB(NG)%NPTS
+                  ! Non-local buffer
+                  BUFNLTS => ELBUF_TAB(NG)%NLOCTS(IR,IS)
+                  ! Non-local in-thickness masses
+                  CALL MY_ALLOC(BUFNLTS%MASSTH,NEL,NONL,"BUFNLTS%MASSTH")
+                  BUFNLTS%MASSTH = ZERO
+                  LNLOCTS = LNLOCTS + NEL*NONL
+                  ! Non-local in-thickness cumulated variables
+                  CALL MY_ALLOC(BUFNLTS%UNLTH,NEL,NONL,"BUFNLTS%UNLTH")
+                  BUFNLTS%UNLTH = ZERO
+                  LNLOCTS = LNLOCTS + NEL*NONL
+                  ! Non-local in-thickness velocities
+                  CALL MY_ALLOC(BUFNLTS%VNLTH,NEL,NONL,"BUFNLTS%VNLTH")
+                  BUFNLTS%VNLTH = ZERO
+                  LNLOCTS = LNLOCTS + NEL*NONL
+                  ! Non-local in-thickness forces
+                  CALL MY_ALLOC(BUFNLTS%FNLTH,NEL,NONL,"BUFNLTS%FNLTH")
+                  BUFNLTS%FNLTH = ZERO
+                  LNLOCTS = LNLOCTS + NEL*NONL
+                ENDDO
+              ENDDO
+            ENDIF
+c---
+          ELSE  
+            NUVAR   = MLAW_TAG(IMID)%NUVAR                                
+            NVARTMP = MLAW_TAG(IMID)%NVARTMP 
+            NVAR_EOS = 0
+            NVARTMP_EOS = 0
+            IEOS_TYPE = IPM(4,IMID)
+            IF (IEOS_TYPE > 0) NVAR_EOS = EOS_TAG(IEOS_TYPE)%NVAR
+            IF (IEOS_TYPE > 0) NVARTMP_EOS = EOS_TAG(IEOS_TYPE)%NVARTMP
+            NFAIL = MAT_PARAM(IMID)%NFAIL
+            ELBUF_TAB(NG)%BUFLY(1)%ILAW = MLW                                          
+            ELBUF_TAB(NG)%BUFLY(1)%IMAT = IMID                                        
+            ELBUF_TAB(NG)%BUFLY(1)%IEOS = IEOS                                        
+            ELBUF_TAB(NG)%BUFLY(1)%NVAR_MAT= NUVAR
+            ELBUF_TAB(NG)%BUFLY(1)%NVAR_EOS= NVAR_EOS
+            ELBUF_TAB(NG)%BUFLY(1)%NVARTMP = NVARTMP
+            ELBUF_TAB(NG)%BUFLY(1)%NVARTMP_EOS = NVARTMP_EOS
+            ELBUF_TAB(NG)%BUFLY(1)%IVISC   = MAT_PARAM(IMID)%VISC%ILAW                                  
+            ELBUF_TAB(NG)%BUFLY(1)%NVAR_VISC = MAT_PARAM(IMID)%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+            ELBUF_TAB(NG)%BUFLY(1)%IPORO= 0                                           
+            ELBUF_TAB(NG)%BUFLY(1)%NFAIL = NFAIL                                     
+            DO J = 1,NFAIL                                                             
+              IRUPT  = MAT_PARAM(IMID)%FAIL(J)%IRUPT   ! rupture model
+              IDFAIL = MAT_PARAM(IMID)%FAIL(J)%FAIL_ID            
+              TFAIL(1,J)  = IRUPT
+              FAILID(1,J) = IDFAIL                                                       
+            ENDDO                                                                     
+c---
+          ENDIF                                               
+c---      User Mat Buffer, Fail buffer, Visc buffer :  alloc + init
+          DO IL = 1, NLAY
+           MX      = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+           NUVARV  = MAT_PARAM(MX)%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+           ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = NUVARV
+           NUVARM  = ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT
+           NVARTMP = ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP
+           NFAIL   = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+           NVAR_EOS= ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS
+           NVARTMP_EOS = ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS
+           DO IR = 1,NPTR                                       
+            DO IS = 1,NPTS                                      
+              DO IT = 1,NPTT
+                ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)%MLAW = ELBUF_TAB(NG)%BUFLY(IL)%ILAW
+                ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)%LawID = MX
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR,NUVARM*NEL,"BUFLY%MAT%VAR")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VARTMP,NVARTMP*NEL,"BUFLY%MAT%VARTMP")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%VISC(IR,IS,IT)%VAR,NUVARV*NEL,"BUFLY%VISC%VAR")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VAR,NVAR_EOS*NEL,"BUFLY%EOS%VAR")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VARTMP,NVARTMP_EOS*NEL,"BUFLY%EOS%VARTMP")
+c
+                ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR(1:NUVARM*NEL) = ZERO
+                ELBUF_TAB(NG)%BUFLY(IL)%VISC(IR,IS,IT)%VAR(1:NUVARV*NEL) = ZERO
+                ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VAR(1:NVAR_EOS*NEL) = ZERO
+                ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VARTMP(1:NVARTMP*NEL) = 0
+                ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VARTMP(1:NVARTMP_EOS*NEL) = 0
+
+                LMAT  = LMAT  + NUVARM*NEL
+                LVISC = LVISC + NUVARV*NEL
+                LEOS  = LEOS  + NVAR_EOS*NEL
+C
+C               Q1NP buffer allocation and initialization (only for Q1NP groups)
+                IF (I_Q1NP_GROUP==1) THEN
+C                 Allocate: 3*NEL for GP_COORD (ξ, η, ζ per element), NEL for GP_WEIGHT
+                  CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_COORD, 3*NEL)
+                  CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_WEIGHT, NEL)
+C
+C                 Compute and store Gauss point coordinates and weights
+C                 Reference coordinates: ξ = Q1NP_GP_U_G(IR), η = Q1NP_GP_V_G(IS), ζ = Q1NP_GP_T_G(IT)
+C                 Weight: w = Q1NP_GW_U_G(IR) * Q1NP_GW_V_G(IS) * Q1NP_GW_T_G(IT)
+                  IF (Q1NP_NP_U_G > 0 .AND. Q1NP_NP_V_G > 0 .AND. Q1NP_NP_T_G > 0) THEN
+                    IF (IR <= Q1NP_NP_U_G .AND. IS <= Q1NP_NP_V_G .AND. IT <= Q1NP_NP_T_G) THEN
+                      XI_GP = Q1NP_GP_U_G(IR)
+                      ETA_GP = Q1NP_GP_V_G(IS)
+                      ZETA_GP = Q1NP_GP_T_G(IT)
+                      GP_WEIGHT = Q1NP_GW_U_G(IR) * Q1NP_GW_V_G(IS) * Q1NP_GW_T_G(IT)
+C
+C                     Store for all elements in the group
+                      DO IEL = 1, NEL
+                        ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_COORD(3*(IEL-1)+1) = XI_GP
+                        ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_COORD(3*(IEL-1)+2) = ETA_GP
+                        ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_COORD(3*(IEL-1)+3) = ZETA_GP
+                        ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_WEIGHT(IEL) = GP_WEIGHT
+                      ENDDO
+C
+                    ELSE
+C                     Invalid indices: initialize to zero
+                      ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_COORD(1:3*NEL) = ZERO
+                      ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_WEIGHT(1:NEL) = ZERO
+                    ENDIF
+                  ELSE
+C                   Gauss scheme not initialized: initialize to zero
+                    ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_COORD(1:3*NEL) = ZERO
+                    ELBUF_TAB(NG)%BUFLY(IL)%Q1NP(IR,IS,IT)%GP_WEIGHT(1:NEL) = ZERO
+                  ENDIF
+                ENDIF
+                
+      call my_alloc(ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC, NFAIL, "ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC")
+                MX = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+
+                DO J = 1,NFAIL
+                  FLOC=>ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC(J)         
+c
+                  IRUPT = MAT_PARAM(MX)%FAIL(J)%IRUPT
+                  FLOC%ILAWF = IRUPT                                          
+                  LFAIL = LFAIL + 1 
+c
+                  FLOC%IDFAIL = MAT_PARAM(MX)%FAIL(J)%FAIL_ID
+                  LFAIL = LFAIL + 1
+c
+                  FLOC%NVAR  = MAT_PARAM(MX)%FAIL(J)%NUVAR                          
+                  CALL MY_ALLOC(FLOC%VAR,FLOC%NVAR*NEL,"FLOC%VAR")
+                  FLOC%VAR = ZERO     
+                  LFAIL = LFAIL + FLOC%NVAR*NEL + 1 
+c
+                  NVARTMP = MAT_PARAM(MX)%FAIL(J)%NVARTMP                          
+                  CALL MY_ALLOC(FLOC%VARTMP,NVARTMP*NEL,"FLOC%VARTMP")
+                  FLOC%VARTMP = 0     
+c
+                  FLOC%LF_DAM  = FAIL_TAG(MX,J)%LF_DAM                        
+                  CALL MY_ALLOC(FLOC%DAM,FLOC%LF_DAM*NEL,"FLOC%DAM")
+                  FLOC%DAM = ZERO   
+                  LFAIL = LFAIL + FLOC%LF_DAM*NEL + 1 
+c
+                  FLOC%LF_DAMMX  = FAIL_TAG(MX,J)%LF_DAMMX                        
+                  CALL MY_ALLOC(FLOC%DAMMX,FLOC%LF_DAMMX*NEL,"FLOC%DAMMX")
+                  FLOC%DAMMX = ZERO
+                  LFAIL = LFAIL + FLOC%LF_DAMMX*NEL + 1 
+c
+                  FLOC%LF_DAMINI = FAIL_TAG(MX,J)%LF_DAMINI                        
+                  CALL MY_ALLOC(FLOC%DAMINI,FLOC%LF_DAMINI*NEL,"FLOC%DAMINI")
+                  FLOC%DAMINI = ZERO
+                  LFAIL = LFAIL + FLOC%LF_DAMINI*NEL + 1 
+c
+                  FLOC%LF_TDEL  = FAIL_TAG(MX,J)%LF_TDEL                        
+                  CALL MY_ALLOC(FLOC%TDEL,FLOC%LF_TDEL*NEL,"FLOC%TDEL")
+                  FLOC%TDEL = ZERO                                                               
+                  LFAIL = LFAIL + FLOC%LF_TDEL*NEL + 1 
+c
+                  FLOC%LF_INDX = FAIL_TAG(MX,J)%LF_INDX                       
+                  CALL MY_ALLOC(FLOC%INDX,FLOC%LF_INDX*NEL,"FLOC%INDX")
+                  FLOC%INDX = 0                                                               
+                  LFAIL = LFAIL + FLOC%LF_INDX*NEL + 1 
+c
+                  FLOC%LF_OFF = FAIL_TAG(MX,J)%LF_OFF                       
+                  CALL MY_ALLOC(FLOC%OFF,FLOC%LF_OFF*NEL,"FLOC%OFF")
+                  FLOC%OFF = 1                                                               
+                  LFAIL = LFAIL + FLOC%LF_OFF*NEL + 1 
+c
+                ENDDO
+              ENDDO                                                           
+            ENDDO                                                          
+           ENDDO 
+          ENDDO 
+c----------------------------------------------------
+          GBUF  => ELBUF_TAB(NG)%GBUF                                  
+          IF (IGTYP == 43) THEN       
+            ELBUF_TAB(NG)%BUFLY(1)%L_EPSA = 3
+            ELBUF_TAB(NG)%BUFLY(1)%L_EPE  = 3
+          ENDIF                                                        
+C
+C         Q1NP starter mass and GP-volume reconstruction always need
+C         the local volume field, independent of the small/large strain
+C         branch below.
+          IF (I_Q1NP_GROUP == 1) THEN
+            ELBUF_TAB(NG)%BUFLY(1)%L_VOL = 1
+          ENDIF
+
+          IF (ISMSTR /= 4 .OR. JLAG >0)THEN
+           IF (IGTYP == 43) THEN       
+             ELBUF_TAB(NG)%BUFLY(1)%L_VOL = 1
+           ELSEIF (ITY == 1)THEN                     
+            IF (ISNOD == 10 .OR. ISNOD == 16 .OR. ISNOD == 20 ) THEN                     
+              GBUF%G_SMSTR = 3*ISNOD
+C------for the future small strain option w/ Itetra=1      
+            ELSEIF (ISNOD == 4  .AND.ISROT == 1) THEN                     
+              GBUF%G_SMSTR = 3*(ISNOD+6)                                   
+            ELSE                                                       
+              GBUF%G_SMSTR = 3*(ISNOD-1)                               
+            ENDIF    
+           ENDIF                                                  
+          ENDIF 
+          IF (ITY == 1.AND.(IGTYP == 20.OR.IGTYP == 21.OR.IGTYP == 22)) GBUF%G_IDT_TSH=1      
+C------
+          ! Variable for ITET4 = 3
+          IF (ITY == 1 .AND. ISNOD == 4 .AND. ISROT == 3 ) THEN
+            GBUF%G_AMU = 1
+          ENDIF
+C------
+          ! Variable for Eint_distor
+          ICONTROL = -HUGE(ICONTROL)
+          IF (ITY == 1 ) THEN
+            ICONTROL = IGEO(97,IPID)
+            IF (ICONTROL==1) GBUF%G_EINT_DISTOR = 1
+          ENDIF
+C------
+          IF ((ISMSTR == 10.OR.ISMSTR == 12).AND.ITY == 1)THEN
+           IF (ISNOD == 10.OR.(ISNOD==4 .AND. ISROT==1)) THEN 
+            GBUF%G_JAC_I = 0    
+            ELBUF_TAB(NG)%BUFLY(1)%L_JAC_I=0     
+            ELBUF_TAB(NG)%BUFLY(1)%L_PIJ=3*10     
+           ELSEIF (ISNOD == 8.AND.JHBE == 17 ) THEN 
+            GBUF%G_JAC_I = 9 + 1    
+            ELBUF_TAB(NG)%BUFLY(1)%L_JAC_I=0     
+            ELBUF_TAB(NG)%BUFLY(1)%L_PIJ=3*ISNOD      
+            IF (IINT == 2.AND.ICPRE == 0 ) ELBUF_TAB(NG)%BUFLY(1)%L_PIJ=9*ISNOD 
+            IF (IINT == 2) GBUF%G_ETOTSH = 6
+           ELSE           
+            GBUF%G_JAC_I = 9 + 1    
+            ELBUF_TAB(NG)%BUFLY(1)%L_JAC_I=GBUF%G_JAC_I      
+c            IF (JHBE == 17) GBUF%G_ETOTSH = 6
+           END IF !(ISNOD == 10 ) THEN 
+C----- thickshell will be checked later----           
+           IF (ISMSTR == 12 .AND. MLW==1 ) ELBUF_TAB(NG)%BUFLY(1)%L_SIGL=6 
+          ENDIF
+          IF (JTHE      /= 0) GBUF%G_TEMP = 1 
+          IF (JTHE      /= 0 .AND. NPG > 1) GBUF%G_TEMPG = NPG 
+          IF (JEUL+JALE /= 0 .AND. ISNOD >= 4) GBUF%G_MOM = 3
+          IF (JHBE == 15 .OR. JHBE == 24) GBUF%G_HOURG = 12
+          IF (ISNOD == 6 .AND. JHBE /= 15) GBUF%G_HOURG = 12
+          IF (JHBE == 15 .AND. ISNOD == 6) THEN 
+            GBUF%G_HOURG = 2 
+            IF (ICONTROL==1) GBUF%G_HOURG = 12
+          END IF
+          IF (JHBE == 1 .AND. IINT == 3) GBUF%G_HOURG = 12
+C------------- for strain output, to 3*6 
+          IF (JHBE == 24) GBUF%G_STRHG = 3*6
+c           Allocate thermal stress and Thermal internal energy
+          IF(IEXPAN > 0) THEN
+             GBUF%G_FORTH = 1
+             GBUF%G_EINTTH = 1
+          ENDIF
+          IF (MLW /= 115) GBUF%G_RHO = 1 
+          GBUF%G_DT  = 1
+          IF (ISMS_SELEC >= 1) GBUF%G_ISMS  = 1
+          IF (JCVT>0.AND.ITY == 1) GBUF%G_GAMA_R = 6
+c
+c         local material variables   
+          DO IL = 1, NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+            IF (MLW /= 115) BUFLY%L_RHO = 1 
+c
+            IF (ISORTH == 1 .AND. ISROT > 0) BUFLY%L_SIGD = 6
+            IF ((ISTRA > 0 .AND. MLW /= 0) .OR. ITY == 101)   
+     .                 BUFLY%L_STRA = 6                      
+            IF (GBUF%G_GAMA > 0 .AND. NLAY > 1) BUFLY%L_GAMA = GBUF%G_GAMA
+            IF (JTHE /= 0) BUFLY%L_TEMP = 1
+            IF (ISVIS > 0 ..OR. BUFLY%IVISC == 1 .OR. BUFLY%IVISC == 3 ) BUFLY%L_SIGV = 6
+! for th outp of viscous stress
+            IF ((IVISC > 0).OR.(IDAMP_FREQ_RANGE > 0)) BUFLY%L_VISC = 6
+c           Allocate thermal stress and Thermal internal energy
+            IF(IEXPAN > 0) THEN
+               BUFLY%L_FORTH = 1
+               BUFLY%L_EINTTH = 1
+            ENDIF
+            IF(IUFACYLD == 1.AND.(MLW==36.OR.MLW==87))BUFLY%L_FAC_YLD = 1
+C---- only useful with the law where P=Bulk*AMU(rho,rho0) but not do the distinc here         
+            IF(ITY == 1) BUFLY%L_VOL0DP = 1
+            IF ((ISORTH == 1).AND.(IGTYP == 34)) THEN
+              BUFLY%L_SIGL = 6
+            ENDIF
+          ENDDO
+C
+C         Orthotropic SPH properties
+          IF ((ISORTH == 1).AND.(IGTYP == 34)) THEN
+            GBUF%G_GAMA = 6
+          ENDIF
+C
+c        Bolt Preloading
+         GBUF%G_BPRELD = NBPRELD*IBOLTP
+         
+c        Corotational nodal forces (isolid 19)
+         IF (ITY==1 .AND. JHBE==17 .AND. IINT==3) THEN
+           GBUF%G_COR_NF = 24
+c        Corotational frame  (isolid 19)
+           GBUF%G_COR_FR =  9          !3*3                 ! sb Mis en standby pourl'instant
+c        Corotational reference coordinates (isolid 19)
+           GBUF%G_COR_XR = 21         !7*3
+         ENDIF
+C                            
+c----------------------------------------------------
+          CALL INITVARS_AUTO(
+     .         ELBUF_TAB(NG),MLAW_TAG ,PROP_TAG ,
+     .         IMID         ,MLW      ,IGTYP    ,JMULT    ,IFAIL  ,
+     .         IEOS         ,EOS_TAG  ,ISNOD    )
+c-------------------------------------------------
+c       size of the local ELBUF array for restart
+c-------------------------------------------------
+c         GBUF%NVAR_GLOB ! number of element variables in GBUF 
+c         BUFLY%NVAR_LAY ! number of element variables in BUFLY
+c         BUFLY%NVAR_LOC ! number of element variables in LBUF (defined on layer level)
+c
+          BUFLEN = NPAR_TAB + LMAT + LFAIL + LVISC + LPORO + LEOS + LIMAT + LIFAIL + LNLOCTS
+
+          LGLOB = 0                                 
+          LGLOB = LGLOB + GBUF%G_NOFF  
+          LGLOB = LGLOB + GBUF%G_IERR  
+          LGLOB = LGLOB + GBUF%G_GAMA  
+C This array is a double precision array even in SP executable.
+C Remode from global buffer writing
+c           LGLOB = LGLOB + GBUF%G_SMSTR
+          LGLOB = LGLOB + GBUF%G_HOURG 
+          LGLOB = LGLOB + GBUF%G_TAG22
+          LGLOB = LGLOB + GBUF%G_STRA
+          LGLOB = LGLOB + GBUF%G_SIGI
+          LGLOB = LGLOB + GBUF%G_DMG
+          LGLOB = LGLOB + GBUF%G_DAMDL
+          LGLOB = LGLOB + GBUF%G_FOR     
+          LGLOB = LGLOB + GBUF%G_MOM     
+          LGLOB = LGLOB + GBUF%G_THK
+          LGLOB = LGLOB + GBUF%G_STRW 
+          LGLOB = LGLOB + GBUF%G_THK_I
+          LGLOB = LGLOB + GBUF%G_JAC_I
+          LGLOB = LGLOB + GBUF%G_DT
+          LGLOB = LGLOB + GBUF%G_ISMS
+          LGLOB = LGLOB + GBUF%G_BPRELD
+          LGLOB = LGLOB + GBUF%G_COR_NF
+          LGLOB = LGLOB + GBUF%G_COR_FR
+          LGLOB = LGLOB + GBUF%G_COR_XR
+          LGLOB = LGLOB + GBUF%G_MAXFRAC
+          LGLOB = LGLOB + GBUF%G_MAXEPS   
+          LGLOB = LGLOB + GBUF%G_AMU 
+          LGLOB = LGLOB + GBUF%G_EINT_DISTOR
+          LGLOB = LGLOB + GBUF%G_WPLA
+
+          IF (NPG > 1) THEN
+            LGLOB = LGLOB + GBUF%G_FORPG
+            LGLOB = LGLOB + GBUF%G_MOMPG
+C
+            LGLOB = LGLOB + GBUF%G_FORPGPINCH
+            LGLOB = LGLOB + GBUF%G_MOMPGPINCH
+            LGLOB = LGLOB + GBUF%G_EPGPINCHXZ
+            LGLOB = LGLOB + GBUF%G_EPGPINCHYZ
+            LGLOB = LGLOB + GBUF%G_EPGPINCHZZ
+C
+            LGLOB = LGLOB + GBUF%G_STRPG
+            LGLOB = LGLOB + GBUF%G_STRWPG 
+            LGLOB = LGLOB + GBUF%G_TEMPG 
+          ENDIF
+C
+          IF (NPT /= 1) THEN 
+            LGLOB = LGLOB + GBUF%G_BFRAC
+            LGLOB = LGLOB + GBUF%G_OFF   
+            LGLOB = LGLOB + GBUF%G_EINT  
+            LGLOB = LGLOB + GBUF%G_EINS  
+            LGLOB = LGLOB + GBUF%G_RHO   
+            LGLOB = LGLOB + GBUF%G_QVIS  
+            LGLOB = LGLOB + GBUF%G_DELTAX
+            LGLOB = LGLOB + GBUF%G_VOL   
+            LGLOB = LGLOB + GBUF%G_EPSD  
+            LGLOB = LGLOB + GBUF%G_EPSQ
+            LGLOB = LGLOB + GBUF%G_PLA   
+            LGLOB = LGLOB + GBUF%G_TEMP  
+            LGLOB = LGLOB + GBUF%G_TB    
+            LGLOB = LGLOB + GBUF%G_RK    
+            LGLOB = LGLOB + GBUF%G_RE    
+            LGLOB = LGLOB + GBUF%G_SIG   
+cc            LGLOB = LGLOB + GBUF%G_THK
+            LGLOB = LGLOB + GBUF%G_FORTH
+            LGLOB = LGLOB + GBUF%G_EINTTH
+            LGLOB = LGLOB + GBUF%G_SEQ
+            LGLOB = LGLOB + GBUF%G_ABURN  
+            LGLOB = LGLOB + GBUF%G_MU    
+          ENDIF
+          IF (LFAIL > 0) THEN
+            GBUF%G_UELR  = 1
+            GBUF%G_UELR1 = 1
+            LGLOB = LGLOB + GBUF%G_UELR
+            LGLOB = LGLOB + GBUF%G_UELR1
+          ENDIF
+C
+          LGLOB = LGLOB + GBUF%G_AREA
+          LGLOB = LGLOB + GBUF%G_SKEW
+          LGLOB = LGLOB + GBUF%G_LENGTH
+          LGLOB = LGLOB + GBUF%G_TOTDEPL
+          LGLOB = LGLOB + GBUF%G_TOTROT
+          LGLOB = LGLOB + GBUF%G_FOREP
+          LGLOB = LGLOB + GBUF%G_MOMEP
+          LGLOB = LGLOB + GBUF%G_DEP_IN_TENS
+          LGLOB = LGLOB + GBUF%G_DEP_IN_COMP
+          LGLOB = LGLOB + GBUF%G_ROT_IN_TENS
+          LGLOB = LGLOB + GBUF%G_ROT_IN_COMP
+          LGLOB = LGLOB + GBUF%G_POSX
+          LGLOB = LGLOB + GBUF%G_POSY
+          LGLOB = LGLOB + GBUF%G_POSZ
+          LGLOB = LGLOB + GBUF%G_POSXX
+          LGLOB = LGLOB + GBUF%G_POSYY
+          LGLOB = LGLOB + GBUF%G_POSZZ
+          LGLOB = LGLOB + GBUF%G_YIELD
+          LGLOB = LGLOB + GBUF%G_LENGTH_ERR
+          LGLOB = LGLOB + GBUF%G_DV
+          LGLOB = LGLOB + GBUF%G_DFS
+          LGLOB = LGLOB + GBUF%G_SKEW_ERR
+          LGLOB = LGLOB + GBUF%G_E6
+          LGLOB = LGLOB + GBUF%G_RUPTCRIT
+          LGLOB = LGLOB + GBUF%G_MASS
+          LGLOB = LGLOB + GBUF%G_V_REPCVT
+          LGLOB = LGLOB + GBUF%G_VR_REPCVT
+          LGLOB = LGLOB + GBUF%G_NUVAR
+          LGLOB = LGLOB + GBUF%G_DEFINI
+          LGLOB = LGLOB + GBUF%G_FORINI
+          LGLOB = LGLOB + GBUF%G_INIFRIC
+          LGLOB = LGLOB + GBUF%G_STRHG
+          LGLOB = LGLOB + GBUF%G_DT_PITER
+          LGLOB = LGLOB + GBUF%G_IDT_TSH
+C
+          LGLOB = LGLOB + GBUF%G_FILL
+C ---add H3D/TMAX in BUFLEN         
+          LGLOB = LGLOB + GBUF%G_TM_YIELD
+          LGLOB = LGLOB + GBUF%G_TM_SEQ  
+          LGLOB = LGLOB + GBUF%G_TM_EINT 
+          LGLOB = LGLOB + GBUF%G_TM_DMG  
+          LGLOB = LGLOB + 2*GBUF%G_TM_SIG  
+          LGLOB = LGLOB + 2*GBUF%G_TM_STRA
+
+C          
+          BUFLEN = BUFLEN + GBUF%NVAR_GLOB + 1 + LGLOB*NEL 
+c
+c---------   layer variables       
+          LLAY = 0
+          DO I=1,NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(I)
+c
+            LLAY = LLAY + NPAR_LAY + BUFLY%NVAR_LAY + BUFLY%NVAR_LOC
+            LLAY = LLAY + NEL*BUFLY%LY_DMG 
+            LLAY = LLAY + NEL*BUFLY%LY_GAMA
+            IF(IDRAPE == 0 .OR. (IDRAPE > 0 .AND . IGTYP == 17)) THEN
+              LLAY = LLAY + NEL*BUFLY%LY_DIRA 
+              LLAY = LLAY + NEL*BUFLY%LY_DIRB 
+            ENDIF
+            IF (NPG > 1) THEN
+              IF (NLAY > 1) THEN
+                LEN_PLAPT = NEL*BUFLY%LY_PLAPT
+                LEN_SIGPT = NEL*BUFLY%LY_SIGPT
+              ELSE
+                IF (IGTYP /= 51 .AND. IGTYP /= 52) THEN
+                  LEN_PLAPT = NEL*BUFLY%LY_PLAPT*NPT
+                  LEN_SIGPT = NEL*BUFLY%LY_SIGPT*NPT
+                ELSE
+                  LEN_PLAPT = NEL*BUFLY%LY_PLAPT*BUFLY%NPTT
+                  LEN_SIGPT = NEL*BUFLY%LY_SIGPT*BUFLY%NPTT
+                ENDIF
+              ENDIF
+cc              LLAY = LLAY + NEL*BUFLY%LY_PLAPT
+cc              LLAY = LLAY + NEL*BUFLY%LY_SIGPT
+              LLAY = LLAY + LEN_PLAPT
+              LLAY = LLAY + LEN_SIGPT
+            ENDIF
+            LLAY = LLAY + NEL*BUFLY%LY_HOURG
+          ENDDO
+          BUFLEN = BUFLEN  + LLAY
+c---------  local variables        
+          DO I=1,NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(I)
+c           ! tags for local variables : NVAR_LOC = 51
+            LLOC = 0                                 
+            LLOC = LLOC + BUFLY%L_OFF    
+            LLOC = LLOC + BUFLY%L_GAMA   
+            LLOC = LLOC + BUFLY%L_STRA 
+            LLOC = LLOC + BUFLY%L_FRAC   
+            LLOC = LLOC + BUFLY%L_BFRAC
+            LLOC = LLOC + BUFLY%L_EINT  
+            LLOC = LLOC + BUFLY%L_EINS   
+            LLOC = LLOC + BUFLY%L_RHO         
+            LLOC = LLOC + BUFLY%L_DP_DRHO     
+            LLOC = LLOC + BUFLY%L_QVIS   
+            LLOC = LLOC + BUFLY%L_DELTAX 
+            LLOC = LLOC + BUFLY%L_VOL   
+            LLOC = LLOC + BUFLY%L_EPSA   
+            LLOC = LLOC + BUFLY%L_EPSD   
+            LLOC = LLOC + BUFLY%L_EPSQ   
+            LLOC = LLOC + BUFLY%L_EPSF   
+            LLOC = LLOC + BUFLY%L_PLA    
+            LLOC = LLOC + BUFLY%L_WPLA  
+            LLOC = LLOC + BUFLY%L_TEMP       
+            LLOC = LLOC + BUFLY%L_TB     
+            LLOC = LLOC + BUFLY%L_RK     
+            LLOC = LLOC + BUFLY%L_RE     
+            LLOC = LLOC + BUFLY%L_VK     
+            LLOC = LLOC + BUFLY%L_SF     
+            LLOC = LLOC + BUFLY%L_ROB    
+            LLOC = LLOC + BUFLY%L_DAM    
+            LLOC = LLOC + BUFLY%L_DSUM   
+            LLOC = LLOC + BUFLY%L_DGLO     
+            LLOC = LLOC + BUFLY%L_CRAK   
+            LLOC = LLOC + BUFLY%L_ANG      
+            LLOC = LLOC + BUFLY%L_EPE    
+            LLOC = LLOC + BUFLY%L_EPC    
+            LLOC = LLOC + BUFLY%L_XST    
+            LLOC = LLOC + BUFLY%L_SSP    
+            LLOC = LLOC + BUFLY%L_Z      
+            LLOC = LLOC + BUFLY%L_VISC   
+            LLOC = LLOC + BUFLY%L_SIGL   
+            LLOC = LLOC + BUFLY%L_SIGV   
+            LLOC = LLOC + BUFLY%L_SIGA   
+            LLOC = LLOC + BUFLY%L_SIGB   
+            LLOC = LLOC + BUFLY%L_SIGC        
+            LLOC = LLOC + BUFLY%L_SIGD        
+            LLOC = LLOC + BUFLY%L_SIGF   
+            LLOC = LLOC + BUFLY%L_SIG    
+            LLOC = LLOC + BUFLY%L_FOR    
+            LLOC = LLOC + BUFLY%L_MOM
+            LLOC = LLOC + BUFLY%L_THK    
+            LLOC = LLOC + BUFLY%L_SMSTR    
+            LLOC = LLOC + BUFLY%L_DMG  
+            LLOC = LLOC + BUFLY%L_FORTH
+            LLOC = LLOC + BUFLY%L_EINTTH
+            LLOC = LLOC + BUFLY%L_SEQ   
+            LLOC = LLOC + BUFLY%L_JAC_I 
+            LLOC = LLOC + BUFLY%L_FAC_YLD  
+            LLOC = LLOC + BUFLY%L_ABURN
+            LLOC = LLOC + BUFLY%L_MU
+            LLOC = LLOC + BUFLY%L_PIJ 
+c            Lloc = lloc + bufly%l_Vol0dp 
+            LLOC = LLOC + BUFLY%L_PLANL
+            LLOC = LLOC + BUFLY%L_EPSDNL
+            LLOC = LLOC + BUFLY%L_DMGSCL
+            LLOC = LLOC + BUFLY%L_TSAIWU
+            BUFLEN = BUFLEN + (LLOC * NEL + NPAR_LBUF) * NPG       
+          ENDDO
+c          print*,'      local=',(LLOC * NEL + NPAR_LBUF) * NPG
+c-----------------------------------
+          IPARG(66,NG) = BUFLEN    !  size of restart transfer table 
+c          print*,' elbuf_ini : buflen=',buflen
+c          print*,' elbuf_ini : buflen=',buflen,ITY,NPG
+c          print*,'   nlay,nptr,npts,nptt=',nlay,nptr,npts,nptt
+c-------------------------------------------------
+          CALL ALLOCBUF_AUTO(ELBUF_TAB,NLAY,NPTR,NPTS,NPTT,
+     .                   NINTLAY,NEL,NPT,NG,NGROUP,ITY,
+     .                   IGTYP,NUMMAT,MAT_PARAM)
+c-------------------------------------------------
+          CALL MY_DEALLOC(TFAIL)
+          CALL MY_DEALLOC(FAILID)
+          CALL MY_DEALLOC(IMAT)
+          CALL MY_DEALLOC(ILAW)
+c
+c=======================================================================
+c
+        ELSEIF (ITY == 3 .OR. ITY == 7) THEN
+c
+c         shell elements
+c
+c=======================================================================
+c
+          IF (ITY == 3) THEN
+            IMID = IXC(1,NFT+1)                                                
+            IPID = IXC(6,NFT+1)      
+          ELSEIF (ITY == 7) THEN 
+            IMID = IXTG(1,NFT+1)                                                
+            IPID = IXTG(5,NFT+1)                                       
+          ENDIF
+          ELBUF_TAB(NG)%GBUF%G_DT = 1
+C
+          NPTT = 1
+          IF (ITY == 3 .and. JHBE == 11) THEN 
+            NPTR = 2
+            NPTS = 2
+          ELSEIF (ITY==7 .and. JHBE == 30) THEN
+            NPTR = 3
+            NPTS = 1
+          ELSE   ! One Gauss Point We Surface
+            NPTR = 1
+            NPTS = 1
+          ENDIF
+          IF (IGTYP == 10 .or. IGTYP == 11 .or. IGTYP == 16 .or. 
+     .        IGTYP == 17 .or. IGTYP == 51 .or. IGTYP == 52) THEN
+            NLAY = MAX(1,NPT)
+            NPTT = 1
+          ELSE  ! IGTYP = 1 .or. IGTYP = 9
+            NLAY = 1
+            NPTT = MAX(1,NPT)    ! attention to global integration 
+          ENDIF
+          IF (IGTYP == 17 .and. ISHPLYXFEM == 1) NINTLAY = NLAY-1
+          IF (ITY == 7 .AND. MLW == 151) THEN
+             NLAY = IPARG(20, NG)
+          ENDIF
+c
+!--------------------------------
+          IPARG(56,NG) = NPTR                              
+          IPARG(57,NG) = NPTS                              
+          IPARG(58,NG) = NPTT                              
+          IPARG(59,NG) = NLAY
+          NPG = NPTR*NPTS
+c-------------------------------------------------
+          ELBUF_TAB(NG)%IGTYP  = IGTYP                     
+          ELBUF_TAB(NG)%NEL    = NEL                                        
+          ELBUF_TAB(NG)%NLAY   = NLAY                      
+          ELBUF_TAB(NG)%NINTLAY= NINTLAY                        
+          ELBUF_TAB(NG)%NPTR   = NPTR                        
+          ELBUF_TAB(NG)%NPTS   = NPTS                        
+          ELBUF_TAB(NG)%NPTT   = NPTT                        
+          ELBUF_TAB(NG)%IXFEM  = IXFEM       
+          ELBUF_TAB(NG)%NXEL   = NXEL
+          ELBUF_TAB(NG)%IDRAPE = IDRAPE
+c-------------------------------------------------
+c        print*,'****  JHBE,NPG=',JHBE,NPG
+cc          NPT = NPG*NLAY*NPTT
+          IF (IGTYP == 51 .OR. IGTYP == 52) THEN
+            NPT = NPG*NPT
+          ELSE
+            NPT = NPG*NLAY*NPTT
+          ENDIF
+c         NPT may be 0 for PID1 <=> global integration  !
+c          NIP_LAY = NPG*NPTT
+c          print*,'   nlay,nptr,npts,nptt=',nlay,nptr,npts,nptt
+c          print*,'   npt_iparg, nel=',iparg(6,ng), nel
+c          print*,'nel,ISTRA, ISMSTR=',nel,ISTRA, ISMSTR
+c
+          MAXFLAY = 7          ! max Nb of failure models per mat
+          CALL MY_ALLOC(TFAIL,NLAY,MAXFLAY,"TFAIL")
+          CALL MY_ALLOC(FAILID,NLAY,MAXFLAY,"FAILID")
+          CALL MY_ALLOC(IMAT,NLAY,"IMAT")
+          CALL MY_ALLOC(ILAW,NLAY,"ILAW")
+c---------------------------------------------------------
+c       no non-local structure allocation if not needed
+c---------------------------------------------------------
+          IF (INLOC == 0) THEN 
+            ALLOCATE(ELBUF_TAB(NG)%NLOC(0, 0))
+          ENDIF  
+c
+          TFAIL(:,:) = 0
+          FAILID(:,:) = 0
+          ILAW(:)    = 0
+          IMAT(:)    = 0
+c------------------------------------------------------
+c         allocation of element buffer sub-structures 
+c------------------------------------------------------
+          call my_alloc(ELBUF_TAB(NG)%BUFLY, NLAY, "ELBUF_TAB(NG)%BUFLY")
+C---
+          IF(IDRAPE > 0) THEN
+            IF (IGTYP == 51 .OR. IGTYP == 52 ) THEN
+C--- count (and store) total number of integration points through each stack group layer
+             IPPID = 2
+             IPNPT_LAY = IPPID + 3*NLAY
+             DO IL = 1,NLAY
+               NPT_LAY = STACK%IGEO(IPNPT_LAY + IL,ISUBSTACK)
+               ELBUF_TAB(NG)%BUFLY(IL)%NPTT = NPT_LAY
+             ENDDO
+           ELSE
+              DO IL = 1,NLAY
+                ELBUF_TAB(NG)%BUFLY(IL)%NPTT = NPTT
+              ENDDO
+           ENDIF
+         ELSE ! idrape = 0
+           IF (IGTYP == 51 ) THEN
+C--- count (and store) total number of integration points through each stack group layer
+             IPPID = 2
+             DO IL = 1,NLAY
+               IPIDL = STACK%IGEO(IPPID+IL,ISUBSTACK)
+               NPT_LAY = IGEO(4,IPIDL)
+               ELBUF_TAB(NG)%BUFLY(IL)%NPTT = NPT_LAY
+             ENDDO
+           ELSEIF(IGTYP == 52) THEN
+             IPPID = 2
+             DO IL = 1,NLAY
+               IPIDL = STACK%IGEO(IPPID+IL,ISUBSTACK)
+               NPT_LAY = IGEO_STACK(4,IPIDL)
+               ELBUF_TAB(NG)%BUFLY(IL)%NPTT = NPT_LAY
+             ENDDO  
+           ELSE
+             DO IL = 1,NLAY
+               ELBUF_TAB(NG)%BUFLY(IL)%NPTT = NPTT
+             ENDDO
+           ENDIF   
+         ENDIF 
+C---
+          NPTTOT  = 0
+          DO I=1,NLAY
+            NPTTOT = NPTTOT + NPG*ELBUF_TAB(NG)%BUFLY(I)%NPTT
+          ENDDO
+C---
+          DO IL = 1, NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+            NPTT = BUFLY%NPTT
+            ALLOCATE(BUFLY%LBUF(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%MAT(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%FAIL(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%PROP(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%EOS(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%VISC(NPTR, NPTS, NPTT))
+            ALLOCATE(BUFLY%PORO(NPTR, NPTS, NPTT))
+            IF(IDRAPE > 0 .AND. (IGTYP == 51 .OR. IGTYP == 52))
+     .        call my_alloc(ELBUF_TAB(NG)%BUFLY(IL)%LBUF_DIR, NPTT, 
+     .                      "ELBUF_TAB(NG)%BUFLY(IL)%LBUF_DIR")
+          ENDDO
+C---
+          ! Non-local regularization in the shell thickness
+          IF ((INLOC > 0).AND.(NPTT>1)) THEN 
+            ! Allocation of the non-local in thickness structural data
+            ALLOCATE(ELBUF_TAB(NG)%NLOC(NPTR, NPTS))
+            ! Number of non-local nodes in the thickness
+            IF (NPTT>2) THEN
+              NONL = NPTT+1
+            ELSE
+              NONL = NPTT
+            ENDIF
+            ! Loop over Gauss points in the plane of the shell
+            DO IR = 1,NPTR
+              DO IS = 1,NPTS
+                ! Non-local buffer
+                BUFNL => ELBUF_TAB(NG)%NLOC(IR,IS)
+                ! Non-local in-thickness masses
+                CALL MY_ALLOC(BUFNL%MASSTH,NEL,NONL,"BUFNL%MASSTH")
+                BUFNL%MASSTH = ZERO
+                LNLOC = LNLOC + NEL*NONL
+                ! Non-local in-thickness cumulated variables
+                CALL MY_ALLOC(BUFNL%UNLTH,NEL,NONL,"BUFNL%UNLTH")
+                BUFNL%UNLTH = ZERO
+                LNLOC = LNLOC + NEL*NONL
+                ! Non-local in-thickness velocities
+                CALL MY_ALLOC(BUFNL%VNLTH,NEL,NONL,"BUFNL%VNLTH")
+                BUFNL%VNLTH = ZERO
+                LNLOC = LNLOC + NEL*NONL
+                ! Non-local in-thickness forces
+                CALL MY_ALLOC(BUFNL%FNLTH,NEL,NONL,"BUFNL%FNLTH")
+                BUFNL%FNLTH = ZERO
+                LNLOC = LNLOC + NEL*NONL
+              ENDDO
+            ENDDO
+          ENDIF
+!-------------------------------------------------
+C---
+          call my_alloc(ELBUF_TAB(NG)%INTLAY, NINTLAY, "ELBUF_TAB(NG)%INTLAY")
+          DO I = 1, NINTLAY                                      
+            INTLAY => ELBUF_TAB(NG)%INTLAY(I)                  
+            ALLOCATE(INTLAY%ILBUF(NPTR, NPTS))
+            ALLOCATE(INTLAY%MAT(NPTR, NPTS))
+            ALLOCATE(INTLAY%FAIL(NPTR, NPTS))
+          ENDDO                                                  
+c-------------------------------------------------
+          CALL ZEROVARS_AUTO(ELBUF_TAB(NG))
+c-------------------------------------------------
+          CALL INI_OUTMAX_AUTO(ELBUF_TAB(NG),ITY,NG) 
+c
+c---  User Mat Buffer, Fail buffer - structure parameters
+c
+          IF (IGTYP == 11 .or. IGTYP == 16) THEN                         
+            DO IL = 1,NLAY
+              IMAT(IL) = IGEO(100+IL,IPID)                                        
+              ILAW(IL) = IPM(2,IMAT(IL)) 
+            ENDDO
+          ELSEIF (IGTYP == 17 .OR. IGTYP == 51 .OR. IGTYP ==52) THEN 
+            IPMAT   = 2 + NLAY    
+            DO IL = 1,NLAY
+              IMAT(IL)  = STACK%IGEO(IPMAT + IL ,ISUBSTACK)
+              ILAW(IL) = IPM(2,IMAT(IL)) 
+            ENDDO
+          ELSEIF(IPM(2,IMID) == 151)THEN
+            DO IL = 1,NLAY
+              IMAT(IL) = IPM(20+IL,IMID)
+              ILAW(IL) = IPM(2,IPM(20+IL,IMID))
+            ENDDO
+          ELSE   ! IGTYP = 1,9,10
+            DO IL = 1,NLAY
+              IMAT(IL) = IMID                                       
+              ILAW(IL) = MLW
+            ENDDO
+          END IF
+c
+c-----------------------------------------------          
+          IF (MLW == 151) THEN  ! Multifluid law
+            DO IL = 1,NLAY
+              IEOS_TYPE = MAT_PARAM(IMAT(IL))%IEOS
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW = ILAW(IL)
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT = IMAT(IL)
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS = IEOS        
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO= 0        
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL= 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT  = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS  = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP   = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS = 0
+            ENDDO
+          ELSE     
+            DO IL = 1,NLAY
+              NFAIL    = MAT_PARAM(IMAT(IL))%NFAIL
+              NVAR_EOS = 0
+              NVAR_EOS = 0
+              NVARTMP_EOS = 0
+              IEOS_TYPE = IPM(4,IMAT(IL))
+              IF(IEOS_TYPE>0)NVAR_EOS = EOS_TAG(IEOS_TYPE)%NVAR
+              IF(IEOS_TYPE>0)NVARTMP_EOS = EOS_TAG(IEOS_TYPE)%NVARTMP
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW  = ILAW(IL)        
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT  = IMAT(IL)
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS  = IEOS        
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC = MAT_PARAM(IMAT(IL))%VISC%ILAW
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT  = MLAW_TAG(IMAT(IL))%NUVAR
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP   = MLAW_TAG(IMAT(IL))%NVARTMP
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = MAT_PARAM(IMAT(IL))%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS = NVAR_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS = NVARTMP_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO = 0        
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL = NFAIL  
+
+              DO J = 1, NFAIL                                            
+                IRUPT  = MAT_PARAM(IMAT(IL))%FAIL(J)%IRUPT   ! rupture model
+                IDFAIL = MAT_PARAM(IMAT(IL))%FAIL(J)%FAIL_ID
+                TFAIL(IL,J)  = IRUPT  
+                FAILID(IL,J) = IDFAIL    
+              ENDDO                                                           
+            ENDDO                                       
+          ENDIF       
+c--------------
+         IF (DEBUG_PRINT == 1) THEN
+c            print*,'      nlay,nptr,npts,nptt,npt=',nlay,nptr,npts,nptt,npt
+         ENDIF
+c--------------
+c---      Layer variables
+c---      User Mat Buffer, Fail buffer, Visc buffer :  alloc + init
+          DO IL = 1, NLAY
+           MX      = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+           NUVARV  = MAT_PARAM(MX)%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+           ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = NUVARV
+           NUVARM = ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT
+           NVARTMP= ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP
+           NVAR_EOS = ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS
+           NVARTMP_EOS = ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS
+           NFAIL  = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+           NPTT   = ELBUF_TAB(NG)%BUFLY(IL)%NPTT
+           DO IR = 1,NPTR                                       
+            DO IS = 1,NPTS                                      
+              DO IT = 1,NPTT
+                ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)%MLAW = ELBUF_TAB(NG)%BUFLY(IL)%ILAW
+                ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)%LawID = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+      CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR,NUVARM*NEL,"ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VARTMP,NVARTMP*NEL,"BUFLY%MAT%VARTMP")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%VISC(IR,IS,IT)%VAR,NUVARV*NEL,"BUFLY%VISC%VAR")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VAR,NVAR_EOS*NEL,"BUFLY%EOS%VAR")
+                CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VARTMP,NVARTMP_EOS*NEL,"BUFLY%EOS%VARTMP")
+                ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR = ZERO
+                ELBUF_TAB(NG)%BUFLY(IL)%VISC(IR,IS,IT)%VAR = ZERO
+                ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VAR = ZERO
+                ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VARTMP = 0
+                ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VARTMP = 0
+c
+                LMAT  = LMAT  + NUVARM*NEL
+                LVISC = LVISC + NUVARV*NEL
+                LEOS = LEOS + NVAR_EOS*NEL
+
+      call my_alloc(ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC, NFAIL, "ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC")
+                MX = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                DO J = 1,NFAIL
+                  FLOC=>ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC(J)         
+                  
+                  IRUPT = MAT_PARAM(MX)%FAIL(J)%IRUPT
+                  FLOC%ILAWF = IRUPT 
+                  LFAIL = LFAIL + 1 
+c
+                  FLOC%IDFAIL = MAT_PARAM(MX)%FAIL(J)%FAIL_ID 
+                  LFAIL = LFAIL + 1 
+c
+                  FLOC%NVAR  = MAT_PARAM(MX)%FAIL(J)%NUVAR                       
+                  CALL MY_ALLOC(FLOC%VAR,FLOC%NVAR*NEL,"FLOC%VAR")
+                  FLOC%VAR = ZERO     
+                  LFAIL = LFAIL + FLOC%NVAR*NEL + 1 
+c
+                  NVARTMP  = MAT_PARAM(MX)%FAIL(J)%NVARTMP                       
+                  CALL MY_ALLOC(FLOC%VARTMP,NVARTMP*NEL,"FLOC%VARTMP")
+                  FLOC%VARTMP = 0     
+c
+                  FLOC%LF_DAM  = FAIL_TAG(MX,J)%LF_DAM                        
+                  CALL MY_ALLOC(FLOC%DAM,FLOC%LF_DAM*NEL,"FLOC%DAM")
+                  FLOC%DAM = ZERO   
+                  LFAIL = LFAIL + FLOC%LF_DAM*NEL + 1 
+c
+                  FLOC%LF_DAMMX  = FAIL_TAG(MX,J)%LF_DAMMX                        
+                  CALL MY_ALLOC(FLOC%DAMMX,FLOC%LF_DAMMX*NEL,"FLOC%DAMMX")
+                  FLOC%DAMMX = ZERO
+                  LFAIL = LFAIL + FLOC%LF_DAMMX*NEL + 1 
+c
+                  FLOC%LF_DAMINI = FAIL_TAG(MX,J)%LF_DAMINI                      
+                  CALL MY_ALLOC(FLOC%DAMINI,FLOC%LF_DAMINI*NEL,"FLOC%DAMINI")
+                  FLOC%DAMINI = ZERO
+                  LFAIL = LFAIL + FLOC%LF_DAMINI*NEL + 1 
+c
+                  FLOC%LF_TDEL  = FAIL_TAG(MX,J)%LF_TDEL                        
+                  CALL MY_ALLOC(FLOC%TDEL,FLOC%LF_TDEL*NEL,"FLOC%TDEL")
+                  FLOC%TDEL = ZERO                                                               
+                  LFAIL = LFAIL + FLOC%LF_TDEL*NEL + 1 
+c
+                  FLOC%LF_INDX = FAIL_TAG(MX,J)%LF_INDX                       
+                  CALL MY_ALLOC(FLOC%INDX,FLOC%LF_INDX*NEL,"FLOC%INDX")
+                  FLOC%INDX = 0
+                  LFAIL = LFAIL + FLOC%LF_INDX*NEL + 1 
+c
+                  FLOC%LF_OFF = FAIL_TAG(MX,J)%LF_OFF                       
+                  CALL MY_ALLOC(FLOC%OFF,FLOC%LF_OFF*NEL,"FLOC%OFF")
+                  FLOC%OFF = 1                                                               
+                  LFAIL = LFAIL + FLOC%LF_OFF*NEL + 1 
+c
+                ENDDO
+              ENDDO                                                           
+            ENDDO                                                          
+           ENDDO 
+          ENDDO
+c
+c---      Inter layer variables
+c
+          DO I=1,NINTLAY
+            DO J=1,MAXFLAY
+              TFAIL(I,J)  = 0
+              FAILID(I,J) = 0
+            ENDDO
+            ILAW(I) = 0
+            IMAT(I) = 0
+          ENDDO
+          
+          IPMAT_IPLY   = 2 + 2*NLAY
+          ! adding 
+          L_EPS  = 3  
+          L_SIG  = 3  
+          LY_EINT = 1  
+          LY_COUNT= 1  
+          DO IL = 1,NINTLAY                                                   
+            INTLAY  => ELBUF_TAB(NG)%INTLAY(IL)
+C old stack IGEO(500+IL,IPID)                                
+            IMAT(IL) = STACK%IGEO(IPMAT_IPLY + IL ,ISUBSTACK)                    
+            ILAW(IL) = IPM(2,IMAT(IL))                                        
+            NFAIL    = MAT_PARAM(IMAT(IL))%NFAIL                                  
+            ELBUF_TAB(NG)%INTLAY(IL)%ILAW = ILAW(IL)                          
+            ELBUF_TAB(NG)%INTLAY(IL)%IMAT = IMAT(IL)                          
+            ELBUF_TAB(NG)%INTLAY(IL)%NFAIL= NFAIL                             
+            ELBUF_TAB(NG)%INTLAY(IL)%NVAR_MAT = MLAW_TAG(IMAT(IL))%NUVAR          
+            ELBUF_TAB(NG)%INTLAY(IL)%NVARTMP  = MLAW_TAG(IMAT(IL))%NVARTMP          
+            DO J = 1, NFAIL                                                   
+              IRUPT  = MAT_PARAM(IMAT(IL))%FAIL(J)%IRUPT   ! rupture model
+              IDFAIL = MAT_PARAM(IMAT(IL))%FAIL(J)%FAIL_ID
+              TFAIL(IL,J)  = IRUPT 
+              FAILID(IL,J) = IDFAIL                                            
+            ENDDO                   
+               LIMAT = LIMAT + 5  ! inter layer parameters: = 5             
+               LIMAT = LIMAT + NEL*LY_EINT               
+               LIMAT = LIMAT + NEL*LY_COUNT   
+            ! write local inter layer variables for each element
+             DO I = 1,NPTR                                          
+                DO J = 1,NPTS                                          
+                   ILBUF => ELBUF_TAB(NG)%INTLAY(IL)%ILBUF(I,J)  
+                   CALL MY_ALLOC(INTLAY%ILBUF(I,J)%EPS,L_EPS*NEL,"INTLAY%ILBUF(I,J)%EPS")
+                   CALL MY_ALLOC(INTLAY%ILBUF(I,J)%SIG,L_SIG*NEL,"INTLAY%ILBUF(I,J)%SIG")
+                   INTLAY%ILBUF(I,J)%EPS = ZERO      
+                   INTLAY%ILBUF(I,J)%SIG = ZERO      
+                   LIMAT = LIMAT + NEL*L_EPS  
+                   LIMAT = LIMAT + NEL*L_SIG                                   
+                ENDDO                                                         
+              ENDDO                     
+          ENDDO                                                               
+c
+          DO IL = 1, NINTLAY                                                       
+            NUVARM  = ELBUF_TAB(NG)%INTLAY(IL)%NVAR_MAT                            
+            NVARTMP = ELBUF_TAB(NG)%INTLAY(IL)%NVARTMP                            
+            NFAIL = ELBUF_TAB(NG)%INTLAY(IL)%NFAIL                                
+            DO IR = 1,NPTR                                                         
+              DO IS = 1,NPTS        
+      CALL MY_ALLOC(ELBUF_TAB(NG)%INTLAY(IL)%MAT(IR,IS)%VAR,NUVARM*NEL,"ELBUF_TAB(NG)%INTLAY(IL)%MAT(IR,IS)%VAR")
+      CALL MY_ALLOC(ELBUF_TAB(NG)%INTLAY(IL)%MAT(IR,IS)%VARTMP,NVARTMP*NEL,"ELBUF_TAB(NG)%INTLAY(IL)%MAT(IR,IS)%VARTMP")
+                ELBUF_TAB(NG)%INTLAY(IL)%MAT(IR,IS)%VAR = ZERO                 
+                ELBUF_TAB(NG)%INTLAY(IL)%MAT(IR,IS)%VARTMP = 0
+                 LIMAT  = LIMAT  + NUVARM*NEL    ! Not need in restart file +    NVARTMP*NEL       
+c                ALLOCATE(ELBUF_TAB(NG)%INTLAY(IL)%VISC(IR,IS)%                 
+c     .                   VAR(NUVARV*NEL) ,STAT=Stat)                               
+c
+      call my_alloc(ELBUF_TAB(NG)%INTLAY(IL)%FAIL(IR,IS)%FLOC, NFAIL, "ELBUF_TAB(NG)%INTLAY(IL)%FAIL(IR,IS)%FLOC")
+c                LVISC = LVISC + NUVARV*NEL                                         
+                DO J = 1,NFAIL                                                     
+                  FLOC=>ELBUF_TAB(NG)%INTLAY(IL)%FAIL(IR,IS)%FLOC(J)           
+                  FLOC%ILAWF   = MAT_PARAM(IMAT(IL))%FAIL(J)%IRUPT 
+                  FLOC%IDFAIL  = MAT_PARAM(IMAT(IL))%FAIL(J)%FAIL_ID                                              
+                  FLOC%NVAR    = MAT_PARAM(IMAT(IL))%FAIL(J)%NUVAR                             
+                  NVARTMP      = MAT_PARAM(IMAT(IL))%FAIL(J)%NVARTMP                             
+                  CALL MY_ALLOC(FLOC%VAR,FLOC%NVAR*NEL,"FLOC%VAR")
+                  CALL MY_ALLOC(FLOC%VARTMP,NVARTMP*NEL,"FLOC%VARTMP")
+                  FLOC%VAR = ZERO                                                   
+                  FLOC%VARTMP = 0                                                   
+                  LIFAIL = LIFAIL + FLOC%NVAR*NEL + 3                               
+                ENDDO                                                              
+              ENDDO                                                                  
+            ENDDO                                                                   
+            IF (DEBUG_PRINT == 1) THEN
+              print*,''
+              print*,'    INTLAY ',IL
+              print*,'      LIMAT,LIFAIL = ',LIMAT,LIFAIL
+            ENDIF          
+          ENDDO                                                                    
+c----------------------------------
+          IF (DEBUG_PRINT == 1) THEN
+            print*,''
+            print*,'      sum local variables mat,visc,fail on all layers'
+            print*,'      LMAT,LVISC,LFAIL,LEOS = ',LMAT,LVISC,LFAIL,LEOS
+          ENDIF          
+c----------------------------------------------------
+          GBUF  => ELBUF_TAB(NG)%GBUF      
+          IF (JTHE /= 0     ) GBUF%G_TEMP = 1
+          IF (JTHE      /= 0 .AND. NPG > 1) GBUF%G_TEMPG = NPG
+          IF (ISMS_SELEC >= 1) GBUF%G_ISMS  = 1
+          IF (JEUL+JALE /= 0 .AND. ISNOD >= 4) GBUF%G_MOM  = 3
+          IF (ITY == 3) THEN
+            IF (JHBE <= 4) THEN
+              GBUF%G_HOURG = 5
+            ELSEIF (JHBE == 23) THEN
+              GBUF%G_HOURG = 12
+            ENDIF
+            IF (ISROT > 0) GBUF%G_HOURG = GBUF%G_HOURG + 13
+            IF (ISMSTR == 10) THEN
+C----------- -----            
+             GBUF%G_SMSTR = 9 
+            ELSEIF (ISMSTR /= 4) THEN
+             GBUF%G_SMSTR = 6
+            END IF
+cc          
+
+          ELSEIF (ITY == 7) THEN
+            IF (JHBE >= 30) THEN  ! dkt6
+              IF (ISMSTR /= 4) GBUF%G_SMSTR = 13
+            ELSEIF (ISMSTR == 10) THEN  
+              GBUF%G_SMSTR = 6 
+            ELSEIF (ISMSTR /= 4) THEN
+C------------- 3 is sufficient !!!!           
+              GBUF%G_SMSTR = 6
+            ENDIF
+            IF (JHBE < 30 .and. ISROT > 0) GBUF%G_HOURG = 5
+          ENDIF
+          IF (ITY == 3 .OR. ITY == 7) THEN
+            IF (DEFAULTS%SHELL%IOFFSET ==1) ELBUF_TAB(NG)%GBUF%G_SH_IOFFSET = 1
+            IF (NPT0 == 0) THEN 
+                GBUF%G_FOR_G = 5 ! avoid mem damping error
+                IF (NPG > 1) GBUF%G_FORPG_G = 5*NPG 
+            END IF
+          ENDIF
+c---------for accumulate WXY
+          IF (ISMSTR == 10 )THEN
+            GBUF%G_STRW = 1
+            GBUF%G_STRWPG  = GBUF%G_STRW*NPG
+            GBUF%G_STRA = 8
+            GBUF%G_STRPG = GBUF%G_STRA*NPG
+          ELSEIF (ISTRA > 0   .OR. IFAIL > 0 .OR.
+     .       ISMSTR == 11 .OR.(ISMSTR==1 .AND. MLW==19)) THEN
+            GBUF%G_STRA = 8
+          ENDIF
+          IF (ITY == 3 .AND. JHBE == 23 .AND. ISTR_24 > 0) GBUF%G_STRPG = 4*GBUF%G_STRA
+c           Allocate thermal stress and Thermal internal energy
+          IF(IEXPAN > 0) THEN
+             GBUF%G_FORTH = 2
+             GBUF%G_EINTTH = 1
+          ENDIF              
+c
+c         local material variables   
+          DO IL = 1, NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+            IF (ISORTH == 1 .AND. ISROT > 0) BUFLY%L_SIGD = 6
+            IF (GBUF%G_GAMA > 0 .AND. NLAY > 1) BUFLY%L_GAMA = GBUF%G_GAMA
+            IF (IREP == 1 ) THEN
+              BUFLY%LY_DIRA = 2
+            ELSEIF (IREP >= 2) THEN
+              BUFLY%LY_DIRA = 2
+              BUFLY%LY_DIRB = 2
+            ENDIF
+            IF (JTHE /= 0) BUFLY%L_TEMP = 1
+            IF (ISVIS > 0 .OR. BUFLY%IVISC == 1 .OR. BUFLY%IVISC == 3) BUFLY%L_SIGV = 5                      
+            IF ((BUFLY%IVISC > 0).OR.(IDAMP_FREQ_RANGE > 0)) BUFLY%L_VISC = 5
+            IF (BUFLY%IVISC > 0 .and. MLW == 25) BUFLY%L_SIGD = 6
+            IF (MLW == 27) BUFLY%L_DMG  = 2
+            IF (MLW == 2)  BUFLY%L_SIGB  = 3
+            IF (IXFEM > 0) THEN
+              IF (ISTRA > 0 .AND. MLW /= 0 .AND. NLAY > 1) BUFLY%L_STRA = 8
+              BUFLY%L_SMSTR = 6
+              BUFLY%L_THK = 1
+              BUFLY%LY_HOURG = GBUF%G_HOURG
+              IF (IGTYP == 11 .or. IGTYP == 51 .or. IGTYP == 52) THEN
+                BUFLY%L_FOR = 5
+                BUFLY%L_MOM = 3
+              ENDIF
+              IF (LFAIL > 0) THEN
+                BUFLY%LY_UELR  = 1
+                BUFLY%LY_UELR1 = 1
+              ENDIF
+            ENDIF
+c           Allocate thermal stress and Thermal internal energy
+            IF (IEXPAN > 0) THEN
+               BUFLY%L_FORTH = 2
+               BUFLY%L_EINTTH = 1
+            ENDIF
+            IF(IUFACYLD == 1.AND.(MLW==36.OR.MLW==87))BUFLY%L_FAC_YLD = 1
+
+            IF (LFAIL > 0) THEN
+              BUFLY%L_OFF = 1
+              BUFLY%LY_OFFPG = NPG
+              BUFLY%LY_OFF   = 1
+            ENDIF
+          ENDDO   
+
+c           Allocate Orthotropic Beta angle (dyna input format)
+          IF((ITY==3.OR.ITY==7).AND.IGTYP /= 1) THEN
+             GBUF%G_BETAORTH = 1
+          ENDIF                   
+c----------------------------------------------------
+          CALL INITVARS_AUTO(
+     .         ELBUF_TAB(NG),MLAW_TAG ,PROP_TAG ,
+     .         IMID         ,MLW      ,IGTYP    ,JMULT    ,IFAIL  ,
+     .         IEOS         ,EOS_TAG  ,ISNOD    )  
+c-------------------------------------------------
+!---
+!          !  equivalent stress / criterion - other then VON MISES
+!          IF( GBUF%G_SEQ > 0) THEN
+!            DO IL = 1, NLAY
+!              BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+!              LAW = BUFLY%ILAW
+!              IF (LAW == 10 .OR. LAW == 12 .OR. LAW == 14 .OR.
+!     .            LAW == 15 .OR. LAW == 21 .OR. LAW == 24 .OR.
+!     .            LAW == 25 .OR. LAW == 32 .OR. LAW == 43 .OR.
+!     .            LAW == 53 .OR. LAW == 57 .OR. LAW == 72 .OR.
+!     .            LAW == 73 .OR. LAW == 74 .OR. LAW == 81 .OR.
+!     .            LAW == 93) THEN
+!                BUFLY%L_SEQ = 1
+!              ENDIF
+!            ENDDO
+!          ENDIF
+!---
+c-------------------------------------------------
+c       size of the local ELBUF array for restart
+c-------------------------------------------------
+c         GBUF%NVAR_GLOB ! number of element variables in GBUF 
+c         BUFLY%NVAR_LOC ! number of element variables in LBUF (defined on layer level)
+c          
+          BUFLEN = NPAR_TAB + LMAT  + LFAIL + LVISC + LPORO + LEOS + LIMAT + LIFAIL + LNLOC
+c-------------------------------------------------
+         IF (DEBUG_PRINT == 1) THEN
+           print*,'       BUFLEN=NPAR_TAB+LMAT+LFAIL+LVISC+LPORO+LEOS+LIMAT+LIFAIL+LNLOC',buflen             
+         ENDIF
+c-------------------------------------------------
+          IF (LFAIL > 0) THEN
+            GBUF%G_UELR  = 1
+            GBUF%G_UELR1 = 1
+            DO IL=1,NLAY
+              BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+              NFAIL = BUFLY%NFAIL
+              DO J=1,NFAIL
+                IRUPT = TFAIL(IL,J)
+                BUFLY%LY_CRKDIR = MAX(FAIL_TAG(IMID,J)%LF_DIR,BUFLY%LY_CRKDIR)
+                BUFLY%LY_DMG  = MAX(FAIL_TAG(IMID,J)%LF_DAM,BUFLY%LY_DMG)
+              ENDDO
+            ENDDO
+          ENDIF
+          IF (MLW /= 151) THEN
+             GBUF%G_RHO = 0
+          ENDIF
+C
+          LGLOB = 0                                 
+          LGLOB = LGLOB + GBUF%G_NOFF  
+          LGLOB = LGLOB + GBUF%G_IERR  
+          LGLOB = LGLOB + GBUF%G_GAMA  
+C This array is a double precision array even in SP executable.
+C Remode from global buffer writing
+c           LGLOB = LGLOB + GBUF%G_SMSTR
+          LGLOB = LGLOB + GBUF%G_HOURG 
+          LGLOB = LGLOB + GBUF%G_TAG22
+          LGLOB = LGLOB + GBUF%G_STRA
+          LGLOB = LGLOB + GBUF%G_SIGI
+          LGLOB = LGLOB + GBUF%G_DMG
+          LGLOB = LGLOB + GBUF%G_DAMDL  
+          LGLOB = LGLOB + GBUF%G_FOR     
+          LGLOB = LGLOB + GBUF%G_MOM     
+          LGLOB = LGLOB + GBUF%G_THK
+          LGLOB = LGLOB + GBUF%G_DT
+          LGLOB = LGLOB + GBUF%G_ISMS
+C-------G_THK_I =  G_THK          
+          LGLOB = LGLOB + GBUF%G_STRW 
+          GBUF%G_THK_I = GBUF%G_THK
+          LGLOB = LGLOB + GBUF%G_THK_I
+          LGLOB = LGLOB + GBUF%G_MAXFRAC
+          LGLOB = LGLOB + GBUF%G_MAXEPS    
+          LGLOB = LGLOB + GBUF%G_FOR_G
+          LGLOB = LGLOB + GBUF%G_WPLA             
+          IF (NPG > 1) THEN
+            LGLOB = LGLOB + GBUF%G_FORPG
+            LGLOB = LGLOB + GBUF%G_MOMPG
+C
+            LGLOB = LGLOB + GBUF%G_FORPGPINCH
+            LGLOB = LGLOB + GBUF%G_MOMPGPINCH
+            LGLOB = LGLOB + GBUF%G_EPGPINCHXZ
+            LGLOB = LGLOB + GBUF%G_EPGPINCHYZ
+            LGLOB = LGLOB + GBUF%G_EPGPINCHZZ
+C
+            LGLOB = LGLOB + GBUF%G_STRPG
+            LGLOB = LGLOB + GBUF%G_STRWPG
+            LGLOB = LGLOB + GBUF%G_TEMPG
+            LGLOB = LGLOB + GBUF%G_FORPG_G
+          ELSEIF (GBUF%G_STRPG > GBUF%G_STRA) THEN
+            LGLOB = LGLOB + GBUF%G_STRPG
+          ENDIF
+c
+          IF (LFAIL > 0) THEN
+            LGLOB = LGLOB + GBUF%G_UELR
+            LGLOB = LGLOB + GBUF%G_UELR1
+          ENDIF
+C
+          IF (NPTTOT /= 1) THEN 
+            LGLOB = LGLOB + GBUF%G_BFRAC    
+            LGLOB = LGLOB + GBUF%G_OFF   
+            LGLOB = LGLOB + GBUF%G_EINT  
+            LGLOB = LGLOB + GBUF%G_EINS  
+            LGLOB = LGLOB + GBUF%G_RHO   
+            LGLOB = LGLOB + GBUF%G_QVIS  
+            LGLOB = LGLOB + GBUF%G_DELTAX
+            LGLOB = LGLOB + GBUF%G_VOL   
+            LGLOB = LGLOB + GBUF%G_EPSD  
+            LGLOB = LGLOB + GBUF%G_EPSQ  
+            LGLOB = LGLOB + GBUF%G_PLA   
+            LGLOB = LGLOB + GBUF%G_TEMP  
+            LGLOB = LGLOB + GBUF%G_TB    
+            LGLOB = LGLOB + GBUF%G_RK    
+            LGLOB = LGLOB + GBUF%G_RE    
+            LGLOB = LGLOB + GBUF%G_SIG   
+            LGLOB = LGLOB + GBUF%G_FORTH   
+            LGLOB = LGLOB + GBUF%G_EINTTH
+            LGLOB = LGLOB + GBUF%G_SEQ
+            LGLOB = LGLOB + GBUF%G_ABURN
+            LGLOB = LGLOB + GBUF%G_MU
+          ENDIF   
+C
+          LGLOB = LGLOB + GBUF%G_AREA
+          LGLOB = LGLOB + GBUF%G_SKEW
+          LGLOB = LGLOB + GBUF%G_LENGTH
+          LGLOB = LGLOB + GBUF%G_TOTDEPL
+          LGLOB = LGLOB + GBUF%G_TOTROT
+          LGLOB = LGLOB + GBUF%G_FOREP
+          LGLOB = LGLOB + GBUF%G_MOMEP
+          LGLOB = LGLOB + GBUF%G_DEP_IN_TENS
+          LGLOB = LGLOB + GBUF%G_DEP_IN_COMP
+          LGLOB = LGLOB + GBUF%G_ROT_IN_TENS
+          LGLOB = LGLOB + GBUF%G_ROT_IN_COMP
+          LGLOB = LGLOB + GBUF%G_POSX
+          LGLOB = LGLOB + GBUF%G_POSY
+          LGLOB = LGLOB + GBUF%G_POSZ
+          LGLOB = LGLOB + GBUF%G_POSXX
+          LGLOB = LGLOB + GBUF%G_POSYY
+          LGLOB = LGLOB + GBUF%G_POSZZ
+          LGLOB = LGLOB + GBUF%G_YIELD
+          LGLOB = LGLOB + GBUF%G_LENGTH_ERR
+          LGLOB = LGLOB + GBUF%G_DV
+          LGLOB = LGLOB + GBUF%G_DFS
+          LGLOB = LGLOB + GBUF%G_SKEW_ERR
+          LGLOB = LGLOB + GBUF%G_E6
+          LGLOB = LGLOB + GBUF%G_RUPTCRIT
+          LGLOB = LGLOB + GBUF%G_MASS
+          LGLOB = LGLOB + GBUF%G_V_REPCVT
+          LGLOB = LGLOB + GBUF%G_VR_REPCVT
+          LGLOB = LGLOB + GBUF%G_NUVAR
+          LGLOB = LGLOB + GBUF%G_DEFINI
+          LGLOB = LGLOB + GBUF%G_FORINI
+          LGLOB = LGLOB + GBUF%G_INIFRIC
+C
+          LGLOB = LGLOB + GBUF%G_SLIPRING_ID
+          LGLOB = LGLOB + GBUF%G_SLIPRING_FRAM_ID
+          LGLOB = LGLOB + GBUF%G_INTVAR
+          LGLOB = LGLOB + GBUF%G_ADD_NODE
+          LGLOB = LGLOB + GBUF%G_UPDATE
+C
+          LGLOB = LGLOB + GBUF%G_FILL
+          LGLOB = LGLOB + GBUF%G_BETAORTH            
+C ---add H3D/TMAX in BUFLEN         
+          LGLOB = LGLOB + GBUF%G_TM_YIELD
+          LGLOB = LGLOB + GBUF%G_TM_SEQ  
+          LGLOB = LGLOB + GBUF%G_TM_EINT 
+          LGLOB = LGLOB + GBUF%G_TM_DMG  
+          LGLOB = LGLOB + 2*GBUF%G_TM_SIG  
+          LGLOB = LGLOB + 2*GBUF%G_TM_STRA 
+          LGLOB = LGLOB + GBUF%G_SH_IOFFSET
+C
+c
+          BUFLEN = BUFLEN + GBUF%NVAR_GLOB + 1 + LGLOB*NEL
+c
+c--------- 
+        IF (DEBUG_PRINT == 1) THEN       
+        print*,'    LGLOB, glob vars= ',LGLOB,LGLOB*NEL               
+        print*,'     total glob: ',  GBUF%NVAR_GLOB + 1 + LGLOB*NEL            
+        print*,'  buflen=BUFLEN + GBUF%NVAR_GLOB + 1 + LGLOB*NEL',buflen
+        print*,' NPAR_LAY+NVAR_LAY,NVAR_LOC=',NPAR_LAY+BUFLY%NVAR_LAY+BUFLY%NVAR_LOC
+        ENDIF
+c---------          
+c
+          LLAY = 0
+          IAD  = 0
+          DO I=1,NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(I)
+            LLAY = LLAY + NPAR_LAY + BUFLY%NVAR_LAY + BUFLY%NVAR_LOC
+            LLAY = LLAY + NEL*BUFLY%LY_DMG 
+            LLAY = LLAY + NEL*BUFLY%LY_GAMA
+            IF(IDRAPE == 0 .OR. (IDRAPE > 0 .AND. IGTYP == 17)) THEN
+              LLAY = LLAY + NEL*BUFLY%LY_DIRA
+              LLAY = LLAY + NEL*BUFLY%LY_DIRB
+            ENDIF  
+            IF (NPG > 1) THEN
+              IF (NLAY > 1) THEN
+                LEN_PLAPT = NEL*BUFLY%LY_PLAPT
+                LEN_SIGPT = NEL*BUFLY%LY_SIGPT
+              ELSE
+                IF (IGTYP /= 51 .AND. IGTYP /= 52) THEN
+                  LEN_PLAPT = NEL*BUFLY%LY_PLAPT*NPT
+                  LEN_SIGPT = NEL*BUFLY%LY_SIGPT*NPT
+                ELSE
+                  LEN_PLAPT = NEL*BUFLY%LY_PLAPT*BUFLY%NPTT
+                  LEN_SIGPT = NEL*BUFLY%LY_SIGPT*BUFLY%NPTT
+                ENDIF
+              ENDIF
+cc              LLAY = LLAY + NEL*BUFLY%LY_PLAPT
+cc              LLAY = LLAY + NEL*BUFLY%LY_SIGPT
+              LLAY = LLAY + LEN_PLAPT
+              LLAY = LLAY + LEN_SIGPT
+            ENDIF   
+            LLAY = LLAY + NEL*BUFLY%LY_HOURG
+            IF (LFAIL > 0) THEN
+              LLAY = LLAY + NEL*BUFLY%LY_UELR
+              LLAY = LLAY + NEL*BUFLY%LY_UELR1
+              LLAY = LLAY + NEL*BUFLY%LY_CRKDIR
+              LLAY = LLAY + NEL*BUFLY%LY_OFFPG
+              LLAY = LLAY + NEL*BUFLY%LY_OFF
+            ENDIF
+              IF (DEBUG_PRINT == 1) THEN
+                 print*,'  **  LAYER=',IL
+                 print*,'    vars NEL*LY_xxx, buflen =: ',  LLAY - IAD , buflen                           
+                 IAD = LLAY
+              ENDIF
+          ENDDO
+c
+          BUFLEN = BUFLEN  + LLAY
+c
+c---------          
+          IF (DEBUG_PRINT == 1) THEN
+            print*,'    total vars LY_xxx, buflen =: ',  LLAY , buflen                           
+          ENDIF
+c---------          
+c---------          
+          DO IL=1,NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+c           ! tags for local variables : NVAR_LOC
+            NIP_LAY = NPG*BUFLY%NPTT
+c
+            LLOC = 0                                 
+            LLOC = LLOC + BUFLY%L_OFF    
+            LLOC = LLOC + BUFLY%L_GAMA 
+c
+            IF(IXFEM == 0) BUFLY%L_STRA  = 0     ! not used for shell elements
+            LLOC = LLOC + BUFLY%L_STRA   
+c            
+            LLOC = LLOC + BUFLY%L_FRAC   
+            LLOC = LLOC + BUFLY%L_BFRAC
+            LLOC = LLOC + BUFLY%L_EINT   
+            LLOC = LLOC + BUFLY%L_EINS 
+            IF (MLW /= 151) THEN
+               BUFLY%L_RHO = 0
+            ENDIF
+            LLOC = LLOC + BUFLY%L_RHO         
+            LLOC = LLOC + BUFLY%L_DP_DRHO     
+            LLOC = LLOC + BUFLY%L_QVIS   
+            LLOC = LLOC + BUFLY%L_DELTAX 
+            LLOC = LLOC + BUFLY%L_VOL    
+            LLOC = LLOC + BUFLY%L_EPSA   
+            LLOC = LLOC + BUFLY%L_EPSD   
+            LLOC = LLOC + BUFLY%L_EPSQ   
+            LLOC = LLOC + BUFLY%L_EPSF   
+            LLOC = LLOC + BUFLY%L_PLA    
+            LLOC = LLOC + BUFLY%L_WPLA    
+            LLOC = LLOC + BUFLY%L_TEMP 
+            LLOC = LLOC + BUFLY%L_TB     
+            LLOC = LLOC + BUFLY%L_RK     
+            LLOC = LLOC + BUFLY%L_RE     
+            LLOC = LLOC + BUFLY%L_VK     
+            LLOC = LLOC + BUFLY%L_SF     
+            LLOC = LLOC + BUFLY%L_ROB    
+            LLOC = LLOC + BUFLY%L_DAM    
+            LLOC = LLOC + BUFLY%L_DSUM   
+            LLOC = LLOC + BUFLY%L_DGLO     
+            LLOC = LLOC + BUFLY%L_CRAK   
+            LLOC = LLOC + BUFLY%L_ANG      
+            LLOC = LLOC + BUFLY%L_EPE    
+            LLOC = LLOC + BUFLY%L_EPC    
+            LLOC = LLOC + BUFLY%L_XST    
+            LLOC = LLOC + BUFLY%L_SSP    
+            LLOC = LLOC + BUFLY%L_Z      
+            LLOC = LLOC + BUFLY%L_VISC   
+            LLOC = LLOC + BUFLY%L_SIGL   
+            LLOC = LLOC + BUFLY%L_SIGV   
+            LLOC = LLOC + BUFLY%L_SIGA   
+            LLOC = LLOC + BUFLY%L_SIGB   
+            LLOC = LLOC + BUFLY%L_SIGC        
+            LLOC = LLOC + BUFLY%L_SIGD        
+            LLOC = LLOC + BUFLY%L_SIGF   
+            LLOC = LLOC + BUFLY%L_SIG
+            LLOC = LLOC + BUFLY%L_SIGPLY
+            LLOC = LLOC + BUFLY%L_FOR    
+            LLOC = LLOC + BUFLY%L_MOM
+            LLOC = LLOC + BUFLY%L_THK    
+            LLOC = LLOC + BUFLY%L_SMSTR    
+            LLOC = LLOC + BUFLY%L_DMG  
+            LLOC = LLOC + BUFLY%L_FORTH
+            LLOC = LLOC + BUFLY%L_EINTTH
+            LLOC = LLOC + BUFLY%L_SEQ
+            LLOC = LLOC + BUFLY%L_FAC_YLD 
+            LLOC = LLOC + BUFLY%L_ABURN 
+            LLOC = LLOC + BUFLY%L_MU 
+            LLOC = LLOC + BUFLY%L_PLANL
+            LLOC = LLOC + BUFLY%L_EPSDNL
+            LLOC = LLOC + BUFLY%L_DMGSCL
+            LLOC = LLOC + BUFLY%L_TSAIWU
+c
+            BUFLEN = BUFLEN + (LLOC * NEL + NPAR_LBUF) * NIP_LAY 
+            IF(IDRAPE > 0 .AND. (IGTYP == 51 .OR. IGTYP == 52)) THEN
+               LLOC_SLICE = BUFLY%LY_DIRA + BUFLY%LY_DIRB
+               BUFLEN = BUFLEN + LLOC_SLICE*NEL*BUFLY%NPTT
+            ENDIF
+            IF (DEBUG_PRINT == 1) THEN
+               print*,'  **  variables locales LAYER=',IL
+               print*,'     (LLOC*NEL+NPAR_LBUF)*NIP_LAY=',(LLOC*NEL+NPAR_LBUF)*NIP_LAY 
+            ENDIF
+c          
+          ENDDO
+          IPARG(66,NG) = BUFLEN    !  size of restart transfer table 
+ 
+          IF(PRINT_FLAG>6) WRITE(IOUT,1002) NG, BUFLEN
+c
+c-------------------------------------------------
+c          print*,' elbuf_ini : NG, buflen=',NG,buflen,ITY,IGTYP
+c-------------------------------------------------
+          CALL ALLOCBUF_AUTO(ELBUF_TAB,NLAY,NPTR,NPTS,NPTT,
+     .                       NINTLAY,NEL,NPT,NG,NGROUP,ITY,
+     .                       IGTYP,NUMMAT,MAT_PARAM)
+c-------------------------------------------------
+          CALL MY_DEALLOC(TFAIL)
+          CALL MY_DEALLOC(FAILID)
+          CALL MY_DEALLOC(IMAT)
+          CALL MY_DEALLOC(ILAW)
+c
+c=======================================================================
+c
+        ELSEIF (ITY == 4 .OR. ITY == 5 .OR. ITY == 6 .OR. ITY == 100) THEN 
+c
+c         1-D elements (TRUSS, BEAM, SPRING)
+c
+c=======================================================================
+          IF (ITY == 4) THEN      ! TRUSS
+            IMID = IXT(1,NFT+1)
+            IPID = IXT(4,NFT+1)
+          ELSEIF (ITY == 5) THEN  ! BEAM
+            IMID = IXP(1,NFT+1)     
+            IPID = IXP(5,NFT+1)
+          ELSEIF (ITY == 6) THEN  ! SPRING
+            IMID = IXR(5,NFT+1)
+            IPID = IXR(1,NFT+1)
+          ELSEIF (ITY == 100) THEN  ! MULTIBRIN
+            IMID = 0
+            IPID = KXX(2,NFT+1)
+          ENDIF
+          IGTYP = IGEO(11,IPID)
+C----
+          GBUF  => ELBUF_TAB(NG)%GBUF 
+C---
+          GBUF%G_DT = 1
+C
+          NPTT = 0
+          NPTR = 0
+          NPTS = 0
+          NLAY = 0
+          NPG  = 0
+C
+          IF (IGTYP == 18) THEN  ! integrated beams
+            NLAY = 1
+            NPTR = 1
+            NPTS = 1
+            NPTT = NPT
+          ENDIF
+C
+          IPARG(56,NG) = NPTR                              
+          IPARG(57,NG) = NPTS                              
+          IPARG(58,NG) = NPTT                              
+          IPARG(59,NG) = NLAY
+c-------------------------------------------------
+          ELBUF_TAB(NG)%IGTYP  = IGTYP                     
+          ELBUF_TAB(NG)%NEL    = NEL                                        
+          ELBUF_TAB(NG)%NLAY   = NLAY
+          ELBUF_TAB(NG)%NINTLAY= 0
+          ELBUF_TAB(NG)%NPTR   = NPTR
+          ELBUF_TAB(NG)%NPTS   = NPTS
+          ELBUF_TAB(NG)%NPTT   = NPTT
+          ELBUF_TAB(NG)%IXFEM  = 0
+          ELBUF_TAB(NG)%NXEL   = 0
+          ELBUF_TAB(NG)%IDRAPE = 0
+c-------------------------------------------------
+          CALL MY_ALLOC(IMAT,NLAY,"IMAT")
+          CALL MY_ALLOC(ILAW,NLAY,"ILAW")
+          ILAW(:) = 0
+          IMAT(:) = 0
+C
+          LMAT = 0
+          LEOS = 0
+C
+          IF (NLAY > 0) THEN  ! integrated beam (NLAY = 1)
+            call my_alloc(ELBUF_TAB(NG)%BUFLY, NLAY, "ELBUF_TAB(NG)%BUFLY")
+C---
+            DO IL = 1,NLAY
+              BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+              BUFLY%NPTT = NPTT
+              ALLOCATE(BUFLY%LBUF(NPTR, NPTS, NPTT))
+              ALLOCATE(BUFLY%MAT(NPTR, NPTS, NPTT))
+              ALLOCATE(BUFLY%EOS(NPTR, NPTS, NPTT))
+              ALLOCATE(BUFLY%FAIL(NPTR, NPTS, NPTT))
+            ENDDO
+C---
+c
+c---  User Mat Buffer - structure parameters
+c
+            DO IL = 1,NLAY
+              IMAT(IL) = IMID                                                      
+              ILAW(IL) = MLW
+              NFAIL    = MAT_PARAM(IMAT(IL))%NFAIL                                 
+              NVAR_EOS = 0
+              NVARTMP_EOS = 0
+              IEOS_TYPE = IPM(4,IMAT(IL))
+              IF(IEOS_TYPE>0)NVAR_EOS = EOS_TAG(IEOS_TYPE)%NVAR
+              IF(IEOS_TYPE>0)NVARTMP_EOS = EOS_TAG(IEOS_TYPE)%NVARTMP
+              ELBUF_TAB(NG)%BUFLY(IL)%ILAW = MLW                                   
+              ELBUF_TAB(NG)%BUFLY(IL)%IMAT = IMID                                  
+              ELBUF_TAB(NG)%BUFLY(IL)%IEOS = IEOS                                  
+              ELBUF_TAB(NG)%BUFLY(IL)%IVISC = MAT_PARAM(IMID)%VISC%ILAW                              
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT  = MLAW_TAG(IMAT(IL))%NUVAR
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP   = MLAW_TAG(IMAT(IL))%NVARTMP
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_VISC = MAT_PARAM(IMID)%VISC%NUVAR + NVAR_DAMP_FREQ_RANGE
+              ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS  = NVAR_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS  = NVARTMP_EOS
+              ELBUF_TAB(NG)%BUFLY(IL)%IPORO = 0
+              ELBUF_TAB(NG)%BUFLY(IL)%NFAIL = NFAIL
+            ENDDO
+c
+c---      User Mat Buffer, Fail buffer, Visc buffer :  alloc + init
+c
+            DO IL = 1,NLAY
+              NUVARM  = ELBUF_TAB(NG)%BUFLY(IL)%NVAR_MAT
+              NVARTMP = ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP
+              NVARTMP_EOS = ELBUF_TAB(NG)%BUFLY(IL)%NVARTMP_EOS
+              NVAR_EOS= ELBUF_TAB(NG)%BUFLY(IL)%NVAR_EOS
+              NPTT    = ELBUF_TAB(NG)%BUFLY(IL)%NPTT
+              NFAIL   = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL                                                
+              
+              DO IR = 1,NPTR                                       
+                DO IS = 1,NPTS                                      
+                  DO IT = 1,NPTT
+                    ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)%MLAW = ELBUF_TAB(NG)%BUFLY(IL)%ILAW
+                    ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)%LawID =  ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                    CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR,NUVARM*NEL,"BUFLY%MAT%VAR")
+                    CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VARTMP,NVARTMP*NEL,"BUFLY%MAT%VARTMP")
+                    CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VAR,NVAR_EOS*NEL,"BUFLY%EOS%VAR")
+                    CALL MY_ALLOC(ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VARTMP,NVARTMP_EOS*NEL,"BUFLY%EOS%VARTMP")
+                    ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VAR = ZERO
+                    ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)%VARTMP = 0
+                    ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VAR = ZERO
+                    ELBUF_TAB(NG)%BUFLY(IL)%EOS(IR,IS,IT)%VARTMP = 0
+                    LMAT  = LMAT  + NUVARM*NEL
+
+                    IF (NFAIL == 1) THEN
+                      IRUPT   = MAT_PARAM(IMAT(IL))%FAIL(1)%IRUPT   ! Failure model type    
+      call my_alloc(ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC, NFAIL, "ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC")
+                      FLOC   => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)%FLOC(1)         
+c
+                      FLOC%ILAWF = IRUPT                                            
+                      LFAIL = LFAIL + 1 
+c
+                      FLOC%IDFAIL = MAT_PARAM(IMAT(IL))%FAIL(1)%FAIL_ID 
+                      LFAIL = LFAIL + 1
+c
+                      FLOC%NVAR  = MAT_PARAM(IMAT(IL))%FAIL(1)%NUVAR                              
+                      CALL MY_ALLOC(FLOC%VAR,FLOC%NVAR*NEL,"FLOC%VAR")
+                      FLOC%VAR = ZERO     
+                      LFAIL = LFAIL + FLOC%NVAR*NEL + 1 
+c
+                      NVARTMP  = MAT_PARAM(IMAT(IL))%FAIL(1)%NVARTMP                              
+                      CALL MY_ALLOC(FLOC%VARTMP,NVARTMP*NEL,"FLOC%VARTMP")
+                      FLOC%VARTMP = 0     
+c
+                      FLOC%LF_DAM  = FAIL_TAG(IMAT(IL),1)%LF_DAM                        
+                      CALL MY_ALLOC(FLOC%DAM,FLOC%LF_DAM*NEL,"FLOC%DAM")
+                      FLOC%DAM = ZERO   
+                      LFAIL = LFAIL + FLOC%LF_DAM*NEL + 1 
+c
+                      FLOC%LF_DAMMX  = FAIL_TAG(IMAT(IL),1)%LF_DAMMX                       
+                      CALL MY_ALLOC(FLOC%DAMMX,FLOC%LF_DAMMX*NEL,"FLOC%DAMMX")
+                      FLOC%DAMMX = ZERO
+                      LFAIL = LFAIL + FLOC%LF_DAMMX*NEL + 1 
+c
+                      FLOC%LF_DAMINI = FAIL_TAG(IMAT(IL),1)%LF_DAMINI                      
+                      CALL MY_ALLOC(FLOC%DAMINI,FLOC%LF_DAMINI*NEL,"FLOC%DAMINI")
+                      FLOC%DAMINI = ZERO
+                      LFAIL = LFAIL + FLOC%LF_DAMINI*NEL + 1 
+c
+                      FLOC%LF_TDEL  = FAIL_TAG(IMAT(IL),1)%LF_TDEL                        
+                      CALL MY_ALLOC(FLOC%TDEL,FLOC%LF_TDEL*NEL,"FLOC%TDEL")
+                      FLOC%TDEL = ZERO                                                           
+                      LFAIL = LFAIL + FLOC%LF_TDEL*NEL + 1 
+c
+                      FLOC%LF_INDX = FAIL_TAG(IMAT(IL),1)%LF_INDX                       
+                      CALL MY_ALLOC(FLOC%INDX,FLOC%LF_INDX*NEL,"FLOC%INDX")
+                      FLOC%INDX = 0                                                           
+                      LFAIL = LFAIL + FLOC%LF_INDX*NEL + 1 
+c
+                      FLOC%LF_OFF = FAIL_TAG(IMAT(IL),1)%LF_OFF                       
+                      CALL MY_ALLOC(FLOC%OFF,FLOC%LF_OFF*NEL,"FLOC%OFF")
+                      FLOC%OFF = 1                                                           
+                      LFAIL = LFAIL + FLOC%LF_OFF*NEL + 1 
+                    END IF
+
+                  ENDDO                                                           
+                ENDDO                                                          
+              ENDDO 
+            ENDDO 
+c
+C---
+          ELSE  ! NLAY = 0  (spring std)
+            call my_alloc(ELBUF_TAB(NG)%BUFLY, 0, "ELBUF_TAB(NG)%BUFLY")
+          ENDIF ! IF (NLAY > 0)
+C
+          BUFLEN = NPAR_TAB + LMAT  + LFAIL + LVISC + LPORO + LEOS + LIMAT + LIFAIL
+c-------------------------------------------------
+          CALL ZEROVARS_AUTO(ELBUF_TAB(NG))
+c-------------------------------------------------
+          CALL INITVARS_AUTO(
+     .         ELBUF_TAB(NG),MLAW_TAG ,PROP_TAG ,
+     .         IMID         ,MLW      ,IGTYP    ,JMULT    ,IFAIL  ,
+     .         IEOS         ,EOS_TAG  ,ISNOD    )  
+C---
+            DO IL = 1,NLAY
+              BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+              IF (MLW == 2)  BUFLY%L_SIGB  = 0  ! NOT USED HERE
+              BUFLY%L_OFF   = 0  ! NOT USED HERE
+              BUFLY%L_EINT  = 0  ! NOT USED HERE
+              BUFLY%L_FAC_YLD = 0 ! NOT USED HERE
+            ENDDO
+C---
+C   - nstrand -
+          IF (ITY == 100) THEN
+            NUVARN = NINT(GEO(35,IPID))
+            NX = KXX(3,NFT+1)
+            GBUF%G_NUVARN = NUVARN*NX
+          ENDIF          
+c           Allocate thermal strain and Thermal internal energy
+          IF(IEXPAN > 0) THEN
+             GBUF%G_FORTH = 1  !
+             GBUF%G_EINTTH = 1  
+          ENDIF     
+C
+          IF (ISMS_SELEC >= 1) GBUF%G_ISMS  = 1
+c        Bolt /PRELOAD/AXIAL
+          IF (IBOLTP>0) GBUF%G_BPRELD = 2
+c-------------------------------------------------
+c       size of the local ELBUF array for restart
+c-------------------------------------------------
+          GBUF%G_THK_I = GBUF%G_THK
+
+          LGLOB = 0                                 
+C
+          LGLOB = LGLOB + GBUF%G_NOFF  
+          LGLOB = LGLOB + GBUF%G_IERR  
+          LGLOB = LGLOB + GBUF%G_GAMA  
+          LGLOB = LGLOB + GBUF%G_SMSTR 
+          LGLOB = LGLOB + GBUF%G_HOURG 
+          LGLOB = LGLOB + GBUF%G_TAG22
+          LGLOB = LGLOB + GBUF%G_STRA
+          LGLOB = LGLOB + GBUF%G_SIGI
+          LGLOB = LGLOB + GBUF%G_DMG
+          LGLOB = LGLOB + GBUF%G_DAMDL  
+          LGLOB = LGLOB + GBUF%G_FOR     
+          LGLOB = LGLOB + GBUF%G_MOM     
+          LGLOB = LGLOB + GBUF%G_THK
+          LGLOB = LGLOB + GBUF%G_DT
+          LGLOB = LGLOB + GBUF%G_ISMS
+          LGLOB = LGLOB + GBUF%G_STRW 
+          LGLOB = LGLOB + GBUF%G_THK_I
+          LGLOB = LGLOB + GBUF%G_MAXFRAC
+          LGLOB = LGLOB + GBUF%G_MAXEPS    
+          LGLOB = LGLOB + GBUF%G_BPRELD    
+
+          IF (NPG > 1) THEN                    ! not actually used
+            LGLOB = LGLOB + GBUF%G_FORPG
+            LGLOB = LGLOB + GBUF%G_MOMPG
+C
+            LGLOB = LGLOB + GBUF%G_FORPGPINCH
+            LGLOB = LGLOB + GBUF%G_MOMPGPINCH
+            LGLOB = LGLOB + GBUF%G_EPGPINCHXZ
+            LGLOB = LGLOB + GBUF%G_EPGPINCHYZ
+            LGLOB = LGLOB + GBUF%G_EPGPINCHZZ
+C
+            LGLOB = LGLOB + GBUF%G_STRPG
+            LGLOB = LGLOB + GBUF%G_STRWPG
+          ENDIF
+C
+          LGLOB = LGLOB + GBUF%G_BFRAC    
+          LGLOB = LGLOB + GBUF%G_OFF   
+          LGLOB = LGLOB + GBUF%G_EINT  
+          LGLOB = LGLOB + GBUF%G_EINS  
+          LGLOB = LGLOB + GBUF%G_RHO   
+          LGLOB = LGLOB + GBUF%G_QVIS  
+          LGLOB = LGLOB + GBUF%G_DELTAX
+          LGLOB = LGLOB + GBUF%G_VOL   
+          LGLOB = LGLOB + GBUF%G_EPSD  
+          LGLOB = LGLOB + GBUF%G_EPSQ  
+          LGLOB = LGLOB + GBUF%G_PLA   
+          LGLOB = LGLOB + GBUF%G_WPLA 
+          LGLOB = LGLOB + GBUF%G_TEMP  
+          LGLOB = LGLOB + GBUF%G_TB    
+          LGLOB = LGLOB + GBUF%G_RK    
+          LGLOB = LGLOB + GBUF%G_RE    
+          LGLOB = LGLOB + GBUF%G_SIG   
+          LGLOB = LGLOB + GBUF%G_FORTH   
+          LGLOB = LGLOB + GBUF%G_EINTTH
+          LGLOB = LGLOB + GBUF%G_SEQ
+          LGLOB = LGLOB + GBUF%G_ABURN
+          LGLOB = LGLOB + GBUF%G_MU
+C
+          LGLOB = LGLOB + GBUF%G_FILL
+C
+          IF (IGTYP == 3) THEN 
+            LGLOB = LGLOB + GBUF%G_DMGSCL 
+          ENDIF 
+          LGLOB = LGLOB + GBUF%G_AREA
+          LGLOB = LGLOB + GBUF%G_SKEW
+          LGLOB = LGLOB + GBUF%G_LENGTH
+          LGLOB = LGLOB + GBUF%G_TOTDEPL
+          LGLOB = LGLOB + GBUF%G_TOTROT
+          LGLOB = LGLOB + GBUF%G_FOREP
+          LGLOB = LGLOB + GBUF%G_MOMEP
+          LGLOB = LGLOB + GBUF%G_DEP_IN_TENS
+          LGLOB = LGLOB + GBUF%G_DEP_IN_COMP
+          LGLOB = LGLOB + GBUF%G_ROT_IN_TENS
+          LGLOB = LGLOB + GBUF%G_ROT_IN_COMP
+          LGLOB = LGLOB + GBUF%G_POSX
+          LGLOB = LGLOB + GBUF%G_POSY
+          LGLOB = LGLOB + GBUF%G_POSZ
+          LGLOB = LGLOB + GBUF%G_POSXX
+          LGLOB = LGLOB + GBUF%G_POSYY
+          LGLOB = LGLOB + GBUF%G_POSZZ
+          LGLOB = LGLOB + GBUF%G_YIELD
+          LGLOB = LGLOB + GBUF%G_LENGTH_ERR
+          LGLOB = LGLOB + GBUF%G_DV
+          LGLOB = LGLOB + GBUF%G_DFS
+          LGLOB = LGLOB + GBUF%G_SKEW_ERR
+          LGLOB = LGLOB + GBUF%G_E6
+          LGLOB = LGLOB + GBUF%G_RUPTCRIT
+          LGLOB = LGLOB + GBUF%G_MASS
+          LGLOB = LGLOB + GBUF%G_V_REPCVT
+          LGLOB = LGLOB + GBUF%G_VR_REPCVT
+          LGLOB = LGLOB + GBUF%G_NUVAR
+          LGLOB = LGLOB + GBUF%G_NUVARN
+          LGLOB = LGLOB + GBUF%G_DEFINI
+          LGLOB = LGLOB + GBUF%G_FORINI
+          LGLOB = LGLOB + GBUF%G_INIFRIC
+          LGLOB = LGLOB + GBUF%G_SKEW_ID
+          LGLOB = LGLOB + GBUF%G_YIELD_IN_COMP
+          LGLOB = LGLOB + GBUF%G_XXOLD_IN_COMP
+          LGLOB = LGLOB + GBUF%G_RBODY_NODE
+C
+          LGLOB = LGLOB + GBUF%G_SLIPRING_ID
+          LGLOB = LGLOB + GBUF%G_SLIPRING_FRAM_ID
+          LGLOB = LGLOB + GBUF%G_SLIPRING_STRAND
+          LGLOB = LGLOB + GBUF%G_RETRACTOR_ID
+          LGLOB = LGLOB + GBUF%G_RINGSLIP
+          LGLOB = LGLOB + GBUF%G_ADD_NODE
+          LGLOB = LGLOB + GBUF%G_UPDATE
+          LGLOB = LGLOB + GBUF%G_FRAM_FACTOR
+          LGLOB = LGLOB + GBUF%G_INTVAR
+c
+c         failure struct for beams type 3 stored in global buffer
+c
+          GFAIL = 0
+          IF (IGTYP == 3 .and. IFAIL > 0) THEN
+             call my_alloc(ELBUF_TAB(NG)%GBUF%FAIL, 1, "ELBUF_TAB(NG)%GBUF%FAIL")
+c
+             IRUPT = MAT_PARAM(IMID)%FAIL(1)%IRUPT
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%ILAWF = IRUPT                                           
+             GFAIL = GFAIL + 1 
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%IDFAIL = MAT_PARAM(IMID)%FAIL(1)%FAIL_ID
+             GFAIL = GFAIL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%NVAR  = MAT_PARAM(IMID)%FAIL(1)%NUVAR                             
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%VAR,ELBUF_TAB(NG)%GBUF%FAIL(1)%NVAR*NEL,"ELBUF_TAB(NG)%GBUF%FAIL(1)%VAR")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%VAR = ZERO     
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%NVAR*NEL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAM  = FAIL_TAG(IMID,1)%LF_DAM                        
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%DAM,ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAM*NEL,
+     &"ELBUF_TAB(NG)%GBUF%FAIL(1)%DAM")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%DAM = ZERO   
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAM*NEL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAMMX  = FAIL_TAG(IMID,1)%LF_DAMMX                       
+             CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%DAMMX,ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAMMX*NEL,"GBUF%FAIL%DAMMX")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%DAMMX = ZERO
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAMMX*NEL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAMINI = FAIL_TAG(IMID,1)%LF_DAMINI                      
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%DAMINI,ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAMINI*NEL,"GBUF%FAIL%DAMINI")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%DAMINI = ZERO
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_DAMINI*NEL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_TDEL  = FAIL_TAG(IMID,1)%LF_TDEL                        
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%TDEL,ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_TDEL*NEL,
+     &"ELBUF_TAB(NG)%GBUF%FAIL(1)%TDEL")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%TDEL = ZERO                                                           
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_TDEL*NEL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_INDX = FAIL_TAG(IMID,1)%LF_INDX                       
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%INDX,ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_INDX*NEL,
+     &"ELBUF_TAB(NG)%GBUF%FAIL(1)%INDX")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%INDX = 0                                                           
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_INDX*NEL + 1
+c
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_OFF = FAIL_TAG(IMID,1)%LF_OFF                       
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%OFF,ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_OFF*NEL,
+     &"ELBUF_TAB(NG)%GBUF%FAIL(1)%OFF")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%OFF = 1                                                           
+             GFAIL = GFAIL + ELBUF_TAB(NG)%GBUF%FAIL(1)%LF_OFF*NEL + 1
+c
+             NVARTMP = MAT_PARAM(IMID)%FAIL(1)%NVARTMP
+      CALL MY_ALLOC(ELBUF_TAB(NG)%GBUF%FAIL(1)%VARTMP, NVARTMP*NEL,"ELBUF_TAB(NG)%GBUF%FAIL(1)%VARTMP")
+             ELBUF_TAB(NG)%GBUF%FAIL(1)%VARTMP = 0
+             GFAIL = GFAIL + NVARTMP*NEL
+c
+          END IF
+c
+          BUFLEN = BUFLEN + GBUF%NVAR_GLOB + 1 + LGLOB*NEL + GFAIL
+c---------          
+c---------   layer variables       
+          LLAY = 0
+          DO IL=1,NLAY
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+            LLAY = LLAY + NPAR_LAY + BUFLY%NVAR_LAY + BUFLY%NVAR_LOC
+            LLAY = LLAY + NEL*BUFLY%LY_DMG 
+            LLAY = LLAY + NEL*BUFLY%LY_GAMA
+            LLAY = LLAY + NEL*BUFLY%LY_DIRA
+            LLAY = LLAY + NEL*BUFLY%LY_DIRB
+            LLAY = LLAY + NEL*BUFLY%LY_HOURG
+            IF (LFAIL > 0) THEN
+              LLAY = LLAY + NEL*BUFLY%LY_UELR
+              LLAY = LLAY + NEL*BUFLY%LY_UELR1
+              LLAY = LLAY + NEL*BUFLY%LY_OFFPG
+              LLAY = LLAY + NEL*BUFLY%LY_OFF
+            ENDIF
+          ENDDO
+C
+          BUFLEN = BUFLEN  + LLAY
+C
+c---------  local variables 
+          DO IL=1,NLAY  ! NLAY = 1 for INTEGRATED BEAM
+            BUFLY => ELBUF_TAB(NG)%BUFLY(IL)
+            NIP_LAY = BUFLY%NPTT
+c
+            LLOC = 0                                 
+            LLOC = LLOC + BUFLY%L_OFF    
+            LLOC = LLOC + BUFLY%L_GAMA 
+c
+            LLOC = LLOC + BUFLY%L_STRA   
+c            
+            LLOC = LLOC + BUFLY%L_FRAC   
+            LLOC = LLOC + BUFLY%L_BFRAC
+            LLOC = LLOC + BUFLY%L_EINT   
+            LLOC = LLOC + BUFLY%L_EINS   
+            BUFLY%L_RHO = 0
+            LLOC = LLOC + BUFLY%L_RHO         
+            LLOC = LLOC + BUFLY%L_DP_DRHO     
+            LLOC = LLOC + BUFLY%L_QVIS   
+            LLOC = LLOC + BUFLY%L_DELTAX 
+            LLOC = LLOC + BUFLY%L_VOL    
+            LLOC = LLOC + BUFLY%L_EPSA   
+            LLOC = LLOC + BUFLY%L_EPSD   
+            LLOC = LLOC + BUFLY%L_EPSQ   
+            LLOC = LLOC + BUFLY%L_EPSF   
+            LLOC = LLOC + BUFLY%L_PLA    
+            LLOC = LLOC + BUFLY%L_WPLA    
+            LLOC = LLOC + BUFLY%L_TEMP 
+            LLOC = LLOC + BUFLY%L_TB     
+            LLOC = LLOC + BUFLY%L_RK     
+            LLOC = LLOC + BUFLY%L_RE     
+            LLOC = LLOC + BUFLY%L_VK     
+            LLOC = LLOC + BUFLY%L_SF     
+            LLOC = LLOC + BUFLY%L_ROB    
+            LLOC = LLOC + BUFLY%L_DAM    
+            LLOC = LLOC + BUFLY%L_DSUM   
+            LLOC = LLOC + BUFLY%L_DGLO     
+            LLOC = LLOC + BUFLY%L_CRAK   
+            LLOC = LLOC + BUFLY%L_ANG      
+            LLOC = LLOC + BUFLY%L_EPE    
+            LLOC = LLOC + BUFLY%L_EPC    
+            LLOC = LLOC + BUFLY%L_XST    
+            LLOC = LLOC + BUFLY%L_SSP    
+            LLOC = LLOC + BUFLY%L_Z      
+            LLOC = LLOC + BUFLY%L_VISC   
+            LLOC = LLOC + BUFLY%L_SIGL   
+            LLOC = LLOC + BUFLY%L_SIGV   
+            LLOC = LLOC + BUFLY%L_SIGA   
+            LLOC = LLOC + BUFLY%L_SIGB   
+            LLOC = LLOC + BUFLY%L_SIGC        
+            LLOC = LLOC + BUFLY%L_SIGD        
+            LLOC = LLOC + BUFLY%L_SIGF   
+            LLOC = LLOC + BUFLY%L_SIG
+            LLOC = LLOC + BUFLY%L_SIGPLY
+            LLOC = LLOC + BUFLY%L_FOR    
+            LLOC = LLOC + BUFLY%L_MOM
+            LLOC = LLOC + BUFLY%L_THK    
+            LLOC = LLOC + BUFLY%L_SMSTR    
+            LLOC = LLOC + BUFLY%L_DMG  
+            LLOC = LLOC + BUFLY%L_FORTH
+            LLOC = LLOC + BUFLY%L_EINTTH
+            LLOC = LLOC + BUFLY%L_SEQ
+            LLOC = LLOC + BUFLY%L_FAC_YLD 
+            LLOC = LLOC + BUFLY%L_ABURN 
+            LLOC = LLOC + BUFLY%L_MU
+            LLOC = LLOC + BUFLY%L_PLANL
+            LLOC = LLOC + BUFLY%L_EPSDNL
+            LLOC = LLOC + BUFLY%L_DMGSCL
+            LLOC = LLOC + BUFLY%L_TSAIWU
+c
+            BUFLEN = BUFLEN + (LLOC * NEL + NPAR_LBUF) * NIP_LAY
+          ENDDO
+c---------
+C----
+c        print*, 'elbuf_ini =', NG,NEL,BUFLEN,LGLOB,
+c     . ITY,IGTYP,GBUF%G_PLA,MLW,NLAY,NPTS
+C----
+c
+c-------------------------------------------------
+          IPARG(66,NG) = BUFLEN    !  size of restart transfer table 
+c 
+          IF(PRINT_FLAG>6) WRITE(IOUT,1002) NG, BUFLEN
+c-------------------------------------------------
+          CALL ALLOCBUF_AUTO(ELBUF_TAB,NLAY,NPTR,NPTS,NPTT,
+     .                       NINTLAY,NEL,NPT,NG,NGROUP,ITY,
+     .                       IGTYP,NUMMAT,MAT_PARAM)
+C
+          IF (ALLOCATED(IMAT)) CALL MY_DEALLOC(IMAT)
+          IF (ALLOCATED(ILAW)) CALL MY_DEALLOC(ILAW)
+c------------------------------------------------------
+        ELSE    
+          call my_alloc(ELBUF_TAB(NG)%BUFLY, 0, "ELBUF_TAB(NG)%BUFLY")
+c------------------------------------------------------
+        ENDIF   ! ITY = 1,2,51,101 (solid group)
+
+c--------------------------------------------------------
+c       damping structure for damping frequency range
+c--------------------------------------------------------
+        IF (IDAMP_FREQ_RANGE > 0) THEN
+          call my_alloc(ELBUF_TAB(NG)%DAMP_RANGE%ALPHA, 3, "ELBUF_TAB(NG)%DAMP_RANGE%ALPHA")
+          call my_alloc(ELBUF_TAB(NG)%DAMP_RANGE%TAU, 3, "ELBUF_TAB(NG)%DAMP_RANGE%TAU")
+          BUFLEN = IPARG(66,NG) + LDAMP_FREQ_RANGE
+          IPARG(66,NG) = BUFLEN 
+c        ELSE  
+c            ALLOCATE(ELBUF_TAB(NG)%DAMP_RANGE(0))
+        ENDIF  
+
+         IF (DEBUG_PRINT == 1) THEN
+           print*,' elbuf_ini : NG,ITY,IGTYP,buflen=',NG,ITY,IGTYP,buflen
+         ENDIF
+
+      ENDDO     ! NG  = 1,NGROUP
+c------------------------------------------------------
+ 1001 FORMAT(//,
+     + 7X,'RESTART SIZE OF SHELL AND SOLID ELEMENT GROUPS'/
+     + 7X,'----------------------------------------------'/)
+ 1002 FORMAT(
+     + 7X,'ELEMENT GROUP',I10,',  SIZE=',I10)
+C-----------
+      RETURN
+      END SUBROUTINE ELBUF_INI

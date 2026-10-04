@@ -1,0 +1,180 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!! \brief Here is a small description of the routine, [after the header]
+!! \details if needed, more details can be added here
+!||====================================================================
+!||    multimat_param_mod               ../common_source/modules/multimat_param_mod.F90
+!||--- called by ------------------------------------------------------
+!||    a22conv3                         ../engine/source/ale/alefvm/cut_cells/a22conv3.F
+!||    aconve                           ../engine/source/ale/aconve.F90
+!||    afluxt                           ../engine/source/ale/ale51/afluxt.F
+!||    afluxt_int22                     ../engine/source/ale/ale51/afluxt_int22.F90
+!||    ale51_finish_int22               ../engine/source/ale/ale51/ale51_finish_int22.F90
+!||    ale51_gradient_reconstruction    ../engine/source/ale/alemuscl/ale51_gradient_reconstruction.F
+!||    ale51_gradient_reconstruction2   ../engine/source/ale/alemuscl/ale51_gradient_reconstruction2.F
+!||    ale51_upwind3_int22              ../engine/source/ale/alefvm/cut_cells/ale51_upwind3_int22.F
+!||    alemain                          ../engine/source/ale/alemain.F
+!||    arezon                           ../engine/source/ale/arezon.F90
+!||    atherm                           ../engine/source/ale/atherm.F
+!||    dfunc0                           ../engine/source/output/anim/generate/dfunc0.F
+!||    dfuncc                           ../engine/source/output/anim/generate/dfuncc.F
+!||    dfuncs                           ../engine/source/output/anim/generate/dfunc6.F
+!||    ebcs10_nrf                       ../engine/source/boundary_conditions/ebcs/ebcs10_nrf.F
+!||    ebcs11_propellant                ../engine/source/boundary_conditions/ebcs/ebcs11_propellant.F90
+!||    ebcs12_cyclic                    ../engine/source/boundary_conditions/ebcs/ebcs12_cyclic.F90
+!||    ebcs8_inlet                      ../engine/source/boundary_conditions/ebcs/ebcs8_inlet.F90
+!||    eikonal_init_mixture_vel         ../starter/source/initial_conditions/detonation/eikonal_ini_mixture_vel.F90
+!||    h3d_quad_scalar                  ../engine/source/output/h3d/h3d_results/h3d_quad_scalar.F
+!||    h3d_shell_scalar_1               ../engine/source/output/h3d/h3d_results/h3d_shell_scalar_1.F
+!||    h3d_solid_scalar_1               ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||    h3d_sph_scalar                   ../engine/source/output/h3d/h3d_results/h3d_sph_scalar.F
+!||    hm_read_mat                      ../starter/source/materials/mat/hm_read_mat.F90
+!||    hm_read_mat20                    ../starter/source/materials/mat/mat020/hm_read_mat20.F
+!||    hm_read_mat51                    ../starter/source/materials/mat/mat051/hm_read_mat51.F
+!||    i22datainit                      ../engine/source/interfaces/int22/i22datainit.F
+!||    i22err3                          ../starter/source/interfaces/inter3d1/i22err3.F
+!||    ini_inimap1d                     ../starter/source/initial_conditions/inimap/ini_inimap1d.F
+!||    inigrav_m51                      ../starter/source/initial_conditions/inigrav/inigrav_m51.F
+!||    inigrav_m51_any_eos              ../starter/source/initial_conditions/inigrav/inigrav_m51_any_eos.F90
+!||    initia                           ../starter/source/elements/initia/initia.F
+!||    inivol_set                       ../starter/source/initial_conditions/inivol/inivol_set.F
+!||    m51init                          ../starter/source/materials/mat/mat051/m51init.F
+!||    m51vois2                         ../engine/source/materials/mat/mat051/m51vois2.F
+!||    m51vois3                         ../engine/source/materials/mat/mat051/m51vois3.F
+!||    matparam_def_mod                 ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||    nodalvfrac                       ../engine/source/output/anim/generate/nodalvfrac.F
+!||    nrf51ini                         ../starter/source/materials/mat/mat051/nrf51ini.F
+!||    r2r_matparam_copy                ../starter/source/elements/elbuf_init/r2r_matparam_copy.F
+!||    r_bufbric_22                     ../engine/source/interfaces/int22/r_bufbric_22.F
+!||    rdcomr                           ../engine/source/output/restart/rdcomm.F
+!||    resol                            ../engine/source/engine/resol.F
+!||    sigeps51                         ../engine/source/materials/mat/mat051/sigeps51.F90
+!||    sigeps51_boundary_material       ../engine/source/materials/mat/mat051/sigeps51_boundary_material.F90
+!||    sinit22_fvm                      ../engine/source/interfaces/int22/sinit22_fvm.F
+!||    spmd_l51vois                     ../engine/source/mpi/fluid/spmd_cfd.F
+!||    stat_inimap1d_file_spmd          ../engine/source/output/sta/stat_inimap1d_file_spmd.F
+!||    stat_inimap1d_spmd               ../engine/source/output/sta/stat_inimap1d_spmd.F
+!||    stat_inimap2d_file_spmd          ../engine/source/output/sta/stat_inimap2d_file_spmd.F
+!||    stat_inimap2d_spmd               ../engine/source/output/sta/stat_inimap2d_spmd.F
+!||    wrcomr                           ../engine/source/output/restart/wrcomm.F
+!||    write_buf_law51                  ../engine/source/materials/mat/mat051/write_buf_law51.F
+!||--- uses       -----------------------------------------------------
+!||    eos_param_mod                    ../common_source/modules/mat_elem/eos_param_mod.F90
+!||    precision_mod                    ../common_source/modules/precision_mod.F90
+!||====================================================================
+      MODULE MULTIMAT_PARAM_MOD
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use precision_mod , only : WP
+          use eos_param_mod , only : eos_param_, ptr_eos_param_
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+        implicit none
+        private :: WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! [ no comment on the same line as #include #define #ifdef, #endif ]
+        INTEGER, PARAMETER :: M51_N0PHAS = 04
+        INTEGER, PARAMETER :: M51_NVPHAS = 29  ! including nvareos_max at the end
+        INTEGER, PARAMETER :: M51_IFLG6_SIZE = 37
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ---------------------------------------------------------------------------------------------------------------------- 
+        TYPE MULTIMAT_PARAM_                                     !< data structure for MAT_PARAM buffer
+          integer :: nb = 0                                      !< number of submaterial
+          integer :: old_data_format = 0
+          integer,allocatable,dimension(:) :: mid                !< material internal identifier for each submaterial
+          real(kind=WP),allocatable,dimension(:) :: vfrac        !< volume fraction for each submaterial
+          type(eos_param_), dimension(:), allocatable :: EOS     !< old format : Embedded Eos parameters
+          type(ptr_eos_param_), DIMENSION(:), POINTER :: pEOS    !< pointers (new/old format)
+
+        contains
+          procedure :: destruct => destruct_multimat_param
+          procedure :: eos_construct => construct_multimat_eos
+
+        END TYPE MULTIMAT_PARAM_
+
+        logical :: M20_DISCRETE_FILL = .false.               !< LAW20 global parameters
+        real(kind=WP) :: M51_SSP0MAX, M51_LC0MAX, M51_TCP_REF      !< LAW51 global parameters
+        INTEGER :: M51_IFLG6 = 0                             !< LAW51 global parameters
+        INTEGER :: M51_lSET_IFLG6 = 0                        !< LAW51 global parameters
+        INTEGER :: M51_ILOOP_NRF = 0                         !< LAW51 global parameters
+
+      contains
+
+!||====================================================================
+!||    destruct_multimat_param   ../common_source/modules/multimat_param_mod.F90
+!||====================================================================
+        subroutine destruct_multimat_param(this)
+          implicit none
+          class(MULTIMAT_PARAM_) :: this
+          integer :: i
+          if (allocated(this%mid))   deallocate(this%mid)
+          if (allocated(this%vfrac)) deallocate(this%vfrac)
+          if (allocated(this%eos)) then
+              do i=1,size(this%eos)
+                 call this%eos(i)%destruct()
+              end do
+              deallocate(this%eos)
+          end if
+          if (associated(this%pEOS))then
+              deallocate(this%pEOS)
+          end if
+        end subroutine destruct_multimat_param
+
+!||====================================================================
+!||    construct_multimat_eos   ../common_source/modules/multimat_param_mod.F90
+!||--- uses       -----------------------------------------------------
+!||    constant_mod             ../common_source/modules/constant_mod.F
+!||====================================================================
+        subroutine construct_multimat_eos(this)
+          use constant_mod , only : zero
+          implicit none
+          class(MULTIMAT_PARAM_) :: this
+          integer :: i
+          this%nb = 4
+          allocate(this%eos(4))
+          allocate(this%pEOS(4))
+          do i=1,4
+             this%eos(i)%title = 'embedded EoS'
+             this%eos(i)%eostype = 1
+             this%eos(i)%nuparam = 7
+             this%eos(i)%niparam = 0
+             this%eos(i)%nfunc = 0
+             this%eos(i)%ntable = 0
+             call this%eos(i)%construct()
+          end do
+
+
+        end subroutine construct_multimat_eos
+
+      END MODULE MULTIMAT_PARAM_MOD
+
+

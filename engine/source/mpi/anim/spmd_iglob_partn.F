@@ -1,0 +1,101 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+
+!||====================================================================
+!||    spmd_iglob_partn     ../engine/source/mpi/anim/spmd_iglob_partn.F
+!||--- called by ------------------------------------------------------
+!||    parsor0              ../engine/source/output/anim/generate/parsor0.F
+!||    parsor_crk           ../engine/source/output/anim/generate/parsor_crk.F
+!||    parsor_ply           ../engine/source/output/anim/generate/parsor_ply.F
+!||    parsorc              ../engine/source/output/anim/generate/parsorc.F
+!||    parsorf              ../engine/source/output/anim/generate/parsorf.F
+!||    parsors              ../engine/source/output/anim/generate/parsors.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_get_count_int   ../engine/source/mpi/generic/spmd_get_count.F90
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod             ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE SPMD_IGLOB_PARTN(IAD,NBPART,IADG,SBUF)
+C iglob_part reconstructs on p0 a global array of part
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IAD(*), NBPART, IADG(NSPMD,NBPART)
+      INTEGER SBUF
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER MSGOFF,MSGTYP,K,N,NB_TMP
+      INTEGER, DIMENSION(:),ALLOCATABLE :: RECBUF
+      INTEGER STATUS(MPI_STATUS_SIZE)
+
+      DATA MSGOFF/7028/
+C-----------------------------------------------
+C   S o u r c e  L i n e s
+C-----------------------------------------------
+      ALLOCATE(RECBUF(SBUF))
+
+      IF (ISPMD/=0) THEN
+         MSGTYP= MSGOFF
+         CALL SPMD_SEND(IAD(1:NBPART),NBPART,IT_SPMD(1),MSGTYP)
+
+      ELSE
+        DO N = 1, NBPART
+          IADG(1,N) = IAD(N)
+        ENDDO
+
+        DO K=2,NSPMD
+          MSGTYP= MSGOFF
+          CALL SPMD_PROBE(IT_SPMD(K),MSGTYP,STATUS)
+          CALL SPMD_GET_COUNT_INT(STATUS,NB_TMP)
+          CALL SPMD_RECV(RECBUF(1:NB_TMP),NB_TMP,IT_SPMD(K),MSGTYP,
+     .                   STATUS)
+
+          DO N = 1, NBPART
+            IADG(K,N) = RECBUF(N)
+          ENDDO
+        END DO
+      ENDIF
+
+      DEALLOCATE(RECBUF)
+
+#endif
+      RETURN
+      END

@@ -1,0 +1,61 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    sordeftb   ../engine/source/elements/solid/solide8e/sordeftb.F
+!||--- called by ------------------------------------------------------
+!||    s8eforc3   ../engine/source/elements/solid/solide8e/s8eforc3.F
+!||====================================================================
+      SUBROUTINE SORDEFTB(JFT,JLT,MXX, MYY, MZZ,  
+     .                   G1X,G1Y,G1Z,G2X,G2Y,G2Z,G3X,G3Y,G3Z)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER JFT, JLT
+C     REAL
+      my_real
+     .   MXX(*),  MYY(*),  MZZ(*),G1X(*),G1Y(*),G1Z(*),
+     .   G2X(*),G2Y(*),G2Z(*),G3X(*),G3Y(*),G3Z(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I
+C     REAL
+      my_real
+     .   FXX,FYY,FZZ
+C-----------------------------------------------
+      DO I=JFT,JLT
+         FXX = MXX(I)*G1X(I)*G1X(I)+MYY(I)*G1Y(I)*G1Y(I)+MZZ(I)*G1Z(I)*G1Z(I)
+         FYY = MXX(I)*G2X(I)*G2X(I)+MYY(I)*G2Y(I)*G2Y(I)+MZZ(I)*G2Z(I)*G2Z(I)
+         FZZ = MXX(I)*G3X(I)*G3X(I)+MYY(I)*G3Y(I)*G3Y(I)+MZZ(I)*G3Z(I)*G3Z(I)
+         MXX(I)=FXX
+         MYY(I)=FYY
+         MZZ(I)=FZZ
+      ENDDO
+C-----------
+      RETURN
+      END

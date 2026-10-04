@@ -1,0 +1,78 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    w_geo            ../starter/source/restart/ddsplit/w_geo.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit          ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE W_GEO(GEO,NODLOCAL)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NODLOCAL(*)
+      my_real
+     .        GEO(NPROPG,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, M
+      my_real
+     .        GEO_L(NPROPG,NUMGEO)
+C
+      DO I = 1, NUMGEO
+        DO J = 1, NPROPG
+          GEO_L(J,I) = GEO(J,I)
+        END DO
+      END DO
+C
+      DO I = 1, NUMGEO
+        DO J = 1, NPROPG
+          GEO_L(J,I) = GEO(J,I)
+        END DO
+        IF(INT(GEO(12,I))==15)THEN
+          M=INT(GEO(29,I))
+          IF(M/=0)THEN
+            M = NODLOCAL(M)
+            GEO_L(29,I) = M
+          END IF
+        END IF
+      END DO
+C
+
+      CALL COMPRESS_R_NNZ(GEO_L,NPROPG*NUMGEO)
+
+C
+      RETURN
+      END

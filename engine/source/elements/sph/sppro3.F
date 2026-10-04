@@ -1,0 +1,238 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    sppro3           ../engine/source/elements/sph/sppro3.F
+!||--- called by ------------------------------------------------------
+!||    sptrivox         ../engine/source/elements/sph/sptrivox.F
+!||--- calls      -----------------------------------------------------
+!||    myqsort          ../common_source/tools/sort/myqsort.F
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    sphbox           ../engine/share/modules/sphbox.F
+!||====================================================================
+      SUBROUTINE SPPRO3(IL    ,KXSP ,IXSP ,NOD2SP,JVOIS,
+     .                  JSTOR,JPERM ,DVOIS,IREDUCE,KREDUCE,
+     .                  KXSPR,IXSPR,TAB_DK)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SPHBOX
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "sphcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER KXSP(NISP,*), IXSP(KVOISPH,*), NOD2SP(*),
+     .   JVOIS(*),JSTOR(*), JPERM(*), IREDUCE, KREDUCE(*),
+     .   KXSPR(*), IXSPR(KVOISPH,*)
+C     REAL
+      my_real
+     .   DVOIS(*),TAB_DK(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER    IL,
+     .     JG,
+     .   NVOIS, K, JK, NVOIS1, NVOIS2, IERROR 
+C     REAL
+      my_real
+     .     DK
+      my_real, DIMENSION(:), ALLOCATABLE :: DSTOR
+
+
+        IF(IL <= NUMSPH.AND.IL > 0)THEN 
+C-----------------
+C       SORT THE LIST, KEEP THE FIRST KVOISPH
+C       (INCREASING SAFETY COEFFICIENT).
+
+C-----------------
+            NVOIS=KXSP(5,IL)
+            TAB_DK(IL) = -ONE
+            IF(NVOIS>KVOISPH)THEN
+
+                IREDUCE    =1 
+                KREDUCE(IL)=1 
+
+                CALL MYQSORT(NVOIS,DVOIS,JPERM,IERROR)
+                DO K=1,NVOIS
+                    JSTOR(K)=JVOIS(K)
+                ENDDO
+                DO K=1,KVOISPH
+                    JVOIS(K)=JSTOR(JPERM(K))
+                ENDDO
+                DK=DVOIS(KVOISPH)
+                TAB_DK(IL) = DK
+C-----------------
+C Choice of cells to keep such that distance < DK to avoid parallelization problems
+                      NVOIS=0
+                      DO K=1,KXSP(5,IL)
+                          IF(DVOIS(K)<DK)THEN
+                              NVOIS=NVOIS+1
+                          END IF
+                      END DO
+
+            ENDIF
+C-----------------
+            NVOIS=MIN(NVOIS,KVOISPH)
+            KXSP(5,IL)=NVOIS
+            DO K=1,NVOIS
+                JK=JVOIS(K)
+                DK=DVOIS(K)
+
+                IF(JK<=NUMSPH) THEN
+                    JG       =KXSP(3,JK)
+                ELSE
+                    JG = -JK+NUMSPH ! si voisin remote alors no noeud = - no cellule remote
+                    XSPHR(1,-JG) = -ABS(XSPHR(1,-JG)) ! reperage cell remote utile
+                END IF
+                IXSP(K,IL)=JG
+            ENDDO
+C-----------------------------------------------------------
+        ELSEIF(IL > NUMSPH)THEN        ! Treatment for unnecessary remote
+C-----------------
+            XSPHR(1,IL-NUMSPH) = -ABS(XSPHR(1,IL-NUMSPH)) ! reperage cell remote utile
+C
+C       SORT THE LIST, KEEP THE FIRST KVOISPH
+C       (INCREASING SAFETY COEFFICIENT).
+C-----------------
+! Get the DK of the original cell
+            DK = DKR(IL - NUMSPH) 
+            NVOIS=KXSPR(IL-NUMSPH)
+            IF(DK>=ZERO) THEN
+                IF(NVOIS>KVOISPH) THEN
+C-----------------
+C Choice of cells to keep such that distance < DK to avoid parallelization problems
+                    NVOIS=KXSPR(IL-NUMSPH)
+                    CALL MYQSORT(NVOIS,DVOIS,JPERM,IERROR)
+                    DO K=1,NVOIS
+                        JSTOR(K)=JVOIS(K)
+                    ENDDO
+                    DO K=1,MIN(KVOISPH,NVOIS)
+                        JVOIS(K)=JSTOR(JPERM(K))
+                    ENDDO
+                    NVOIS=MIN(NVOIS,KVOISPH)
+                ELSE    
+                    call my_alloc(DSTOR, KXSPR(IL-NUMSPH), "DSTOR")
+                    DO K=1,KXSPR(IL-NUMSPH)
+                        JSTOR(K)=JVOIS(K)
+                        DSTOR(K)=DVOIS(K)
+                    ENDDO
+                          NVOIS=0
+                          DO K=1,KXSPR(IL-NUMSPH)
+                              IF(DSTOR(K)<DK)THEN
+                                  NVOIS=NVOIS+1
+                            JVOIS(NVOIS)=JSTOR(K)
+                            DVOIS(NVOIS)=DSTOR(K)
+                              END IF
+                          END DO
+                    call my_dealloc(DSTOR)
+                    NVOIS=MIN(NVOIS,KVOISPH)
+                ENDIF
+            ELSE
+                NVOIS=KXSPR(IL-NUMSPH) 
+            ENDIF
+C-----------------
+            KXSPR(IL-NUMSPH)=NVOIS
+            DO K=1,NVOIS
+                JK=JVOIS(K)
+                DK=DVOIS(K)
+                    IF(JK<=NUMSPH) THEN
+                        JG=KXSP(3,JK)
+                    ELSE
+                        JG = 0
+                        print *,'internal error'
+                    END IF
+                    IXSPR(K,IL-NUMSPH)=JG
+            ENDDO
+        ELSE                           ! IL < 0 <=> Gauge
+C
+Cf gauges IL=-NUMSPH-...
+            IL=ABS(IL)
+C-----------------
+C       SORT THE LIST, KEEP THE FIRST KVOISPH
+C       (INCREASING SAFETY COEFFICIENT).
+
+C-----------------
+            NVOIS=KXSP(5,IL)
+            IF(NVOIS>KVOISPH)THEN
+
+                CALL MYQSORT(NVOIS,DVOIS,JPERM,IERROR)
+                DO K=1,NVOIS
+                    JSTOR(K)=JVOIS(K)
+                ENDDO
+                DO K=1,KVOISPH
+                    JVOIS(K)=JSTOR(JPERM(K))
+                ENDDO
+                DK=DVOIS(KVOISPH)
+C-----------------
+C Choice of cells to keep such that distance < DK to avoid parallelization problems
+                      NVOIS=0
+                      DO K=1,KXSP(5,IL)
+                          IF(DVOIS(K)<DK)THEN
+                              NVOIS=NVOIS+1
+                          END IF
+                      END DO
+            ENDIF
+C-----------------
+            NVOIS=MIN(NVOIS,KVOISPH)
+            KXSP(5,IL)=NVOIS
+            NVOIS1=0
+            NVOIS2=NVOIS
+            DO K=1,NVOIS
+                JK       =JVOIS(K)
+                DK       =DVOIS(K)
+                IF(JK<=NUMSPH) THEN
+                    JG       =KXSP(3,JK)
+                ELSE
+                    JG = -JK+NUMSPH ! si voisin remote alors no noeud = - no cellule remote
+                    XSPHR(1,-JG) = -ABS(XSPHR(1,-JG)) ! reperage cell remote utile
+                END IF
+
+                IF(DK<ONE)THEN
+                    NVOIS1=NVOIS1+1
+                    IXSP(NVOIS1,IL)=JG
+                ELSE
+                    IXSP(NVOIS2,IL)=JG
+                    NVOIS2=NVOIS2-1
+                ENDIF
+            ENDDO
+            KXSP(4,IL)=NVOIS1
+C-----------------------------------------------------------
+        END IF
+    
+        RETURN
+        END

@@ -1,0 +1,189 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_eos_stiffened_gas   ../starter/source/materials/eos/hm_read_eos_stiffened_gas.F
+!||--- called by ------------------------------------------------------
+!||    hm_read_eos                 ../starter/source/materials/eos/hm_read_eos.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                      ../starter/source/output/message/message.F
+!||    hm_get_floatv               ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_option_is_encrypted      ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod                 ../starter/share/message_module/message_mod.F
+!||    submodel_mod                ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_READ_EOS_STIFFENED_GAS(IOUT,PM,UNITAB,IUNIT,LSUBMODEL,IMIDEOS,MAT_PARAM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE UNITAB_MOD
+      USE SUBMODEL_MOD
+      USE MESSAGE_MOD
+      USE MATPARAM_DEF_MOD, ONLY : MATPARAM_STRUCT_
+C-----------------------------------------------
+C   D e s c r i p t i o n
+C-----------------------------------------------
+C reading parameters for
+C   LINEAR EQUATION OF STATE
+C-----------------------------------------------
+C   C o m m e n t s
+C-----------------------------------------------
+C  RHOI = PM(89)   -> provided by /MAT
+C  RHOR = PM(01)   -> provided by /MAT (can be erased by EOS if present : obsolete)
+C  => MU0 = RHO/RHOR-1.
+C  PM(31) = P(MU0,E0) -> will be used to initialize diagonal of stress tensor SIG(1:3,*)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE (UNIT_TYPE_),INTENT(IN) ::UNITAB 
+      INTEGER IOUT, IUNIT
+      my_real PM(NPROPM)
+      TYPE(SUBMODEL_DATA), DIMENSION(NSUBMOD), INTENT(IN) :: LSUBMODEL
+      TYPE(MATPARAM_STRUCT_),INTENT(INOUT) :: MAT_PARAM
+      INTEGER,INTENT(IN) :: IMIDEOS
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      my_real  GAMMA, P0, E0, PSH, RHO0, PSTAR, RHOI, RHOR, MU0, PP, DF, SSP0, G0, DPDMU
+      LOGICAL :: IS_ENCRYPTED, IS_AVAILABLE, IS_AVAILABLE_RHO0     
+C-----------------------------------------------
+C   S o u r c e   L i n e s
+C-----------------------------------------------
+      IS_ENCRYPTED = .FALSE.
+      IS_AVAILABLE = .FALSE.
+      IS_AVAILABLE_RHO0 = .FALSE.
+
+      CALL HM_OPTION_IS_ENCRYPTED(IS_ENCRYPTED)
+
+      CALL HM_GET_FLOATV('Gamma', GAMMA, IS_AVAILABLE,LSUBMODEL,UNITAB)
+      CALL HM_GET_FLOATV('LAW5_P0', P0, IS_AVAILABLE,LSUBMODEL,UNITAB)
+      CALL HM_GET_FLOATV('LAW5_PSH', PSH, IS_AVAILABLE,LSUBMODEL,UNITAB)
+      CALL HM_GET_FLOATV('P_star', PSTAR, IS_AVAILABLE,LSUBMODEL,UNITAB)
+      CALL HM_GET_FLOATV('Refer_Rho', RHO0, IS_AVAILABLE_RHO0,LSUBMODEL,UNITAB)
+!-------------------------------------------------------------------------------
+      RHOR = MAT_PARAM%RHO
+      RHOI = MAT_PARAM%RHO0
+      IF (RHO0 > ZERO) THEN
+        RHOR = RHO0
+        MAT_PARAM%RHO = RHO0
+        PM(1)= RHO0
+      ELSE
+        RHO0=RHOR                   
+      ENDIF
+      
+      IF(GAMMA /= ONE)THEN
+        E0=(P0+GAMMA*PSTAR)/(GAMMA-ONE)
+      ELSE
+        E0 = ZERO ! error managed below
+      ENDIf
+      
+      !ERRORS :
+      ! GAMMA <=0
+      
+      IF(GAMMA <= ONE)THEN
+         CALL ANCMSG(MSGID=67,MSGTYPE=MSGERROR,ANMODE=ANINFO,I1=IMIDEOS,C1='/EOS/STIFF-GAS',C2='GAMMA MUST BE GREATER THAN 1.0')
+      ENDIF
+
+      PM(32)=(GAMMA-ONE)*E0 !BULK = (1+µ)*dP/dmu (partial derivative at constant E)
+      PM(88)=PSH
+      PM(23)=E0
+
+      MAT_PARAM%EOS%NUPARAM = 3
+      MAT_PARAM%EOS%NIPARAM = 0
+      MAT_PARAM%EOS%NFUNC   = 0
+      MAT_PARAM%EOS%NTABLE  = 0
+      CALL MAT_PARAM%EOS%CONSTRUCT() !allocations
+
+      MAT_PARAM%EOS%UPARAM(1) = GAMMA
+      MAT_PARAM%EOS%UPARAM(2) = P0
+      MAT_PARAM%EOS%UPARAM(3) = PSTAR
+      MAT_PARAM%EOS%PSH = PSH
+      MAT_PARAM%EOS%E0 = E0
+      
+      !P0
+      IF(RHOI == ZERO)THEN
+        MU0 = ZERO ! error 683 already displayed
+      ELSE
+        IF(RHOR /= ZERO)THEN
+          MU0 = RHOI/RHOR-ONE
+        ELSE
+          MU0 = ZERO ! error 683 already displayed
+        ENDIF
+      ENDIF
+      
+      IF(RHOI /= ZERO)THEN
+        DF = RHOR/RHOI
+      ELSE
+        DF = ZERO
+      ENDIF
+
+      PP = -GAMMA*PSTAR-PSH + (GAMMA-ONE)*(ONE+MU0)*E0
+      PM(31)=P0-PSH
+      PM(104)=P0-PSH
+      IF (MAT_PARAM%THERM%TINI == ZERO) THEN
+        MAT_PARAM%THERM%TINI =THREE100
+        PM(79) = THREE100
+      END IF
+
+      !SSP0
+      SSP0 = ZERO 
+      G0 = PM(22)
+      RHOI = PM(89)
+      DPDMU =  (GAMMA-ONE) *E0+(GAMMA-ONE)*(ONE+MU0)*DF*DF*(PP+PSH)
+      DPDMU=MAX(ZERO,DPDMU)
+      IF(RHOR > ZERO) SSP0 = SQRT((DPDMU + TWO_THIRD*G0)/RHOR) 
+      PM(27)=SSP0
+      
+      WRITE(IOUT,1000)
+
+      IF(IS_ENCRYPTED)THEN
+        WRITE(IOUT,'(5X,A,//)')'CONFIDENTIAL DATA'
+      ELSE
+        WRITE(IOUT,1500)GAMMA,P0,PSH,PSTAR,E0
+        IF(IS_AVAILABLE_RHO0)WRITE(IOUT,1501)PM(1)
+      ENDIF
+
+      RETURN
+ 1000 FORMAT(
+     & 5X,'  STIFFENED GAS EOS     ',/,
+     & 5X,'  -----------------     ',/)
+ 1500 FORMAT(
+     & 5X,'GAMMA . . . . . . . . . . . . . . . . . .=',1PG20.13/,
+     & 5X,'P0. . . . . . . . . . . . . . . . . . . .=',1PG20.13/,
+     & 5X,'PSH . . . . . . . . . . . . . . . . . . .=',1PG20.13/,
+     & 5X,'PSTAR . . . . . . . . . . . . . . . . . .=',1PG20.13/,
+     & 5X,'COMPUTED E0 . . . . . . . . . . . . . . .=',1PG20.13)
+ 1501 FORMAT(     
+     & 5X,'EOS REFERENCE DENSITY . . . . . . . . . .=',1PG20.13)        
+
+      RETURN
+      END

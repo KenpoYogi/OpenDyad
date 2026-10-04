@@ -1,0 +1,587 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    pre_stackgroup         ../starter/source/stack/pres_stackgroup.F
+!||--- called by ------------------------------------------------------
+!||    lectur                 ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                 ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    drape_mod              ../starter/share/modules1/drape_mod.F
+!||    message_mod            ../starter/share/message_module/message_mod.F
+!||    stack_mod              ../starter/share/modules1/stack_mod.F
+!||    submodel_mod           ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE PRE_STACKGROUP( 
+     .                     IGRSH3N    ,IGRSH4N  ,IXC        ,IXTG ,
+     .                     IGEO       ,GEO      ,IGEO_STACK ,IWORKSH    ,
+     .                     IWORK_T)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SUBMODEL_MOD
+      USE STACK_MOD
+      USE MESSAGE_MOD
+      USE GROUPDEF_MOD
+      USE DRAPE_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+      use element_mod , only : nixc,nixtg
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "scr03_c.inc"
+#include      "com04_c.inc"
+#include      "units_c.inc"
+#include      "warn_c.inc"
+#include      "param_c.inc"
+#include      "remesh_c.inc"
+#include      "sphcom.inc"
+#include      "drape_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IXC(NIXC,NUMELC),
+     .        IXTG(NIXTG,NUMELTG),IGEO(NPROPGI,NUMGEO),IWORKSH(3,NUMELC+NUMELTG),
+     .        IGEO_STACK(NPROPGI,NUMSTACK + NUMPLY)
+      my_real
+     .       GEO(NPROPG,NUMGEO)
+C-----------------------------------------------
+      TYPE (GROUP_)  , DIMENSION(NGRSH3N) :: IGRSH3N
+      TYPE (GROUP_)  , DIMENSION(NGRSHEL) :: IGRSH4N
+      TYPE(DRAPE_WORK_) , DIMENSION(NUMELC + NUMELTG) , TARGET :: IWORK_T
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,II,NSTACK,NPLY,IGTYP,ID,JD,IDPLY,NEL,
+     .        ITY,IDSHEL,PID,IS,IDS,
+     .        NPT,ITG,ISH3N,J4N,J3N
+     
+      INTEGER , DIMENSION(NUMGEO+NUMPLY)  :: IPIDPLY,IDGR4N,IDGR3N
+     
+      INTEGER NGL, IPID_1, NSHQ4, NSHT3
+     
+
+C----------------------------f-------------------    
+C=======================================================================
+C    For Shell
+C-----------------------------------------------   
+       IF(IPART_STACK > 0) THEN
+         NPLY = 0
+         NSTACK = 0
+C
+         IPIDPLY   = 0
+         IDGR4N    = 0
+         IDGR3N    = 0
+         DO I = 1, NUMGEO
+!!           ISUBSTACK(I)= 0
+           IGTYP=IGEO(11,I)
+           NSTACK = IGEO(42,I)  ! number of stack where ply is attached
+           IF (IGTYP == 19 .AND. NSTACK > 0) THEN
+               NPLY = NPLY+1
+               IPIDPLY(NPLY) = I
+               IDGR4N(NPLY)  = IGEO(40,I) ! groupe shell 4N id
+               IDGR3N(NPLY)  = IGEO(41,I) ! groupe shell 3N id
+           ENDIF
+         ENDDO
+C  transformation d'id groupe    
+          DO 10 I=1,NPLY
+C shell 4N id group          
+            ID = IDGR4N(I)
+            IF(ID > 0) THEN   
+                DO J=1,NGRSHEL
+                   JD = IGRSH4N(J)%ID
+                   IF(JD == ID)THEN
+                     IDGR4N(I) = J
+                     GOTO 20
+                   ENDIF  
+                ENDDO
+             ENDIF ! ID > 0
+C !GR  T3       
+ 20          CONTINUE
+             ID = IDGR3N(I) 
+             IF(ID > 0) THEN
+                DO J=1,NGRSH3N
+                  JD = IGRSH3N(J)%ID
+                  IF(JD == ID)THEN
+                     IDGR3N(I) = J
+                     GOTO 10
+                  ENDIF  
+                ENDDO
+             ENDIF  ! ID > 0 
+10      CONTINUE       
+C tag o  f ply element 
+         NSHQ4 = 0
+         DO I=1,NUMELC
+             PID = IXC(6,I)
+             IGTYP = IGEO(11,PID)
+             IF(IGTYP == 17 .OR. IGTYP == 51)THEN
+                 NSHQ4 = NSHQ4 +  1
+            ENDIF  
+         ENDDO 
+C 
+         NSHT3 = 0
+         DO I=1,NUMELTG
+             PID = IXTG(5,I)
+             IGTYP = IGEO(11,PID)
+             IF(IGTYP == 17 .OR. IGTYP == 51)THEN
+                 NSHT3 = NSHT3 +  1
+            ENDIF  
+         ENDDO 
+C  number of ply belong to the element         
+            DO I=1,NPLY 
+              J   = IDGR4N(I)
+              J4N = J
+              IDPLY = IPIDPLY(I) 
+              NSTACK = IGEO(42, IDPLY)
+              IF(J > 0 .AND. NSTACK > 0 ) THEN
+                NEL = IGRSH4N(J)%NENTITY
+C eleme  nt type Q4 or T3 
+                ITY = IGRSH4N(J)%GRTYPE
+                   DO  100 II = 1,NEL
+                     IDSHEL = IGRSH4N(J)%ENTITY(II)
+                     PID = IXC(6,IDSHEL)
+                     IGTYP = IGEO(11,PID)
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS, IDPLY)
+                             IF (IDS == PID) THEN
+                                IWORKSH (1,IDSHEL) = IWORKSH(1,IDSHEL) + 1
+                                GOTO 100
+                             ENDIF 
+                          ENDDO
+                      ENDIF 
+ 100               CONTINUE         
+                ENDIF 
+                 J   = IDGR3N(I)
+                 J3N = J
+                 IF(J > 0 .AND. NSTACK > 0 ) THEN
+                  NEL = IGRSH3N(J)%NENTITY
+C eleme  nt type T3 
+                  ITY = IGRSH3N(J)%GRTYPE
+                   DO 200 II = 1,NEL
+                     ISH3N = IGRSH3N(J)%ENTITY(II)
+                     PID = IXTG(5,ISH3N)
+                     IGTYP = IGEO(11,PID)
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS,IDPLY)
+                             IF (IDS == PID) THEN
+                                IDSHEL = ISH3N + NUMELC
+                                IWORKSH(1,IDSHEL) =   IWORKSH(1,IDSHEL ) + 1
+                                GOTO 200
+                             ENDIF 
+                          ENDDO
+                      ENDIF   
+ 200                CONTINUE
+               ENDIF 
+               IF(J4N == 0 .AND. J3N == 0 .AND. NSTACK > 0 ) THEN
+C 
+                    DO 300 II = 1,NUMELC
+                     PID = IXC(6,II)
+                     IGTYP = IGEO(11,PID)
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS,IDPLY)
+                             IF (IDS == PID) THEN
+                                IWORKSH(1,II) = IWORKSH(1,II) + 1
+                                GOTO 300
+                             ENDIF 
+                          ENDDO
+                      ENDIF   
+ 300                CONTINUE        
+                    DO 400 II = 1,NUMELTG
+                       PID = IXTG(5,II)
+                       IGTYP = IGEO(11,PID)
+                       ITG = NUMELC + II
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS,IDPLY)
+                             IF (IDS == PID) THEN
+                                IWORKSH(1,ITG) = IWORKSH(1,ITG) + 1
+                                GOTO 400
+                             ENDIF 
+                          ENDDO
+                      ENDIF   
+ 400                CONTINUE 
+              ENDIF
+C
+         ENDDO  ! iply  
+C #####################################################"
+           !  SH4N element
+           DO I=1,NUMELC  
+             PID   = IXC(6,I)
+             IGTYP = IGEO(11,PID) 
+             NPT   = IWORKSH(1,I)    
+             IF(IGTYP == 17 .OR. IGTYP == 51  .AND. NPT > 0) THEN
+               call my_alloc(IWORK_T(I)%PLYID, NPT, "IWORK_T(I)%PLYID")
+               call my_alloc(IWORK_T(I)%PLYNUM, NPT, "IWORK_T(I)%PLYNUM")
+               IWORK_T(I)%PLYID = 0
+               IWORKSH(1,I)     = 0
+               IWORK_T(I)%PLYNUM    = 0
+             ENDIF   
+           ENDDO  
+           ! sh3n element          
+           DO I=1, NUMELTG 
+             PID   = IXTG(5,I)
+             IGTYP = IGEO(11,PID)
+             II    = NUMELC + I
+             NPT   = IWORKSH(1,II)
+             IF((IGTYP == 17 .OR. IGTYP == 51) .AND. NPT > 0) THEN
+               call my_alloc(IWORK_T(II)%PLYID, NPT, "IWORK_T(II)%PLYID")
+               call my_alloc(IWORK_T(II)%PLYNUM, NPT, "IWORK_T(II)%PLYNUM")
+               IWORK_T(II)%PLYID = 0
+               IWORKSH(1,II)     = 0
+               IWORK_T(II)%PLYNUM    = 0
+             ENDIF   
+           ENDDO  
+!    ply to element
+!!
+            DO I=1,NPLY 
+              J   = IDGR4N(I)
+              J4N = J
+              IDPLY = IPIDPLY(I) 
+              NSTACK = IGEO(42, IDPLY)
+              IF(J > 0 .AND. NSTACK > 0 ) THEN
+                NEL = IGRSH4N(J)%NENTITY
+C eleme  nt type Q4 or T3 
+                ITY = IGRSH4N(J)%GRTYPE
+                   DO  101 II = 1,NEL
+                     IDSHEL = IGRSH4N(J)%ENTITY(II)
+                     PID = IXC(6,IDSHEL)
+                     IGTYP = IGEO(11,PID)
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS, IDPLY)
+                             IF (IDS == PID) THEN
+                                 IWORKSH (1,IDSHEL) = IWORKSH(1,IDSHEL) + 1
+                                 NPT = IWORKSH (1,IDSHEL)
+                                 IWORK_T(IDSHEL)%PLYID(NPT) = IDPLY
+                                 IWORK_T(IDSHEL)%PLYNUM(NPT) = I
+                                GOTO 101
+                             ENDIF 
+                          ENDDO
+                      ENDIF 
+ 101               CONTINUE        
+                ENDIF 
+                 J   = IDGR3N(I)
+                 J3N = J
+                 IF(J > 0 .AND. NSTACK > 0 ) THEN
+                  NEL = IGRSH3N(J)%NENTITY
+C eleme  nt type T3 
+                  ITY = IGRSH3N(J)%GRTYPE
+                   DO 202 II = 1,NEL
+                     ISH3N = IGRSH3N(J)%ENTITY(II)
+                     PID = IXTG(5,ISH3N)
+                     IGTYP = IGEO(11,PID)
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS,IDPLY)
+                             IF (IDS == PID) THEN
+                                IDSHEL = ISH3N + NUMELC
+                                IWORKSH(1,IDSHEL) =   IWORKSH(1,IDSHEL ) + 1
+                                 NPT = IWORKSH(1,IDSHEL)
+                                 IWORK_T(IDSHEL)%PLYID(NPT) = IDPLY
+                                 IWORK_T(IDSHEL)%PLYNUM(NPT) = I
+                                GOTO 202
+                             ENDIF 
+                          ENDDO
+                      ENDIF   
+ 202                CONTINUE
+               ENDIF 
+               IF(J4N == 0 .AND. J3N == 0 .AND. NSTACK > 0 ) THEN
+C 
+                    DO 333 II = 1,NUMELC
+                     PID = IXC(6,II)
+                     IGTYP = IGEO(11,PID)
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS,IDPLY)
+                             IF (IDS == PID) THEN
+                                IWORKSH(1,II) = IWORKSH(1,II) + 1
+                                NPT = IWORKSH(1,II)
+                                IWORK_T(II)%PLYID(NPT) = IDPLY
+                                IWORK_T(II)%PLYNUM(NPT) = I
+                                GOTO 333
+                             ENDIF 
+                          ENDDO
+                      ENDIF   
+ 333                CONTINUE        
+                    DO 404 II = 1,NUMELTG
+                       PID = IXTG(5,II)
+                       IGTYP = IGEO(11,PID)
+                       ITG = NUMELC + II
+                     IF(IGTYP == 17 .OR. IGTYP == 51) THEN
+                         DO IS = 1,NSTACK
+                             IDS = IGEO(200 + IS,IDPLY)
+                             IF (IDS == PID) THEN
+                                 IWORKSH(1,ITG) = IWORKSH(1,ITG) + 1
+                                 NPT = IWORKSH(1,ITG)
+                                 IWORK_T(ITG)%PLYID(NPT) = IDPLY
+                                 IWORK_T(ITG)%PLYNUM(NPT)    = I
+                                GOTO 404
+                             ENDIF 
+                          ENDDO
+                      ENDIF   
+ 404                CONTINUE 
+              ENDIF
+C
+         ENDDO  ! iply  
+       ENDIF
+C 
+C   pccommp part
+C         
+       IF(IPART_PCOMPP > 0) THEN
+         NPLY = 0
+         NSTACK = 0
+         DO I = 1, NUMPLY
+!! Only one stack by ply
+           IDS  = IGEO_STACK(42,NUMSTACK + I)
+           IF (IDS > 0) THEN 
+               NPLY = NPLY+1
+               IPIDPLY(NPLY) = NUMSTACK + I
+               IDGR4N(NPLY)  = IGEO_STACK(40,NUMSTACK + I) ! groupe shell 4N id
+               IDGR3N(NPLY)  = IGEO_STACK(41,NUMSTACK + I) ! groupe shell 3N id
+           ENDIF  
+         ENDDO 
+!
+          DO 11 I=1,NPLY
+C shell 4N id group                       
+            ID = IDGR4N(I)
+            IF(ID > 0) THEN   
+               DO J=1,NGRSHEL
+                  JD = IGRSH4N(J)%ID
+                  IF(JD == ID)THEN
+                    IDGR4N(I) = J
+                    GOTO 22
+                  ENDIF  
+               ENDDO
+             ENDIF ! ID > 0
+C !GR  T3       
+ 22        CONTINUE
+            ID = IDGR3N(I)
+            IF(ID > 0) THEN
+              DO J=1,NGRSH3N
+                JD = IGRSH3N(J)%ID
+                IF(JD == ID)THEN
+                  IDGR3N(I) = J
+                  GOTO 11
+                ENDIF  
+              ENDDO
+             ENDIF  ! ID > 0           
+11      CONTINUE        
+C   counter by element    
+           IWORK_T(1:NUMELC + NUMELTG)%IDSTACK = 0
+            DO I= 1,NPLY
+              J   = IDGR4N(I)
+              J4N = J
+              IDPLY = IPIDPLY(I) 
+              IDS = IGEO_STACK(42, IDPLY)
+             IF(J > 0 .AND. IDS > 0 ) THEN
+              NEL = IGRSH4N(J)%NENTITY
+C element type Q4 
+!!              ITY = IGRN(4,J)
+              ITY = IGRSH4N(J)%GRTYPE
+                 DO  111 II = 1,NEL
+                   IDSHEL = IGRSH4N(J)%ENTITY(II)
+                   PID = IXC(6,IDSHEL)
+                   IGTYP = IGEO(11,PID)
+                   IF(IGTYP == 52) THEN
+                     IF(IWORK_T(IDSHEL)%IDSTACK == 0) THEN 
+                          IWORKSH (1,IDSHEL) = IWORKSH(1,IDSHEL) + 1
+                          IWORK_T(IDSHEL)%IDSTACK = IDS
+                      ELSEIF(IWORK_T(IDSHEL)%IDSTACK == IDS) THEN
+                          IWORKSH (1,IDSHEL) = IWORKSH(1,IDSHEL) + 1
+                      ELSE
+C  error message      
+                        IPID_1=IGEO_STACK(1,IWORK_T(IDSHEL)%IDSTACK)
+                        NGL =IXC(NIXC,IDSHEL)
+                        CALL ANCMSG(MSGID=1152,
+     .                    MSGTYPE=MSGERROR,
+     .                    ANMODE=ANINFO_BLIND_1,
+     .                    I1=NGL,
+!!     .                    C2='SHELL',
+     .                    I2= IGEO_STACK(1,IDS),
+     .                    I3=  IGEO_STACK(1,IPID_1) )
+                      ENDIF
+                    ENDIF 
+ 111             CONTINUE
+              ENDIF 
+               J   = IDGR3N(I)
+               J3N = J
+               IF(J > 0 .AND. IDS > 0 ) THEN
+                NEL = IGRSH3N(J)%NENTITY
+C element type T3 
+                ITY = IGRSH3N(J)%GRTYPE
+                 DO 222 II = 1,NEL
+! 
+                   ISH3N = IGRSH3N(J)%ENTITY(II)
+                   PID = IXTG(5,ISH3N)
+                   IGTYP = IGEO(11,PID)
+                   IF(IGTYP == 52) THEN
+                      IDSHEL = ISH3N + NUMELC
+                      IF(IWORK_T(IDSHEL)%IDSTACK == 0) THEN  
+                          IWORKSH(1,IDSHEL)      =   IWORKSH(1,IDSHEL ) + 1
+                          IWORK_T(IDSHEL)%IDSTACK=   IDS
+                      ELSEIF(IWORK_T(IDSHEL)%IDSTACK == IDS) THEN
+                          IWORKSH(1,IDSHEL) =   IWORKSH(1,IDSHEL ) + 1
+                      ELSE
+C  error message
+                        IPID_1=IGEO_STACK(1,IWORK_T(IDSHEL)%IDSTACK)
+                        NGL =IXTG(NIXTG,IDSHEL)
+                        CALL ANCMSG(MSGID=1152,
+     .                    MSGTYPE=MSGERROR,
+     .                    ANMODE=ANINFO_BLIND_1,
+     .                    I1=NGL,
+!!     .                    C2='SHE3N',
+     .                    I2= IGEO_STACK(1,IDS),
+     .                    I3=  IGEO_STACK(1,IPID_1) )
+                      ENDIF
+                   ENDIF  
+ 222            CONTINUE
+             ENDIF 
+           ENDDO !  I   ply groupe
+C  
+!!!------------------------------------------------
+           DO I=1,NUMELC 
+             PID   = IXC(6,I)
+             IGTYP = IGEO(11,PID) 
+             NPT   = IWORKSH(1,I)
+             IF(IGTYP == 52 .AND. NPT > 0) THEN
+               call my_alloc(IWORK_T(I)%PLYID, NPT, "IWORK_T(I)%PLYID")
+               call my_alloc(IWORK_T(I)%PLYNUM, NPT, "IWORK_T(I)%PLYNUM")
+               IWORK_T(I)%PLYID   = 0
+               IWORK_T(I)%IDSTACK = 0
+               IWORKSH(1,I)       = 0
+               IWORK_T(I)%PLYNUM      = 0
+             ENDIF  
+           ENDDO
+           DO I=1, NUMELTG  
+             PID   = IXTG(5,I)
+             IGTYP = IGEO(11,PID)
+             II    = NUMELC + I
+             NPT   = IWORKSH(1,II)
+             IF(IGTYP == 52 .AND. NPT > 0) THEN
+                call my_alloc(IWORK_T(II)%PLYID, NPT, "IWORK_T(II)%PLYID")
+               call my_alloc(IWORK_T(II)%PLYNUM, NPT, "IWORK_T(II)%PLYNUM")
+                IWORK_T(II)%PLYID   = 0
+                IWORK_T(II)%IDSTACK = 0
+                IWORKSH(1,II)       = 0
+               IWORK_T(II)%PLYNUM      = 0
+              ENDIF  
+           ENDDO
+C
+            DO I= 1,NPLY
+              J   = IDGR4N(I)
+              J4N = J
+              IDPLY = IPIDPLY(I) 
+              IDS = IGEO_STACK(42, IDPLY)
+             IF(J > 0 .AND. IDS > 0 ) THEN
+              NEL = IGRSH4N(J)%NENTITY
+C element type Q4 
+!!              ITY = IGRN(4,J)
+              ITY = IGRSH4N(J)%GRTYPE
+                 DO  II = 1,NEL
+                   IDSHEL = IGRSH4N(J)%ENTITY(II)
+                   PID = IXC(6,IDSHEL)
+                   IGTYP = IGEO(11,PID)
+                   IF(IGTYP == 52) THEN
+                     IF(IWORK_T(IDSHEL)%IDSTACK == 0) THEN 
+                          IWORKSH (1,IDSHEL) = IWORKSH(1,IDSHEL) + 1
+                          NPT = IWORKSH (1,IDSHEL)
+                          IWORK_T(IDSHEL)%PLYID(NPT) = IDPLY
+                          IWORK_T(IDSHEL)%IDSTACK = IDS
+                          IWORK_T(IDSHEL)%PLYNUM(NPT) = I
+                      ELSEIF(IWORK_T(IDSHEL)%IDSTACK == IDS) THEN
+                          IWORKSH (1,IDSHEL) = IWORKSH(1,IDSHEL) + 1
+                          NPT = IWORKSH (1,IDSHEL)
+                          IWORK_T(IDSHEL)%PLYID(NPT) = IDPLY
+                          IWORK_T(IDSHEL)%PLYNUM(NPT) = I
+                      ELSE
+C  error message      
+                        IPID_1=IGEO_STACK(1,IWORK_T(IDSHEL)%IDSTACK)
+                        NGL =IXC(NIXC,IDSHEL)
+                        CALL ANCMSG(MSGID=1152,
+     .                    MSGTYPE=MSGERROR,
+     .                    ANMODE=ANINFO_BLIND_1,
+     .                    I1=NGL,
+!!     .                    C2='SHELL',
+     .                    I2= IGEO_STACK(1,IDS),
+     .                    I3=  IGEO_STACK(1,IPID_1) )
+                      ENDIF
+                    ENDIF 
+                ENDDO
+              ENDIF 
+               J   = IDGR3N(I)
+               J3N = J
+               IF(J > 0 .AND. IDS > 0 ) THEN
+                NEL = IGRSH3N(J)%NENTITY
+C element type T3 
+                ITY = IGRSH3N(J)%GRTYPE
+                 DO  II = 1,NEL
+! c a verifier l'id du triangle
+
+                   ISH3N = IGRSH3N(J)%ENTITY(II)
+                   PID = IXTG(5,ISH3N)
+                   IGTYP = IGEO(11,PID)
+                   IF(IGTYP == 52) THEN
+                      IDSHEL = ISH3N + NUMELC
+                      IF(IWORK_T(IDSHEL)%IDSTACK == 0) THEN  
+                          IWORKSH(1,IDSHEL) =   IWORKSH(1,IDSHEL ) + 1
+                          NPT = IWORKSH(1,IDSHEL)
+                          IWORK_T(IDSHEL)%PLYID(NPT) = IDPLY
+                          IWORK_T(IDSHEL)%IDSTACK= IDS
+                          IWORK_T(IDSHEL)%PLYNUM(NPT) = I
+                      ELSEIF(IWORK_T(IDSHEL)%IDSTACK == IDS) THEN
+                           IWORKSH(1,IDSHEL) =   IWORKSH(1,IDSHEL ) + 1
+                           NPT = IWORKSH(1,IDSHEL)
+                           IWORK_T(IDSHEL)%PLYID(NPT) = IDPLY
+                           IWORK_T(IDSHEL)%PLYNUM(NPT) = I
+                      ELSE
+C  error message
+                        IPID_1=IGEO_STACK(1,IWORK_T(IDSHEL)%IDSTACK)
+                        NGL =IXTG(NIXTG,IDSHEL)
+                        CALL ANCMSG(MSGID=1152,
+     .                    MSGTYPE=MSGERROR,
+     .                    ANMODE=ANINFO_BLIND_1,
+     .                    I1=NGL,
+!!     .                    C2='SHE3N',
+     .                    I2= IGEO_STACK(1,IDS),
+     .                    I3=  IGEO_STACK(1,IPID_1) )
+                      ENDIF
+                   ENDIF  
+                ENDDO ! II 
+             ENDIF 
+           ENDDO !  I   ply groupe
+!!!------------------------------------------
+       ENDIF    
+C--------
+     
+      RETURN
+      END

@@ -1,0 +1,94 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    frecpl                 ../engine/source/input/frecpl.F
+!||--- called by ------------------------------------------------------
+!||    freform                ../engine/source/input/freform.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                 ../engine/source/output/message/message.F
+!||    arret                  ../engine/source/system/arret.F
+!||    errmsg                 ../engine/source/input/errmsg.F
+!||    wriusc2                ../engine/source/input/wriusc2.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod            ../engine/share/message_module/message_mod.F
+!||    names_and_titles_mod   ../common_source/modules/names_and_titles_mod.F
+!||====================================================================
+      SUBROUTINE FRECPL(IKAD,KEY0,KCPL)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE NAMES_AND_TITLES_MOD, ONLY: NCHARLINE100
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IKAD(0:*),KCPL
+      CHARACTER KEY0(*)*5
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "units_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NBC, K, IKEY, NBCCON
+      my_real ULENGTH,UTIME,UMASS
+      CHARACTER KEY2*5,ONCOD*5
+      PARAMETER (NBCCON=1)
+      DATA ONCOD/'ONOFF'/
+C-----------------------------------------------
+      IKEY=KCPL
+      K=0
+      READ(IUSC1,REC=IKAD(IKEY)+K,FMT='(7X,A,37X,I10)',ERR=9990) KEY2,NBC
+      K=K+1
+C-----------------------------------------------
+      IF (KEY2=='ON'.OR.KEY2=='ON2'.OR.KEY2=='MPP') THEN
+        IF (NBC/=NBCCON) THEN
+          CALL ANCMSG(MSGID=73,ANMODE=ANINFO,C1=KEY0(IKEY))
+          CALL ARRET(0)
+        ELSE
+         WRITE(IIN,'(A5)') ONCOD
+         CALL WRIUSC2(IKAD(IKEY)+K,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) ULENGTH,UTIME,UMASS
+         WRITE(IIN,'(3G16.9)') ULENGTH,UTIME,UMASS
+        END IF
+      ELSE
+         CALL ERRMSG(KEY2)
+         GOTO 9990
+      END IF
+C
+      RETURN
+C
+ 9990 CONTINUE
+      WRITE(ISTDO,*) ' ** ERROR ** : INPUT ERROR IN OPTION ',KEY0(IKEY)
+      WRITE(ISTDO,*) ' ** ERROR ** : INPUT ERROR IN OPTION ',KEY0(IKEY)
+      CALL ANCMSG(MSGID=73,ANMODE=ANINFO,
+     .            C1=KEY0(IKEY))
+      CALL ARRET(0)
+C
+      END

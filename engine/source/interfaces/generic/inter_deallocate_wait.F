@@ -1,0 +1,191 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    inter_deallocate_wait   ../engine/source/interfaces/generic/inter_deallocate_wait.F
+!||--- called by ------------------------------------------------------
+!||    inttri                  ../engine/source/interfaces/intsort/inttri.F
+!||--- calls      -----------------------------------------------------
+!||    my_barrier              ../engine/source/system/machine.F
+!||--- uses       -----------------------------------------------------
+!||    h3d_mod                 ../engine/share/modules/h3d_mod.F
+!||    intbufdef_mod           ../common_source/modules/interfaces/intbufdef_mod.F90
+!||    inter_sorting_mod       ../engine/share/modules/inter_sorting_mod.F
+!||    inter_struct_mod        ../engine/share/modules/inter_struct_mod.F
+!||    metric_mod              ../common_source/modules/interfaces/metric_mod.F
+!||    multi_fvm_mod           ../common_source/modules/ale/multi_fvm_mod.F90
+!||    my_dealloc_mod          ../common_source/tools/memory/my_dealloc.F90
+!||    sensor_mod              ../common_source/modules/sensor_mod.F90
+!||====================================================================
+        SUBROUTINE INTER_DEALLOCATE_WAIT( ITASK,NB_INTER_SORTED,LIST_INTER_SORTED,IPARI,
+     1                          NSENSOR,IRECVFROM,SENSOR_TAB,INTER_STRUCT,SORT_COMM )
+!$COMMENT
+!       INTER_DEALLOCATE_WAIT description
+!       wait the message "send the secondary nodes" & deallocation of array
+!       INTER_DEALLOCATE_WAIT organization :
+!$ENDCOMMENT
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MULTI_FVM_MOD
+      USE H3D_MOD
+      USE METRIC_MOD
+      USE INTBUFDEF_MOD  
+      USE INTER_STRUCT_MOD
+      USE INTER_SORTING_MOD
+      USE SENSOR_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com08_c.inc"
+#include      "param_c.inc"
+#include      "task_c.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(in) :: ITASK    !   omp thread ID
+      INTEGER, INTENT(in) :: NB_INTER_SORTED        !   number of interfaces that need to be sorted
+      INTEGER, INTENT(in) :: NSENSOR
+      INTEGER, DIMENSION(NB_INTER_SORTED), INTENT(in) :: LIST_INTER_SORTED
+! list of interfaces that need to be sorted
+      INTEGER, DIMENSION(NPARI,NINTER), INTENT(in) :: IPARI    !   interface data
+      INTEGER, DIMENSION(NINTER+1,NSPMD+1), INTENT(in) :: IRECVFROM 
+      TYPE(inter_struct_type), DIMENSION(NINTER), INTENT(inout) :: INTER_STRUCT   !   structure for interface
+      TYPE(sorting_comm_type), DIMENSION(NINTER), INTENT(inout) :: SORT_COMM   ! structure for interface sorting comm
+      TYPE (SENSOR_STR_) ,DIMENSION(NSENSOR) :: SENSOR_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        INTEGER :: KK,N,P
+        INTEGER :: NTY,INACTI,ISENS
+        INTEGER :: NSN,NMN
+        LOGICAL :: TYPE18
+#ifdef MPI
+        INTEGER :: IERROR,STATUS(MPI_STATUS_SIZE)
+#endif
+        my_real :: TS
+!   ----------------------------------------
+        IF(ITASK==0.AND.NB_INTER_SORTED>0) THEN
+            DO KK=1,NB_INTER_SORTED
+                N = LIST_INTER_SORTED(KK)
+
+                NTY = IPARI(7,N)
+                INACTI = IPARI(22,N)
+                TYPE18=.FALSE.
+                IF(NTY==7.AND.INACTI==7)TYPE18=.TRUE.
+
+                ISENS = 0
+                IF(NTY == 7.OR.NTY == 11.OR.NTY == 24.OR.NTY == 25) ISENS = IPARI(64,N)  
+                IF (ISENS > 0) THEN    ! IF INTERFACE IS ACTIVATED BY SENSOR 
+                    TS = SENSOR_TAB(ISENS)%TSTART
+                ELSE
+                    TS = TT
+                ENDIF
+
+                NSN = IPARI(5,N)
+                NMN = IPARI(6,N)
+                ! -----------------------------------------------------
+                ! type 7
+                IF((NTY==7.AND.TT>=TS).AND.(.NOT.TYPE18))THEN
+                    ! wait the message only for proc with only secondary nodes 
+                    IF(NSN>0.AND.NMN==0) THEN   !   local nsn>0 && local nmn == 0
+                        DO P = 1, NSPMD
+                            IF(IRECVFROM(N,P)/=0) THEN     !   nmn >0
+                                IF(P/=ISPMD+1) THEN
+                                    IF(SORT_COMM(N)%NB(P)/=0) THEN
+#ifdef MPI
+                                        CALL MPI_WAIT(SORT_COMM(N)%REQ_SD2(P),STATUS,IERROR) 
+                                        call my_dealloc(SORT_COMM(N)%DATA_PROC(P)%RBUF)
+                                        CALL MPI_WAIT(SORT_COMM(N)%REQ_SD3(P),STATUS,IERROR) 
+                                        call my_dealloc(SORT_COMM(N)%DATA_PROC(P)%IBUF)
+                                        SORT_COMM(N)%NB(P) = 0 
+#endif                     
+                                    END IF
+                                ENDIF
+                            ENDIF
+                        ENDDO
+                    ENDIF
+                ENDIF
+                ! -----------------------------------------------------
+                ! deallocation
+                IF(ALLOCATED(SORT_COMM(N)%COARSE_GRID) ) call my_dealloc(SORT_COMM(N)%COARSE_GRID)
+                IF(ALLOCATED(SORT_COMM(N)%MAIN_COARSE_GRID) ) call my_dealloc(SORT_COMM(N)%MAIN_COARSE_GRID)
+                IF(ALLOCATED(SORT_COMM(N)%GLOBAL_COARSE_CELL) ) call my_dealloc(SORT_COMM(N)%GLOBAL_COARSE_CELL)
+
+                IF(ALLOCATED(SORT_COMM(N)%SEND_SIZE_COARSE_CELL) ) call my_dealloc(SORT_COMM(N)%SEND_SIZE_COARSE_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%RCV_SIZE_COARSE_CELL) ) call my_dealloc(SORT_COMM(N)%RCV_SIZE_COARSE_CELL)
+      IF(ALLOCATED(SORT_COMM(N)%SEND_DISPLS_COARSE_CELL) ) call my_dealloc(SORT_COMM(N)%SEND_DISPLS_COARSE_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%RCV_DISPLS_COARSE_CELL) ) call my_dealloc(SORT_COMM(N)%RCV_DISPLS_COARSE_CELL)
+               
+
+                IF(ALLOCATED(SORT_COMM(N)%KEEP_PROC) ) call my_dealloc(SORT_COMM(N)%KEEP_PROC)
+                IF(ALLOCATED(SORT_COMM(N)%CELL_LIST) ) call my_dealloc(SORT_COMM(N)%CELL_LIST)
+                IF(ALLOCATED(SORT_COMM(N)%NB_CELL_PROC) ) call my_dealloc(SORT_COMM(N)%NB_CELL_PROC)
+                IF(ALLOCATED(SORT_COMM(N)%CELL) ) call my_dealloc(SORT_COMM(N)%CELL)
+
+                IF(ALLOCATED(SORT_COMM(N)%SEND_NB_CELL) ) call my_dealloc(SORT_COMM(N)%SEND_NB_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%RCV_NB_CELL) ) call my_dealloc(SORT_COMM(N)%RCV_NB_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%SEND_DISPLS_NB_CELL) ) call my_dealloc(SORT_COMM(N)%SEND_DISPLS_NB_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%RCV_DISPLS_NB_CELL) ) call my_dealloc(SORT_COMM(N)%RCV_DISPLS_NB_CELL)
+
+                IF(ALLOCATED(SORT_COMM(N)%SEND_SIZE_CELL) ) call my_dealloc(SORT_COMM(N)%SEND_SIZE_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%RCV_SIZE_CELL) ) call my_dealloc(SORT_COMM(N)%RCV_SIZE_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%SEND_DISPLS_CELL) ) call my_dealloc(SORT_COMM(N)%SEND_DISPLS_CELL)
+                IF(ALLOCATED(SORT_COMM(N)%RCV_DISPLS_CELL) ) call my_dealloc(SORT_COMM(N)%RCV_DISPLS_CELL)
+
+                IF(ALLOCATED(SORT_COMM(N)%REQUEST_NB_S) ) call my_dealloc(SORT_COMM(N)%REQUEST_NB_S)
+                IF(ALLOCATED(SORT_COMM(N)%REQUEST_NB_R) ) call my_dealloc(SORT_COMM(N)%REQUEST_NB_R)
+                IF(ALLOCATED(SORT_COMM(N)%NB) ) call my_dealloc(SORT_COMM(N)%NB)
+                IF(ALLOCATED(SORT_COMM(N)%INDEX_RCV) ) call my_dealloc(SORT_COMM(N)%INDEX_RCV)
+
+                IF(ALLOCATED(SORT_COMM(N)%SEND_NB) ) call my_dealloc(SORT_COMM(N)%SEND_NB)
+                IF(ALLOCATED(SORT_COMM(N)%RECV_NB) ) call my_dealloc(SORT_COMM(N)%RECV_NB)
+
+                IF(ALLOCATED(SORT_COMM(N)%REQUEST_CELL_SEND) ) call my_dealloc(SORT_COMM(N)%REQUEST_CELL_SEND)
+                IF(ALLOCATED(SORT_COMM(N)%REQUEST_CELL_RCV) ) call my_dealloc(SORT_COMM(N)%REQUEST_CELL_RCV)
+
+                IF(ALLOCATED(SORT_COMM(N)%IIX) ) call my_dealloc(SORT_COMM(N)%IIX)
+                IF(ALLOCATED(SORT_COMM(N)%IIY) ) call my_dealloc(SORT_COMM(N)%IIY)
+                IF(ALLOCATED(SORT_COMM(N)%IIZ) ) call my_dealloc(SORT_COMM(N)%IIZ)
+                IF(ALLOCATED(SORT_COMM(N)%LAST_NOD) ) call my_dealloc(SORT_COMM(N)%LAST_NOD)
+                IF(ALLOCATED(SORT_COMM(N)%NEXT_NOD) ) call my_dealloc(SORT_COMM(N)%NEXT_NOD)
+                IF(ALLOCATED(SORT_COMM(N)%VOXEL) ) call my_dealloc(SORT_COMM(N)%VOXEL)
+
+                IF(ALLOCATED(INTER_STRUCT(N)%CURV_MAX)) call my_dealloc(INTER_STRUCT(N)%CURV_MAX)
+                ! -----------------------------------------------------
+            ENDDO
+            IF(ALLOCATED(NB_LOCAL_CELL) ) call my_dealloc(NB_LOCAL_CELL)
+            IF(ALLOCATED(CELL_BOOL) ) call my_dealloc(CELL_BOOL)
+        ENDIF
+        CALL MY_BARRIER()
+
+        RETURN
+        END SUBROUTINE INTER_DEALLOCATE_WAIT

@@ -1,0 +1,118 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    c_irbe3          ../starter/source/restart/ddsplit/c_irbe3.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit          ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    nlocal           ../starter/source/spmd/node/ddtools.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE C_IRBE3(IRBE3,LRBE3,NSKYRBE3_L,PROC  ,
+     .                   NRBE3_L,SLMN_L ,NBDDRBE3M,NRBE3PEN_L)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "tabsiz_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER PROC, NSKYRBE3_L,NRBE3_L,SLMN_L,NBDDRBE3M,
+     .        IRBE3(NRBE3L,*), LRBE3(*)
+      INTEGER, INTENT(INOUT) :: NRBE3PEN_L
+C-----------------------------------------------
+C   F u n c t i o n
+C-----------------------------------------------
+      INTEGER  NLOCAL
+      EXTERNAL NLOCAL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, K, NSN, ILP, N,P,M,IPEN
+      INTEGER, DIMENSION(:), ALLOCATABLE :: TAGI
+C-----------------------------------------------
+!     allocate 1d array
+      call my_alloc(TAGI, NUMNOD, "TAGI")
+! ----------------------------
+C
+      SLMN_L = 0
+      NRBE3PEN_L =0
+      DO I = 1, NRBE3
+        NSN = IRBE3(5,I)
+        K = IRBE3(1,I)
+        M = IRBE3(3,I)
+        IPEN = IRBE3(9,I)
+       ILP = 0
+       DO J = 1, NSN
+          N = LRBE3(K+J)
+          IF (NLOCAL(N,PROC+1)==1)THEN
+            ILP = ILP + 1
+          ENDIF
+       ENDDO
+C------------- For Exchange, even without node second ----
+       IF (NLOCAL(M,PROC+1)==1.OR.ILP>0)THEN
+        NRBE3_L = NRBE3_L+1
+        IF (IPEN>0) NRBE3PEN_L = NRBE3PEN_L+1
+       END IF
+       SLMN_L = SLMN_L + ILP
+      ENDDO
+C
+      IF(IPARI0/=0) NSKYRBE3_L = SLMN_L*0
+C-------------for main nodes---------
+      DO I = 1, NUMNOD
+        TAGI(I) = 0
+      END DO
+      DO I = 1, SLRBE3/2
+          N = LRBE3(I)
+            IF(NLOCAL(N,PROC+1)==1) THEN
+              IF(TAGI(N)==0) THEN
+C counting boundaries of main nodes
+                DO P = 1, NSPMD
+                  IF(NLOCAL(N,P)==1)THEN
+                    NBDDRBE3M = NBDDRBE3M + 1
+                  END IF
+                END DO
+C We do not count ourselves
+                NBDDRBE3M = NBDDRBE3M - 1
+C to avoid counting main nodes of different RBE3s in the boundaries twice
+                TAGI(N) = 1
+              END IF
+            ENDIF
+      END DO
+C
+! ----------------------------
+!     deallocate 1d array
+      call my_dealloc(TAGI)
+! ----------------------------
+      RETURN
+      END

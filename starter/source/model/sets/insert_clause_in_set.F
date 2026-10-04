@@ -1,0 +1,947 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    insert_clause_in_set          ../starter/source/model/sets/insert_clause_in_set.F
+!||--- called by ------------------------------------------------------
+!||    create_set_clause             ../starter/source/model/sets/create_set_clause.F
+!||    create_set_collect            ../starter/source/model/sets/create_setcol_clause.F
+!||    create_setcol_clause          ../starter/source/model/sets/create_setcol_clause.F
+!||    hm_set                        ../starter/source/model/sets/hm_set.F
+!||--- calls      -----------------------------------------------------
+!||    create_line_from_element      ../starter/source/model/sets/create_line_from_element.F
+!||    create_line_from_surface      ../starter/source/model/sets/create_line_from_surface.F
+!||    create_surface_from_element   ../starter/source/model/sets/create_surface_from_element.F
+!||    set_merge_simple              ../starter/source/model/sets/set_merge_simple.F
+!||    surface_type                  ../starter/source/model/sets/surface_type.F90
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod            ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod                   ../starter/share/message_module/message_mod.F
+!||    set_mod                       ../starter/share/modules1/set_mod.F
+!||    surface_type_mod              ../starter/source/model/sets/surface_type.F90
+!||====================================================================
+      SUBROUTINE INSERT_CLAUSE_IN_SET(SET       ,CLAUSE   ,CLAUSE_OPERATOR,
+     .                                IXS       ,IXS10    ,                      IXQ    ,
+     .                                IXC       ,IXTG     ,IXT       ,IXP       ,IXR    ,
+     .                                                                           SH4TREE,
+     .                                SH3TREE   ,KNOD2ELS ,NOD2ELS   ,KNOD2ELC  ,NOD2ELC,
+     .                                KNOD2ELTG ,NOD2ELTG ,IPARTC    ,IPARTG    ,IPARTS ,
+     .                                IPART     ,OPT_A    ,OPT_O     ,KNOD2ELQ  ,NOD2ELQ,
+     .                                X         ,KEYSET   ,OPT_E     ,DELBUF    ,IPARTQ)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Apply the clause to the current set
+C-----------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     SET           Set Structure - Current SET
+C     CLAUSE        Filled CLAUSE
+C============================================================================
+C-----------------------------------------------
+C   D e f i n i t i o n s 
+C-----------------------------------------------
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE HM_OPTION_READ_MOD
+      USE SETDEF_MOD
+      USE MESSAGE_MOD
+      USE SET_SCRATCH_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARFIELD
+      USE SET_MOD , ONLY : SET_ADD,SET_DELETE,SET_INTERSECT
+      use surface_type_mod , only : surface_type
+      use element_mod , only : nixs,nixq,nixc,nixt,nixp,nixr,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "param_c.inc"
+#include      "sphcom.inc"
+#include      "com04_c.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE (SET_) ::  SET
+      TYPE (SET_) ::  CLAUSE
+      TYPE (SET_SCRATCH) ::  DELBUF
+      INTEGER CLAUSE_OPERATOR
+
+      INTEGER  OPT_A,OPT_O,OPT_E
+      INTEGER IXS(NIXS,*),IXS10(6,*),
+     .        IXQ(NIXQ,*),IXC(NIXC,*),IXTG(NIXTG,*),IXT(NIXT,*),
+     .        IXP(NIXP,*),IXR(NIXR,*),
+     .        SH4TREE(*),SH3TREE(*),KNOD2ELS(*),KNOD2ELC(*),KNOD2ELTG(*),
+     .        KNOD2ELQ(*),NOD2ELS(*),NOD2ELC(*),NOD2ELTG(*),NOD2ELQ(*),
+     .        IPARTS(*),IPARTC(*),IPARTG(*),IPART(LIPART1,*),IPARTQ(NUMELQ)
+      my_real
+     .    X(3,*)
+      CHARACTER(LEN=NCHARFIELD) :: KEYSET
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER, DIMENSION(:), ALLOCATABLE :: RESULT
+      INTEGER NEW_SIZE, NS
+      logical :: empty_condition
+C-----------------------------------------------
+C     NODES 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_NODE > 0) THEN
+
+         IF( SET%NB_NODE > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_NODE + CLAUSE%NB_NODE, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%NODE,    SET%NB_NODE    ,
+     *                             CLAUSE%NODE, CLAUSE%NB_NODE ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%NODE)) CALL MY_DEALLOC(SET%NODE)
+            call my_alloc(SET%NODE, NEW_SIZE, "SET%NODE")
+
+            SET%NODE(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_NODE=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%NODE)) CALL MY_DEALLOC(SET%NODE)
+               call my_alloc(SET%NODE, CLAUSE%NB_NODE, "SET%NODE")
+
+               SET%NB_NODE=CLAUSE%NB_NODE
+               SET%NODE(1:CLAUSE%NB_NODE)=CLAUSE%NODE(1:CLAUSE%NB_NODE)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_NODE > 0)THEN
+               IF(ALLOCATED(SET%NODE)) CALL MY_DEALLOC(SET%NODE)
+               SET%NB_NODE=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     NODENS 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_NODENS > 0 ) THEN
+
+        IF( SET%NB_NODENS > 0 ) THEN
+
+          call my_alloc(RESULT, SET%NB_NODENS + CLAUSE%NB_NODENS, "RESULT") ! Results SET
+
+          CALL SET_MERGE_SIMPLE( SET%NODENS,    SET%NB_NODENS    ,
+     *                             CLAUSE%NODENS, CLAUSE%NB_NODENS ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+          IF (ALLOCATED(SET%NODENS)) CALL MY_DEALLOC(SET%NODENS)
+          call my_alloc(SET%NODENS, NEW_SIZE, "SET%NODENS")
+
+          SET%NODENS(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+          SET%NB_NODENS=NEW_SIZE
+
+          call my_dealloc(RESULT)
+
+        ELSE   ! SET is empty fill it with clause when ADD
+
+          IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+            IF (ALLOCATED(SET%NODENS)) CALL MY_DEALLOC(SET%NODENS)
+            call my_alloc(SET%NODENS, CLAUSE%NB_NODENS, "SET%NODENS")
+
+            SET%NB_NODENS=CLAUSE%NB_NODENS
+            SET%NODENS(1:CLAUSE%NB_NODENS)=CLAUSE%NODENS(1:CLAUSE%NB_NODENS)
+
+          ENDIF
+
+        ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+          IF (SET%NB_NODENS > 0)THEN
+            IF(ALLOCATED(SET%NODENS)) CALL MY_DEALLOC(SET%NODENS)
+            SET%NB_NODENS=0
+          ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     PARTS
+C-----------------------------------------------
+      IF(  CLAUSE%NB_PART > 0) THEN
+
+         IF( SET%NB_PART > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_PART + CLAUSE%NB_PART, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%PART,    SET%NB_PART    ,
+     *                             CLAUSE%PART, CLAUSE%NB_PART ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR             )
+         
+            IF (ALLOCATED(SET%PART)) CALL MY_DEALLOC(SET%PART)
+            call my_alloc(SET%PART, NEW_SIZE, "SET%PART")
+
+            SET%PART(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_PART=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%PART)) CALL MY_DEALLOC(SET%PART)
+               call my_alloc(SET%PART, CLAUSE%NB_PART, "SET%PART")
+
+               SET%NB_PART=CLAUSE%NB_PART
+               SET%PART(1:SET%NB_PART)=CLAUSE%PART(1:SET%NB_PART)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_PART > 0)THEN
+               IF(ALLOCATED(SET%PART)) CALL MY_DEALLOC(SET%PART)
+               SET%NB_PART=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     SOLIDS
+C-----------------------------------------------
+      IF(  CLAUSE%NB_SOLID > 0) THEN
+
+         IF( SET%NB_SOLID > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_SOLID + CLAUSE%NB_SOLID, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%SOLID,    SET%NB_SOLID    ,
+     *                             CLAUSE%SOLID, CLAUSE%NB_SOLID ,
+     *                             RESULT,       NEW_SIZE        ,
+     *                             CLAUSE_OPERATOR)
+         
+            IF (ALLOCATED(SET%SOLID)) CALL MY_DEALLOC(SET%SOLID)
+            call my_alloc(SET%SOLID, NEW_SIZE, "SET%SOLID")
+
+            SET%SOLID(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_SOLID=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%SOLID)) CALL MY_DEALLOC(SET%SOLID)
+               call my_alloc(SET%SOLID, CLAUSE%NB_SOLID, "SET%SOLID")
+
+               SET%NB_SOLID=CLAUSE%NB_SOLID
+               SET%SOLID(1:CLAUSE%NB_SOLID)=CLAUSE%SOLID(1:CLAUSE%NB_SOLID)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_SOLID > 0)THEN
+               IF(ALLOCATED(SET%SOLID)) CALL MY_DEALLOC(SET%SOLID)
+               SET%NB_SOLID=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     SH4N
+C-----------------------------------------------
+      IF(  CLAUSE%NB_SH4N > 0) THEN
+
+         IF( SET%NB_SH4N > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_SH4N + CLAUSE%NB_SH4N, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%SH4N,    SET%NB_SH4N    ,
+     *                             CLAUSE%SH4N, CLAUSE%NB_SH4N ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%SH4N)) CALL MY_DEALLOC(SET%SH4N)
+            call my_alloc(SET%SH4N, NEW_SIZE, "SET%SH4N")
+
+            SET%SH4N(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_SH4N=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%SH4N)) CALL MY_DEALLOC(SET%SH4N)
+               call my_alloc(SET%SH4N, CLAUSE%NB_SH4N, "SET%SH4N")
+
+               SET%NB_SH4N=CLAUSE%NB_SH4N
+               SET%SH4N(1:CLAUSE%NB_SH4N)=CLAUSE%SH4N(1:CLAUSE%NB_SH4N)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_SH4N > 0)THEN
+               IF(ALLOCATED(SET%SH4N)) CALL MY_DEALLOC(SET%SH4N)
+               SET%NB_SH4N=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     SH3N 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_SH3N > 0) THEN
+
+         IF( SET%NB_SH3N > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_SH3N + CLAUSE%NB_SH3N, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%SH3N,    SET%NB_SH3N    ,
+     *                             CLAUSE%SH3N, CLAUSE%NB_SH3N ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%SH3N)) CALL MY_DEALLOC(SET%SH3N)
+            call my_alloc(SET%SH3N, NEW_SIZE, "SET%SH3N")
+
+            SET%SH3N(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_SH3N=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%SH3N)) CALL MY_DEALLOC(SET%SH3N)
+               call my_alloc(SET%SH3N, CLAUSE%NB_SH3N, "SET%SH3N")
+
+               SET%NB_SH3N=CLAUSE%NB_SH3N
+               SET%SH3N(1:CLAUSE%NB_SH3N) = CLAUSE%SH3N(1:CLAUSE%NB_SH3N)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+         IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_SH3N > 0)THEN
+               IF(ALLOCATED(SET%SH3N)) CALL MY_DEALLOC(SET%SH3N)
+               SET%NB_SH3N=0
+            ENDIF
+         ENDIF
+      ENDIF
+C-----------------------------------------------
+C     QUAD 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_QUAD > 0) THEN
+
+         IF( SET%NB_QUAD > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_QUAD + CLAUSE%NB_QUAD, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%QUAD,    SET%NB_QUAD    ,
+     *                             CLAUSE%QUAD, CLAUSE%NB_QUAD ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%QUAD)) CALL MY_DEALLOC(SET%QUAD)
+            call my_alloc(SET%QUAD, NEW_SIZE, "SET%QUAD")
+
+            SET%QUAD(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_QUAD=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%QUAD)) CALL MY_DEALLOC(SET%QUAD)
+               call my_alloc(SET%QUAD, CLAUSE%NB_QUAD, "SET%QUAD")
+
+               SET%NB_QUAD=CLAUSE%NB_QUAD
+               SET%QUAD(1:CLAUSE%NB_QUAD)=CLAUSE%QUAD(1:CLAUSE%NB_QUAD)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_QUAD > 0)THEN
+               IF(ALLOCATED(SET%QUAD)) CALL MY_DEALLOC(SET%QUAD)
+               SET%NB_QUAD=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     TRIA 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_TRIA > 0) THEN
+
+         IF( SET%NB_TRIA > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_TRIA + CLAUSE%NB_TRIA, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%TRIA,    SET%NB_TRIA    ,
+     *                             CLAUSE%TRIA, CLAUSE%NB_TRIA ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%TRIA)) CALL MY_DEALLOC(SET%TRIA)
+            call my_alloc(SET%TRIA, NEW_SIZE, "SET%TRIA")
+
+            SET%TRIA(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_TRIA=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%TRIA)) CALL MY_DEALLOC(SET%TRIA)
+               call my_alloc(SET%TRIA, CLAUSE%NB_TRIA, "SET%TRIA")
+
+               SET%NB_TRIA=CLAUSE%NB_TRIA
+               SET%TRIA(1:CLAUSE%NB_TRIA) = CLAUSE%TRIA(1:CLAUSE%NB_TRIA)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_TRIA > 0)THEN
+               IF(ALLOCATED(SET%TRIA)) CALL MY_DEALLOC(SET%TRIA)
+               SET%NB_TRIA=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     BEAM 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_BEAM > 0) THEN
+
+         IF( SET%NB_BEAM > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_BEAM + CLAUSE%NB_BEAM, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%BEAM,    SET%NB_BEAM    ,
+     *                             CLAUSE%BEAM, CLAUSE%NB_BEAM ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%BEAM)) CALL MY_DEALLOC(SET%BEAM)
+            call my_alloc(SET%BEAM, NEW_SIZE, "SET%BEAM")
+
+            SET%BEAM(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_BEAM=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%BEAM)) CALL MY_DEALLOC(SET%BEAM)
+               call my_alloc(SET%BEAM, CLAUSE%NB_BEAM, "SET%BEAM")
+
+               SET%NB_BEAM=CLAUSE%NB_BEAM
+               SET%BEAM(1:CLAUSE%NB_BEAM) = CLAUSE%BEAM(1:CLAUSE%NB_BEAM) 
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_BEAM > 0)THEN
+               IF(ALLOCATED(SET%BEAM)) CALL MY_DEALLOC(SET%BEAM)
+               SET%NB_BEAM=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     TRUSS 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_TRUSS > 0) THEN
+
+         IF( SET%NB_TRUSS > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_TRUSS + CLAUSE%NB_TRUSS, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%TRUSS,    SET%NB_TRUSS    ,
+     *                             CLAUSE%TRUSS, CLAUSE%NB_TRUSS ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%TRUSS)) CALL MY_DEALLOC(SET%TRUSS)
+            call my_alloc(SET%TRUSS, NEW_SIZE, "SET%TRUSS")
+
+            SET%TRUSS(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_TRUSS=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%TRUSS)) CALL MY_DEALLOC(SET%TRUSS)
+               call my_alloc(SET%TRUSS, CLAUSE%NB_TRUSS, "SET%TRUSS")
+
+               SET%NB_TRUSS=CLAUSE%NB_TRUSS
+               SET%TRUSS(1:CLAUSE%NB_TRUSS) = CLAUSE%TRUSS(1:CLAUSE%NB_TRUSS)
+
+            ENDIF
+
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_TRUSS > 0)THEN
+               IF(ALLOCATED(SET%TRUSS)) CALL MY_DEALLOC(SET%TRUSS)
+               SET%NB_TRUSS=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     SPRING 
+C-----------------------------------------------
+      IF(  CLAUSE%NB_SPRING > 0) THEN
+
+         IF( SET%NB_SPRING > 0 ) THEN
+
+            call my_alloc(RESULT, SET%NB_SPRING + CLAUSE%NB_SPRING, "RESULT") ! Results SET
+
+            CALL SET_MERGE_SIMPLE( SET%SPRING,    SET%NB_SPRING    ,
+     *                             CLAUSE%SPRING, CLAUSE%NB_SPRING ,
+     *                             RESULT,      NEW_SIZE       ,
+     *                             CLAUSE_OPERATOR)
+
+            IF (ALLOCATED(SET%SPRING)) CALL MY_DEALLOC(SET%SPRING)
+            call my_alloc(SET%SPRING, NEW_SIZE, "SET%SPRING")
+
+            SET%SPRING(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+            SET%NB_SPRING=NEW_SIZE
+
+            call my_dealloc(RESULT)
+
+         ELSE   ! SET is empty fill it with clause when ADD
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN 
+               IF (ALLOCATED(SET%SPRING)) CALL MY_DEALLOC(SET%SPRING)
+               call my_alloc(SET%SPRING, CLAUSE%NB_SPRING, "SET%SPRING")
+
+               SET%NB_SPRING=CLAUSE%NB_SPRING
+               SET%SPRING(1:CLAUSE%NB_SPRING)=CLAUSE%SPRING(1:CLAUSE%NB_SPRING)
+
+            ENDIF
+         ENDIF
+      ELSE
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET Intersection with Empty clause gives Empty SET
+            IF (SET%NB_SPRING > 0)THEN
+               IF(ALLOCATED(SET%SPRING)) CALL MY_DEALLOC(SET%SPRING)
+               SET%NB_SPRING=0
+            ENDIF
+        ENDIF
+      ENDIF
+C-----------------------------------------------
+C     SURFACES
+C-----------------------------------------------
+
+
+      !------------------------!
+      !    SURFACES  -ELLIPSE- !
+      !------------------------!
+      IF ( SET%NB_ELLIPSE > 0 ) THEN
+
+         SET%ELLIPSE_IAD_BUFR = CLAUSE%ELLIPSE_IAD_BUFR
+         SET%ELLIPSE_ID_MADYMO = CLAUSE%ELLIPSE_ID_MADYMO
+         SET%ELLIPSE_N = CLAUSE%ELLIPSE_N
+         SET%ELLIPSE_XC = CLAUSE%ELLIPSE_XC
+         SET%ELLIPSE_YC = CLAUSE%ELLIPSE_YC
+         SET%ELLIPSE_ZC = CLAUSE%ELLIPSE_ZC
+         SET%ELLIPSE_A = CLAUSE%ELLIPSE_A
+         SET%ELLIPSE_B = CLAUSE%ELLIPSE_B
+         SET%ELLIPSE_C = CLAUSE%ELLIPSE_C
+         SET%EXT_ALL = CLAUSE%EXT_ALL
+         CALL MY_ALLOC(SET%ELLIPSE_SKEW,9,"SET%ELLIPSE_SKEW")
+         SET%ELLIPSE_SKEW(1:9) = CLAUSE%ELLIPSE_SKEW(1:9)
+
+      !------------------------!
+      !    SURFACES  -PLANE- !
+      !------------------------!
+      ELSEIF ( SET%NB_PLANE > 0 ) THEN
+
+         SET%PLANE_IAD_BUFR = CLAUSE%PLANE_IAD_BUFR
+         SET%PLANE_XM = CLAUSE%PLANE_XM
+         SET%PLANE_YM = CLAUSE%PLANE_YM
+         SET%PLANE_ZM = CLAUSE%PLANE_ZM
+         SET%PLANE_XM1 = CLAUSE%PLANE_XM1
+         SET%PLANE_YM1 = CLAUSE%PLANE_YM1
+         SET%PLANE_ZM1 = CLAUSE%PLANE_ZM1
+         SET%EXT_ALL = CLAUSE%EXT_ALL
+      ELSE
+        !------------------------!
+        !    classic SURFACES    !
+        !------------------------!
+        empty_condition = (clause%nb_surf_seg==0)
+        IF( CLAUSE%NB_SURF_SEG > 0) THEN
+          empty_condition = (set%nb_surf_seg==0)
+          IF( SET%NB_SURF_SEG > 0 ) THEN
+
+              !
+              ! Low level CPP routines / One per operator
+              ! The result is held in CPP Structure 
+              ! until SET is reallocated and unstacked
+              !
+              IF ( CLAUSE_OPERATOR == SET_ADD) THEN                            
+
+                  CALL UNION_SURFACE( SET%SURF_NODES(1,1), SET%SURF_NODES(1,2), 
+     .                                SET%SURF_NODES(1,3), SET%SURF_NODES(1,4),
+     .                                SET%SURF_ELTYP, SET%SURF_ELEM, SET%NB_SURF_SEG,
+     .                                CLAUSE%SURF_NODES(1,1), CLAUSE%SURF_NODES(1,2), 
+     .                                CLAUSE%SURF_NODES(1,3), CLAUSE%SURF_NODES(1,4),
+     .                                CLAUSE%SURF_ELTYP, CLAUSE%SURF_ELEM, CLAUSE%NB_SURF_SEG,
+     .                                NS  )
+                  call surface_type( empty_condition,clause_operator,clause,set )
+
+              ELSEIF ( CLAUSE_OPERATOR == SET_DELETE) THEN
+
+                  CALL DELETE_SURFACE(SET%SURF_NODES(1,1), SET%SURF_NODES(1,2), 
+     .                                SET%SURF_NODES(1,3), SET%SURF_NODES(1,4),
+     .                                SET%SURF_ELTYP, SET%SURF_ELEM, SET%NB_SURF_SEG,
+     .                                CLAUSE%SURF_NODES(1,1), CLAUSE%SURF_NODES(1,2), 
+     .                                CLAUSE%SURF_NODES(1,3), CLAUSE%SURF_NODES(1,4),
+     .                                CLAUSE%SURF_ELTYP, CLAUSE%SURF_ELEM, CLAUSE%NB_SURF_SEG,
+     .                                NS  )
+                  call surface_type( empty_condition,clause_operator,clause,set )
+
+              ELSEIF ( CLAUSE_OPERATOR == SET_INTERSECT)THEN
+
+                  CALL INTERSECT_SURFACE( SET%SURF_NODES(1,1), SET%SURF_NODES(1,2), 
+     .                                    SET%SURF_NODES(1,3), SET%SURF_NODES(1,4),
+     .                                    SET%SURF_ELTYP, SET%SURF_ELEM, SET%NB_SURF_SEG,
+     .                                    CLAUSE%SURF_NODES(1,1), CLAUSE%SURF_NODES(1,2), 
+     .                                    CLAUSE%SURF_NODES(1,3), CLAUSE%SURF_NODES(1,4),
+     .                                    CLAUSE%SURF_ELTYP, CLAUSE%SURF_ELEM, CLAUSE%NB_SURF_SEG,
+     .                                    NS )
+                  call surface_type( empty_condition,clause_operator,clause,set )
+              ELSE
+                  print*,'Unknown clause operator'
+              ENDIF
+
+              CALL MY_DEALLOC(SET%SURF_NODES)
+              CALL MY_DEALLOC(SET%SURF_ELTYP)
+              CALL MY_DEALLOC(SET%SURF_ELEM)
+
+              CALL MY_ALLOC(SET%SURF_NODES,NS,4,"SET%SURF_NODES")
+              CALL MY_ALLOC(SET%SURF_ELTYP,NS,"SET%SURF_ELTYP")
+              CALL MY_ALLOC(SET%SURF_ELEM,NS,"SET%SURF_ELEM")
+
+              SET%NB_SURF_SEG = NS
+
+              CALL GET_MERGED_SURFACE(SET%SURF_NODES(1,1), 
+     .                                SET%SURF_NODES(1,2),
+     .                                SET%SURF_NODES(1,3),
+     .                                SET%SURF_NODES(1,4),
+     .                                SET%SURF_ELTYP,
+     .                                SET%SURF_ELEM)
+
+          ELSE      ! SET WAS EMPTY FILL it with Clause if SET_ADD operator
+
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN
+              IF (ALLOCATED (SET%SURF_NODES) ) CALL MY_DEALLOC(SET%SURF_NODES)
+              IF (ALLOCATED (SET%SURF_ELTYP) ) CALL MY_DEALLOC(SET%SURF_ELTYP)
+              IF (ALLOCATED (SET%SURF_ELEM) ) CALL MY_DEALLOC(SET%SURF_ELEM)
+
+              NEW_SIZE = CLAUSE%NB_SURF_SEG
+              CALL MY_ALLOC(SET%SURF_NODES,NEW_SIZE,4,"SET%SURF_NODES")
+              CALL MY_ALLOC(SET%SURF_ELTYP,NEW_SIZE,"SET%SURF_ELTYP")
+              CALL MY_ALLOC(SET%SURF_ELEM,NEW_SIZE,"SET%SURF_ELEM")
+
+              SET%NB_SURF_SEG = NEW_SIZE
+              SET%SURF_NODES(1:NEW_SIZE,1:4) = CLAUSE%SURF_NODES(1:NEW_SIZE,1:4)
+              SET%SURF_ELTYP(1:NEW_SIZE)     = CLAUSE%SURF_ELTYP(1:NEW_SIZE)
+              SET%SURF_ELEM(1:NEW_SIZE)      = CLAUSE%SURF_ELEM(1:NEW_SIZE)
+              call surface_type( empty_condition,clause_operator,clause,set )
+            ENDIF
+          ENDIF
+        ELSE             
+          IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET : Intersection with Empty clause gives Empty SET
+            IF (SET%NB_SURF_SEG > 0)THEN
+               IF(ALLOCATED(SET%SURF_NODES)) CALL MY_DEALLOC(SET%SURF_NODES)
+               IF(ALLOCATED(SET%SURF_ELTYP)) CALL MY_DEALLOC(SET%SURF_ELTYP)
+               IF(ALLOCATED(SET%SURF_ELEM)) CALL MY_DEALLOC(SET%SURF_ELEM)
+               SET%NB_SURF_SEG=0
+               call surface_type( empty_condition,clause_operator,clause,set )
+            ENDIF
+          ENDIF
+        ENDIF
+      ENDIF ! IF ( SET%NB_ELLIPSE > 0 )
+C-----------------------------------------------
+C     LINES
+C-----------------------------------------------
+      IF( CLAUSE%NB_LINE_SEG > 0) THEN
+
+         IF( SET%NB_LINE_SEG > 0 ) THEN
+
+            !
+            ! Low level CPP routines / One per operator
+            ! The result is held in CPP Structure 
+            ! until SET is reallocated and unstacked
+            !
+            IF ( CLAUSE_OPERATOR == SET_ADD) THEN                            
+
+                CALL UNION_LINE( SET%LINE_NODES(1,1), SET%LINE_NODES(1,2), 
+     .                           SET%LINE_ELTYP, SET%LINE_ELEM, SET%NB_LINE_SEG,
+     .                           CLAUSE%LINE_NODES(1,1), CLAUSE%LINE_NODES(1,2), 
+     .                           CLAUSE%LINE_ELTYP, CLAUSE%LINE_ELEM, CLAUSE%NB_LINE_SEG,
+     .                           NEW_SIZE  )
+
+            ELSEIF ( CLAUSE_OPERATOR == SET_DELETE) THEN
+
+                CALL DELETE_LINE ( SET%LINE_NODES(1,1), SET%LINE_NODES(1,2), 
+     .                             SET%LINE_ELTYP, SET%LINE_ELEM, SET%NB_LINE_SEG,
+     .                             CLAUSE%LINE_NODES(1,1), CLAUSE%LINE_NODES(1,2), 
+     .                             CLAUSE%LINE_ELTYP, CLAUSE%LINE_ELEM, CLAUSE%NB_LINE_SEG,
+     .                             NEW_SIZE  )
+
+            ELSEIF ( CLAUSE_OPERATOR == SET_INTERSECT)THEN
+
+                CALL INTERSECT_LINE (  SET%LINE_NODES(1,1), SET%LINE_NODES(1,2), 
+     .                                 SET%LINE_ELTYP, SET%LINE_ELEM, SET%NB_LINE_SEG,
+     .                                 CLAUSE%LINE_NODES(1,1), CLAUSE%LINE_NODES(1,2), 
+     .                                 CLAUSE%LINE_ELTYP, CLAUSE%LINE_ELEM, CLAUSE%NB_LINE_SEG,
+     .                                 NEW_SIZE    )
+            ELSE
+                print*,'Unknown clause operator'
+            ENDIF
+
+                CALL MY_DEALLOC(SET%LINE_NODES)
+                CALL MY_DEALLOC(SET%LINE_ELTYP)
+                CALL MY_DEALLOC(SET%LINE_ELEM)
+
+                CALL MY_ALLOC(SET%LINE_NODES,NEW_SIZE,4,"SET%LINE_NODES")
+                CALL MY_ALLOC(SET%LINE_ELTYP,NEW_SIZE,"SET%LINE_ELTYP")
+                CALL MY_ALLOC(SET%LINE_ELEM,NEW_SIZE,"SET%LINE_ELEM")
+
+                SET%NB_LINE_SEG = NEW_SIZE
+
+                CALL GET_MERGED_LINES (SET%LINE_NODES(1,1), 
+     .                                 SET%LINE_NODES(1,2),
+     .                                 SET%LINE_ELTYP,
+     .                                 SET%LINE_ELEM)
+
+         ELSE      ! SET WAS EMPTY FILL it with Clause if SET_ADD operator
+
+                IF ( CLAUSE_OPERATOR == SET_ADD) THEN
+                    IF (ALLOCATED (SET%LINE_NODES) ) CALL MY_DEALLOC(SET%LINE_NODES)
+                    IF (ALLOCATED (SET%LINE_ELTYP) ) CALL MY_DEALLOC(SET%LINE_ELTYP)
+                    IF (ALLOCATED (SET%LINE_ELEM) ) CALL MY_DEALLOC(SET%LINE_ELEM)
+
+                    NEW_SIZE = CLAUSE%NB_LINE_SEG
+                    CALL MY_ALLOC(SET%LINE_NODES,NEW_SIZE,2,"SET%LINE_NODES")
+                    CALL MY_ALLOC(SET%LINE_ELTYP,NEW_SIZE,"SET%LINE_ELTYP")
+                    CALL MY_ALLOC(SET%LINE_ELEM,NEW_SIZE,"SET%LINE_ELEM")
+
+                    SET%NB_LINE_SEG = NEW_SIZE
+                    SET%LINE_NODES(1:NEW_SIZE,1:2) = CLAUSE%LINE_NODES(1:NEW_SIZE,1:2)
+                    SET%LINE_ELTYP(1:NEW_SIZE)     = CLAUSE%LINE_ELTYP(1:NEW_SIZE)
+                    SET%LINE_ELEM(1:NEW_SIZE)      = CLAUSE%LINE_ELEM(1:NEW_SIZE)
+
+                ENDIF
+         ENDIF
+      ELSE             
+        IF ( CLAUSE_OPERATOR == SET_INTERSECT) THEN              ! SET : Intersection with Empty clause gives Empty SET
+            IF (SET%NB_LINE_SEG > 0)THEN
+               IF(ALLOCATED(SET%LINE_NODES)) CALL MY_DEALLOC(SET%LINE_NODES)
+               IF(ALLOCATED(SET%LINE_ELTYP)) CALL MY_DEALLOC(SET%LINE_ELTYP)
+               IF(ALLOCATED(SET%LINE_ELEM)) CALL MY_DEALLOC(SET%LINE_ELEM)
+               SET%NB_LINE_SEG=0
+            ENDIF
+        ENDIF
+      ENDIF
+
+      ! -----------------------------------------------
+      !     IN CASE OF DELETE redo NODES_FROM_ELEM 
+      !                            SURFACE_FROM_ELEMENT
+      !                            LINE_FROM_SURFACE
+      ! -----------------------------------------------
+      IF(CLAUSE_OPERATOR == SET_DELETE)THEN
+
+        !---
+        ! Nodes reconstruction after delete
+        !---
+
+!        ALLOCATE(NODES(NUMNOD))
+!        ALLOCATE(RESULT(NUMNOD ))                  ! Results SET
+
+!        CALL CREATE_NODE_FROM_ELEMENT(
+!     .                           IXS   ,IXS10  ,IXS20  ,IXS16  ,IXQ    ,
+!     .                           IXC   ,IXTG   ,IXT    ,IXP    ,IXR    ,
+!     .                           IXX   ,KXX    ,KXSP   ,SET ,GEO    ,
+!     .                           NODES ,ND_SIZE,.TRUE. )
+!        OPERATOR = SET_ADD
+!        CALL SET_MERGE_SIMPLE( SET%NODE,    SET%NB_NODE    ,
+!     .                         NODES, ND_SIZE ,
+!     .                         RESULT,      NEW_SIZE       ,
+!     .                         OPERATOR)  
+
+
+!         IF (ALLOCATED(SET%NODE)) DEALLOCATE (SET%NODE)
+!         ALLOCATE(SET%NODE(NEW_SIZE))
+
+!         SET%NODE(1:NEW_SIZE) = RESULT(1:NEW_SIZE)
+!         SET%NB_NODE=NEW_SIZE
+
+!         DEALLOCATE(RESULT)
+!         DEALLOCATE(NODES)
+
+
+        !---
+        ! Surfs reconstruction after delete
+        !---
+
+
+        CALL CREATE_SURFACE_FROM_ELEMENT(
+     .                     IXS       ,IXS10    ,SH4TREE   ,SH3TREE   ,IXC       ,
+     .                     IXTG      ,KNOD2ELS ,NOD2ELS   ,KNOD2ELC  ,NOD2ELC   ,
+     .                     KNOD2ELTG ,NOD2ELTG ,IPARTC    ,IPARTG    ,IPARTS    ,
+     .                     IPART     ,SET      ,OPT_A     ,OPT_O     ,IXQ       ,
+     .                     KNOD2ELQ  ,NOD2ELQ  ,X         ,KEYSET    ,DELBUF    ,
+     .                     .TRUE.   ,IPARTQ    ,OPT_E     )
+
+        !--- void calling UNION_SURFACE with non allocated arrays
+        IF(.NOT. ALLOCATED(SET%SURF_NODES)) call my_alloc(SET%SURF_NODES, 1, 4, "SET%SURF_NODES")
+        IF(.NOT. ALLOCATED(SET%SURF_ELTYP)) call my_alloc(SET%SURF_ELTYP, 1, "SET%SURF_ELTYP")
+        IF(.NOT. ALLOCATED(SET%SURF_ELEM))  call my_alloc(SET%SURF_ELEM, 1, "SET%SURF_ELEM")
+        IF(.NOT. ALLOCATED(DELBUF%SURF))    call my_alloc(DELBUF%SURF, 1, 6, "DELBUF%SURF")
+      
+        CALL UNION_SURFACE(SET%SURF_NODES(1,1), SET%SURF_NODES(1,2), 
+     .                     SET%SURF_NODES(1,3), SET%SURF_NODES(1,4),
+     .                     SET%SURF_ELTYP, SET%SURF_ELEM, SET%NB_SURF_SEG,
+     .                     DELBUF%SURF(1,1), DELBUF%SURF(1,2), 
+     .                     DELBUF%SURF(1,3), DELBUF%SURF(1,4),
+     .                     DELBUF%SURF(1,5), DELBUF%SURF(1,6), DELBUF%SZ_SURF,
+     .                     NS  )
+
+        IF(ALLOCATED(SET%SURF_NODES))CALL MY_DEALLOC(SET%SURF_NODES)
+        IF(ALLOCATED(SET%SURF_ELTYP))CALL MY_DEALLOC(SET%SURF_ELTYP)
+        IF(ALLOCATED(SET%SURF_ELEM)) CALL MY_DEALLOC(SET%SURF_ELEM)
+        IF(ALLOCATED(DELBUF%SURF)) call my_dealloc(DELBUF%SURF)
+
+        CALL MY_ALLOC(SET%SURF_NODES,NS,4,"SET%SURF_NODES")
+        CALL MY_ALLOC(SET%SURF_ELTYP,NS,"SET%SURF_ELTYP")
+        CALL MY_ALLOC(SET%SURF_ELEM,NS,"SET%SURF_ELEM")
+
+        SET%NB_SURF_SEG = NS
+
+        CALL GET_MERGED_SURFACE(SET%SURF_NODES(1,1), 
+     .                          SET%SURF_NODES(1,2),
+     .                          SET%SURF_NODES(1,3),
+     .                          SET%SURF_NODES(1,4),
+     .                          SET%SURF_ELTYP,
+     .                          SET%SURF_ELEM)
+
+        DELBUF%SZ_SURF = 0
+        !---
+        ! Lines reconstruction after delete
+        !---
+
+        ! Line from 1D_ELEMENT
+        !-------------------
+        CALL CREATE_LINE_FROM_ELEMENT(IXT    ,IXP  ,IXR  ,SET ,DELBUF    ,
+     .                                .TRUE. )
+        IF(.NOT. ALLOCATED(SET%LINE_NODES)) call my_alloc(SET%LINE_NODES, 1, 2, "SET%LINE_NODES")
+        IF(.NOT. ALLOCATED(SET%LINE_ELTYP)) call my_alloc(SET%LINE_ELTYP, 1, "SET%LINE_ELTYP")
+        IF(.NOT. ALLOCATED(SET%LINE_ELEM))  call my_alloc(SET%LINE_ELEM, 1, "SET%LINE_ELEM")
+        IF(.NOT. ALLOCATED(DELBUF%LINE))    call my_alloc(DELBUF%LINE, 1, 4, "DELBUF%LINE")
+
+        CALL UNION_LINE(SET%LINE_NODES(1,1), SET%LINE_NODES(1,2), 
+     .                  SET%LINE_ELTYP, SET%LINE_ELEM, SET%NB_LINE_SEG,
+     .                  DELBUF%LINE(1,1), DELBUF%LINE(1,2), 
+     .                  DELBUF%LINE(1,3), DELBUF%LINE(1,4), DELBUF%SZ_LINE,
+     .                  NEW_SIZE  )
+
+        IF(ALLOCATED(SET%LINE_NODES))CALL MY_DEALLOC(SET%LINE_NODES)
+        IF(ALLOCATED(SET%LINE_ELTYP))CALL MY_DEALLOC(SET%LINE_ELTYP)
+        IF(ALLOCATED(SET%LINE_ELEM)) CALL MY_DEALLOC(SET%LINE_ELEM)
+        IF(ALLOCATED(DELBUF%LINE)) call my_dealloc(DELBUF%LINE)
+
+        CALL MY_ALLOC(SET%LINE_NODES,NEW_SIZE,4,"SET%LINE_NODES")
+        CALL MY_ALLOC(SET%LINE_ELTYP,NEW_SIZE,"SET%LINE_ELTYP")
+        CALL MY_ALLOC(SET%LINE_ELEM,NEW_SIZE,"SET%LINE_ELEM")
+
+        SET%NB_LINE_SEG = NEW_SIZE
+
+        CALL GET_MERGED_LINES (SET%LINE_NODES(1,1), 
+     .                         SET%LINE_NODES(1,2),
+     .                         SET%LINE_ELTYP,
+     .                         SET%LINE_ELEM)
+
+        DELBUF%SZ_LINE = 0
+        
+
+        ! Line from SURFACE
+        IF(KEYSET =='PART'.OR.KEYSET =='SOLID'.OR.KEYSET =='SHELL'.OR.KEYSET =='SH3N'.OR.
+     .     KEYSET =='ALL' .OR.KEYSET =='SUBS' .OR.KEYSET =='SUBM' .OR.KEYSET =='BOX')
+     .      CALL CREATE_LINE_FROM_SURFACE(SET  ,KEYSET,OPT_A,OPT_E,DELBUF,.TRUE.)
+
+        IF(.NOT. ALLOCATED(SET%LINE_NODES)) call my_alloc(SET%LINE_NODES, 1, 2, "SET%LINE_NODES")
+        IF(.NOT. ALLOCATED(SET%LINE_ELTYP)) call my_alloc(SET%LINE_ELTYP, 1, "SET%LINE_ELTYP")
+        IF(.NOT. ALLOCATED(SET%LINE_ELEM))  call my_alloc(SET%LINE_ELEM, 1, "SET%LINE_ELEM")
+        IF(.NOT. ALLOCATED(DELBUF%LINE))    call my_alloc(DELBUF%LINE, 1, 4, "DELBUF%LINE")
+
+
+        CALL UNION_LINE(SET%LINE_NODES(1,1), SET%LINE_NODES(1,2), 
+     .                  SET%LINE_ELTYP, SET%LINE_ELEM, SET%NB_LINE_SEG,
+     .                  DELBUF%LINE(1,1), DELBUF%LINE(1,2), 
+     .                  DELBUF%LINE(1,3), DELBUF%LINE(1,4), DELBUF%SZ_LINE,
+     .                  NEW_SIZE  )
+
+        IF(ALLOCATED(SET%LINE_NODES))CALL MY_DEALLOC(SET%LINE_NODES)
+        IF(ALLOCATED(SET%LINE_ELTYP))CALL MY_DEALLOC(SET%LINE_ELTYP)
+        IF(ALLOCATED(SET%LINE_ELEM)) CALL MY_DEALLOC(SET%LINE_ELEM)
+        IF(ALLOCATED(DELBUF%LINE)) call my_dealloc(DELBUF%LINE)
+
+        CALL MY_ALLOC(SET%LINE_NODES,NEW_SIZE,4,"SET%LINE_NODES")
+        CALL MY_ALLOC(SET%LINE_ELTYP,NEW_SIZE,"SET%LINE_ELTYP")
+        CALL MY_ALLOC(SET%LINE_ELEM,NEW_SIZE,"SET%LINE_ELEM")
+
+        SET%NB_LINE_SEG = NEW_SIZE
+
+        CALL GET_MERGED_LINES (SET%LINE_NODES(1,1), 
+     .                         SET%LINE_NODES(1,2),
+     .                         SET%LINE_ELTYP,
+     .                         SET%LINE_ELEM)
+
+        DELBUF%SZ_LINE = 0
+
+      ENDIF ! IF(CLAUSE_OPERATOR == SET_DELETE)
+
+
+      END

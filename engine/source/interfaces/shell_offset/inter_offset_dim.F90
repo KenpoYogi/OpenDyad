@@ -1,0 +1,88 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    inter_sh_offset_dim_mod   ../engine/source/interfaces/shell_offset/inter_offset_dim.F90
+!||--- called by ------------------------------------------------------
+!||    inter_sh_offset_ini       ../engine/source/interfaces/shell_offset/inter_offset_ini.F90
+!||====================================================================
+      module inter_sh_offset_dim_mod
+      implicit none
+      contains
+        ! ======================================================================================================================
+        !                                                   PROCEDURES
+        ! ======================================================================================================================
+        !
+        !=======================================================================================================================
+        !!\brief This subroutine gets number of shell with offset treatment
+        !=======================================================================================================================
+!||====================================================================
+!||    inter_sh_offset_dim   ../engine/source/interfaces/shell_offset/inter_offset_dim.F90
+!||--- called by ------------------------------------------------------
+!||    inter_sh_offset_ini   ../engine/source/interfaces/shell_offset/inter_offset_ini.F90
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod          ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    inter_sh_offset_mod   ../engine/source/modules/interfaces/sh_offset_mod.F90
+!||====================================================================
+        subroutine inter_sh_offset_dim(                                         &
+          ngroup,    nparg,      iparg,     elbuf_tab,            &
+          nsh_oset)
+          ! ----------------------------------------------------------------------------------------------------------------------
+          !                                                   Modules
+          ! ----------------------------------------------------------------------------------------------------------------------
+          use elbufdef_mod
+          use inter_sh_offset_mod , only:sh_offset_
+          ! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+          ! ----------------------------------------------------------------------------------------------------------------------
+          !                                                   Arguments
+          ! ----------------------------------------------------------------------------------------------------------------------
+          integer, intent (in   )                         :: ngroup           !< number of elem group
+          integer, intent (in   )                         :: nparg            !< first dimension of iparg
+          integer, intent (in   ) ,dimension(nparg,ngroup):: iparg            !< elem group array
+          integer, intent (inout)                         :: nsh_oset         !< number offset shell
+          type (elbuf_struct_), target, dimension(ngroup) :: elbuf_tab        !< el_buf struct_
+          ! ----------------------------------------------------------------------------------------------------------------------
+          !                                                   Local variables
+          ! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,nel,igtyp,ity,nshel,ng
+          type(g_bufel_)     , pointer :: gbuf
+          !
+          ! ----------------------------------------------------------------------------------------------------------------------
+          !                                                   Body
+          ! ----------------------------------------------------------------------------------------------------------------------
+          nshel = 0
+          do  ng=1,ngroup
+            ity=iparg(5,ng)
+            igtyp  = iparg(38,ng)
+            gbuf  => elbuf_tab(ng)%gbuf
+            if (igtyp == 0.or.(ity /= 3 .and. ity /= 7).or.gbuf%G_SH_IOFFSET==0 ) cycle
+            nel=iparg(2,ng)
+            do i=1,nel
+              if (gbuf%sh_ioffset(i)>0) nshel= nshel + 1
+            end do
+          end do
+          nsh_oset = nshel
+          !-----------
+        end subroutine inter_sh_offset_dim
+      end module inter_sh_offset_dim_mod

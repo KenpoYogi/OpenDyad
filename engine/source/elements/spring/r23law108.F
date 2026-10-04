@@ -1,0 +1,282 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    r23law108          ../engine/source/elements/spring/r23law108.F
+!||--- called by ------------------------------------------------------
+!||    r23forc3           ../engine/source/elements/spring/r23forc3.F
+!||--- calls      -----------------------------------------------------
+!||    r23bilan           ../engine/source/elements/spring/r23bilan.F
+!||    r23coor3           ../engine/source/elements/spring/r23coor3.F
+!||    r23l108def3        ../engine/source/elements/spring/r23l108def3.F
+!||    r23sens3           ../engine/source/elements/spring/r23sens3.F
+!||    r2cum3             ../engine/source/elements/spring/r2cum3.F
+!||    r2cum3p            ../engine/source/elements/spring/r2cum3p.F
+!||    r2len3             ../engine/source/elements/spring/r2len3.F
+!||    r2tors             ../engine/source/elements/spring/r2tors.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod       ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod        ../common_source/modules/elements/element_mod.F90
+!||    h3d_mod            ../engine/share/modules/h3d_mod.F
+!||    python_funct_mod   ../common_source/modules/python_mod.F90
+!||    sensor_mod         ../common_source/modules/sensor_mod.F90
+!||    table_mod          ../engine/share/modules/table_mod.F
+!||====================================================================
+      SUBROUTINE R23LAW108(PYTHON,
+     1   ELBUF_STR, JFT,       JLT,       NEL,
+     2   MTN,       IGEO,      GEO,       IPM,
+     3   IXR,       X,         TABLE,     XDP,
+     4   F,         NPF,       TF,        SKEW,
+     5   FLG_KJ2,   VR,        AR,        V,
+     6   DT2T,      NELTST,    ITYPTST,   STIFN,
+     7   STIFR,     MS,        IN,        FSKY,
+     8   IADR,      NSENSOR,   SENSOR_TAB,OFFSET,    ANIM,
+     9   PARTSAV,   IPARTR,    TANI,      
+     A   BUFMAT,    BUFGEO,    PM,        RBY,
+     B   FX1,       FX2,       FY1,       FY2,
+     C   FZ1,       FZ2,       MX1,       MX2,
+     D   MY1,       MY2,       MZ1,       MZ2,
+     E   GRESAV,    GRTH,      IGRTH,     MSRT,
+     F   DMELRT,    H3D_DATA,  JSMS,      IGRE,
+     G   NFT,       STF,       SANIN,     IRESP,
+     H   SNPC,      FLG_SPR_DT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD
+      USE TABLE_MOD
+      USE H3D_MOD
+      USE SENSOR_MOD
+      USE python_funct_mod
+      use element_mod , only : nixr
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "parit_c.inc"
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      type(python_), intent(inout) :: PYTHON
+      INTEGER, INTENT(IN) :: STF      !< Size of TF
+      INTEGER, INTENT(IN) :: SANIN    !< Size of ANIM
+      INTEGER, INTENT(IN) :: IRESP    !< Single precision flag
+      INTEGER, INTENT(IN) :: SNPC     !< Size of NPF
+      INTEGER, INTENT(IN) :: IGRE,NSENSOR
+      INTEGER, INTENT(IN) :: NFT
+      INTEGER, INTENT(IN) :: JSMS
+      INTEGER IXR(NIXR,*), NPF(*),IADR(3,*),IPARTR(*),
+     .        IGEO(NPROPGI,*),JFT,JLT,NELTST ,ITYPTST,OFFSET,
+     .        NEL,MTN,GRTH(*),IGRTH(*),FLG_KJ2,IPM(NPROPMI,*)
+      INTEGER, INTENT(INOUT) :: FLG_SPR_DT
+      my_real DT2T ,
+     .   GEO(NPROPG,*),X(*),F(*),TF(STF),SKEW(LSKEW,*),FSKY(*),
+     .   VR(*), V(*), AR(*), STIFN(*),STIFR(*),MS(*), IN(*),
+     .   ANIM(SANIN),PARTSAV(*),TANI(15,*),
+     .   BUFMAT(*),BUFGEO(*),PM(*),RBY(*),
+     .   FX1(MVSIZ),FY1(MVSIZ),FZ1(MVSIZ),
+     .   FX2(MVSIZ),FY2(MVSIZ),FZ2(MVSIZ),
+     .   MX1(MVSIZ),MY1(MVSIZ),MZ1(MVSIZ),
+     .   MX2(MVSIZ),MY2(MVSIZ),MZ2(MVSIZ),GRESAV(*),
+     .   MSRT(*), DMELRT(*)
+      DOUBLE PRECISION XDP(3,*)
+      TYPE(TTABLE) TABLE(*)
+C
+      TYPE (ELBUF_STRUCT_), TARGET :: ELBUF_STR
+      TYPE(H3D_DATABASE) :: H3D_DATA
+      TYPE (SENSOR_STR_) ,DIMENSION(NSENSOR), INTENT(IN) :: SENSOR_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NGL(MVSIZ), PID(MVSIZ), NC1(MVSIZ), NC2(MVSIZ), 
+     .        MID(MVSIZ),IEQUIL(MVSIZ)
+C     REAL
+      my_real 
+     . STI(3,MVSIZ),STIR(3,MVSIZ),
+     . FR_W_E(MVSIZ),OFF(MVSIZ),BID
+      my_real
+     . X1(MVSIZ),Y1(MVSIZ),Z1(MVSIZ),
+     . X2(MVSIZ),Y2(MVSIZ),Z2(MVSIZ),
+     .   EXX(MVSIZ),EYX(MVSIZ),EZX(MVSIZ),
+     .   EXY(MVSIZ),EYY(MVSIZ),EZY(MVSIZ),
+     .   EXZ(MVSIZ),EYZ(MVSIZ),EZZ(MVSIZ),
+     . XCR(MVSIZ),XM(MVSIZ),RX1(MVSIZ),RX2(MVSIZ),
+     .   RY1(MVSIZ),RY2(MVSIZ),RZ1(MVSIZ),RZ2(MVSIZ),XIN(MVSIZ),
+     .   AK(MVSIZ),XKM(MVSIZ),XCM(MVSIZ),XKR(MVSIZ)
+      INTEGER IGTYP,I,I0,NUVAR,IADBUF
+      DOUBLE PRECISION
+     . X1DP(3,MVSIZ),X2DP(3,MVSIZ)
+C-----------------------------------------------
+      TYPE(G_BUFEL_),POINTER :: GBUF
+      INTEGER II(6)
+C=======================================================================
+      GBUF => ELBUF_STR%GBUF      
+!
+      FX1(1:MVSIZ) = ZERO
+      FX2(1:MVSIZ) = ZERO
+      FY1(1:MVSIZ) = ZERO
+      FY2(1:MVSIZ) = ZERO
+      FZ1(1:MVSIZ) = ZERO
+      FZ2(1:MVSIZ) = ZERO
+      MX1(1:MVSIZ) = ZERO
+      MX2(1:MVSIZ) = ZERO
+      MY1(1:MVSIZ) = ZERO
+      MY2(1:MVSIZ) = ZERO
+      MZ1(1:MVSIZ) = ZERO
+      MZ2(1:MVSIZ) = ZERO
+!
+      DO I=1,6
+        II(I) = (I-1)*NEL + 1
+      ENDDO
+C
+      I0 = IXR(1,1)
+      IGTYP = IGEO(11,I0)
+C
+      BID = ZERO
+C
+      FR_W_E(1:NEL) = ZERO
+C=======================================================================
+C=======================================================================
+       CALL R23COOR3(
+     1   X,       VR,      IXR,     XDP,
+     2   X1DP,    X2DP,    NGL,     X1,
+     3   Y1,      Z1,      X2,      Y2,
+     4   Z2,      PID,     MID,     RX1,
+     5   RY1,     RZ1,     RX2,     RY2,
+     6   RZ2,     NC1,     NC2,     NEL)
+       CALL R23SENS3(
+     1   GEO,                GBUF%OFF,           SENSOR_TAB,         GBUF%TOTDEPL(II(1)),
+     2   GBUF%TOTDEPL(II(2)),GBUF%TOTDEPL(II(3)),GBUF%LENGTH(II(1)), GBUF%LENGTH(II(2)),
+     3   GBUF%LENGTH(II(3)), GBUF%TOTROT(II(1)), GBUF%TOTROT(II(2)), GBUF%TOTROT(II(3)),
+     4   IGEO,               PID,                NEL,                NSENSOR           )
+C
+        DO I=JFT,JLT
+          IF (GBUF%OFF(I) /= -TEN) THEN
+            OFF(I)=MIN(ONE,ABS(GBUF%OFF(I)))
+          ELSE
+C        spring may be activated by sensor and is actually inactive.
+            OFF(I)=ZERO
+          ENDIF
+        ENDDO
+C
+        NUVAR =  NINT(GEO(25,I0)) !! from Mid
+        DO I=JFT,JLT
+          MID(I)     = IXR(5,I)
+          IADBUF = IPM(7,MID(I))
+          NUVAR = MAX(NUVAR, NINT(BUFMAT(IADBUF + 4 -1))) 
+        ENDDO
+!!    is like r2def3 (spring type08)    
+        CALL R23L108DEF3(PYTHON,
+     1   IPM,                      IGEO,                     MID,                      PID,
+     2   BUFMAT,                   SKEW,                     GEO,                      GBUF%FOR(II(1)),
+     3   GBUF%FOR(II(2)),          GBUF%FOR(II(3)),          GBUF%EINT,                GBUF%TOTDEPL(II(1)),
+     4   GBUF%TOTDEPL(II(2)),      GBUF%TOTDEPL(II(3)),      NPF,                      TF,
+     5   OFF,                      GBUF%DEP_IN_TENS(II(1)),  GBUF%DEP_IN_TENS(II(2)),  GBUF%DEP_IN_TENS(II(3)),
+     6   GBUF%DEP_IN_COMP(II(1)),  GBUF%DEP_IN_COMP(II(2)),  GBUF%DEP_IN_COMP(II(3)),  GBUF%FOREP(II(1)),
+     7   GBUF%FOREP(II(2)),        GBUF%FOREP(II(3)),        GBUF%LENGTH(II(1)),       GBUF%LENGTH(II(2)),
+     8   GBUF%LENGTH(II(3)),       GBUF%MOM(II(1)),          GBUF%MOM(II(2)),          GBUF%MOM(II(3)),
+     9   GBUF%TOTROT(II(1)),       GBUF%TOTROT(II(2)),       GBUF%TOTROT(II(3)),       GBUF%ROT_IN_TENS(II(1)),
+     A   GBUF%ROT_IN_TENS(II(2)),  GBUF%ROT_IN_TENS(II(3)),  GBUF%MOMEP(II(1)),        GBUF%MOMEP(II(2)),
+     B   GBUF%MOMEP(II(3)),        GBUF%ROT_IN_COMP(II(1)),  GBUF%ROT_IN_COMP(II(2)),  GBUF%ROT_IN_COMP(II(3)),
+     C   ANIM,                     GBUF%POSX,                GBUF%POSY,                GBUF%POSZ,
+     D   GBUF%POSXX,               GBUF%POSYY,               GBUF%POSZZ,             
+     E   V,                        GBUF%E6,                  GBUF%RUPTCRIT,            NEL,
+     F   GBUF%LENGTH_ERR,          X1DP,                     X2DP,                     GBUF%YIELD(II(1)),
+     G   GBUF%YIELD(II(2)),        GBUF%YIELD(II(3)),        GBUF%YIELD(II(4)),        GBUF%YIELD(II(5)),
+     H   GBUF%YIELD(II(6)),        NGL,                      XKR,                      EXX,
+     I   EYX,                      EZX,                      EXY,                      EYY,
+     J   EZY,                      EXZ,                      EYZ,                      EZZ,
+     K   XCR,                      RX1,                      RY1,                      RZ1,
+     L   RX2,                      RY2,                      RZ2,                      XIN,
+     M   AK,                       XM,                       XKM,                      XCM,
+     N   NC1,                      NC2,                      NUVAR,                    GBUF%VAR,
+     O   GBUF%MASS,                GBUF%DEFINI(II(1)),       GBUF%DEFINI(II(2)),       GBUF%DEFINI(II(3)),
+     P   GBUF%DEFINI(II(4)),       GBUF%DEFINI(II(5)),       GBUF%DEFINI(II(6)),       IEQUIL,
+     Q   GBUF%SKEW_ID,             NFT,                      STF,                      SANIN,
+     R   IRESP,                    SNPC,                     GBUF%G_YIELD_IN_COMP     ,GBUF%G_XXOLD_IN_COMP,
+     S   GBUF%YIELD_IN_COMP(II(1)),GBUF%YIELD_IN_COMP(II(2)),GBUF%YIELD_IN_COMP(II(3)),GBUF%YIELD_IN_COMP(II(4)),
+     T   GBUF%YIELD_IN_COMP(II(5)),GBUF%YIELD_IN_COMP(II(6)),GBUF%XXOLD_IN_COMP(II(1)),GBUF%XXOLD_IN_COMP(II(2)),
+     U   GBUF%XXOLD_IN_COMP(II(3)),GBUF%XXOLD_IN_COMP(II(4)),GBUF%XXOLD_IN_COMP(II(5)),GBUF%XXOLD_IN_COMP(II(6)))
+C
+        DO I=JFT,JLT
+          IF (GBUF%OFF(I) /= -TEN .AND. OFF(I) < ONE) GBUF%OFF(I) = OFF(I)
+        ENDDO
+C
+        CALL R2LEN3(
+     1   JFT,      JLT,      GBUF%OFF, DT2T,
+     2   NELTST,   ITYPTST,  STI,      STIR,
+     3   MS,       IN,       MSRT,     DMELRT,
+     4   GBUF%G_DT,GBUF%DT,  NGL,      XCR,
+     5   XIN,      XM,       XKM,      XCM,
+     6   XKR,      NC1,      NC2,      JSMS,
+     7   NEL,      GBUF%RBODY_NODE,    FLG_SPR_DT)
+        CALL R23BILAN(
+     1   GBUF%EINT,PARTSAV,  IXR,      GEO,
+     2   V,        IPARTR,   GBUF%MASS,GRESAV,
+     3   GRTH,     IGRTH,    GBUF%OFF, NC1,
+     4   NC2,      X,        VR,       NEL,
+     5   IGRE)
+        CALL R2TORS(
+     1   GBUF%FOR(II(1)),GBUF%FOR(II(2)),GBUF%FOR(II(3)),GBUF%MOM(II(1)),
+     2   GBUF%MOM(II(2)),GBUF%MOM(II(3)),TANI,           H3D_DATA,
+     3   NEL)
+        IF (IPARIT == 0) THEN
+          CALL R2CUM3(
+     1   F,              GBUF%FOR(II(1)),GBUF%FOR(II(2)),GBUF%FOR(II(3)),
+     2   AR,             GBUF%MOM(II(1)),GBUF%MOM(II(2)),GBUF%MOM(II(3)),
+     3   STI,            STIR,           STIFN,          STIFR,
+     4   FX1,            FX2,            FY1,            FY2,
+     5   FZ1,            FZ2,            MX1,            MX2,
+     6   MY1,            MY2,            MZ1,            MZ2,
+     7   GEO,            X1,             Y1,             Z1,
+     8   X2,             Y2,             Z2,             IEQUIL,
+     9   EXX,            EYX,            EZX,            EXY,
+     A   EYY,            EZY,            EXZ,            EYZ,
+     B   EZZ,            NC1,            NC2,            NEL,
+     C   MTN)
+        ELSE
+          CALL R2CUM3P(
+     1   GBUF%FOR(II(1)),GBUF%FOR(II(2)),GBUF%FOR(II(3)),GBUF%MOM(II(1)),
+     2   GBUF%MOM(II(2)),GBUF%MOM(II(3)),STI,            STIR,
+     3   FSKY,           FSKY,           IADR,           FX1,
+     4   FX2,            FY1,            FY2,            FZ1,
+     5   FZ2,            MX1,            MX2,            MY1,
+     6   MY2,            MZ1,            MZ2,            GEO,
+     7   X1,             Y1,             Z1,             X2,
+     8   Y2,             Z2,             IEQUIL,         EXX,
+     9   EYX,            EZX,            EXY,            EYY,
+     A   EZY,            EXZ,            EYZ,            EZZ,
+     B   NEL,            NFT,            MTN )
+        ENDIF
+C-----------------------------------------------
+      RETURN
+      END SUBROUTINE R23LAW108

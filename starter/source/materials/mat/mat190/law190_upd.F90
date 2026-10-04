@@ -1,0 +1,234 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    law190_upd_mod   ../starter/source/materials/mat/mat190/law190_upd.F90
+!||--- called by ------------------------------------------------------
+!||    updmat           ../starter/source/materials/updmat.F
+!||====================================================================
+      module law190_upd_mod
+        implicit none
+      contains
+!! \brief update material law 190
+!||====================================================================
+!||    law190_upd         ../starter/source/materials/mat/mat190/law190_upd.F90
+!||--- called by ------------------------------------------------------
+!||    updmat             ../starter/source/materials/updmat.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+        subroutine law190_upd(  matparam ,numtabl ,itable   ,table    ,pm ,  &
+        &                    npropm   ,ntable )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use constant_mod
+          use matparam_def_mod
+          use MY_ALLOC_MOD, only : my_alloc
+          use my_dealloc_mod, only : my_dealloc
+          use precision_mod, only : WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+#include "mvsiz_p.inc"
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, intent(in) :: npropm
+          integer, intent(in) :: ntable
+          integer, intent(in) :: numtabl
+          integer, dimension(numtabl) :: itable
+          type(matparam_struct_), target :: matparam
+          type(ttable), dimension(ntable) ,intent(inout) ::  table
+          real(kind=WP), dimension(npropm), intent(inout) :: pm
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          ! integer variables
+          integer :: i,j,k,kk                             !< iterators
+          integer :: ndim                                 !< dimension
+          integer :: npt                           !< number of integration points / max number of integration points
+          integer :: fun_1                                !< function identifiers
+          integer :: sizetozero,stat,len2,len3
+
+          ! real variables
+          real(kind=WP) :: x_i,x_ii,y_i,y_ii
+          real(kind=WP) :: ener,scalefac,dx,dy,dydx,stiffini,nu,g,c1
+          real(kind=WP) ,dimension(:)  ,allocatable :: x_ener,y_ener
+          type(table_4d_), dimension(:) ,pointer ::  table_mat
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+!--------------------------------------------------------------------------
+!     copy global functions/tables to matparam data structure
+!--------------------------------------------------------------------------
+!
+          ! loading table
+          fun_1 = itable(1)                       ! identifier
+          ndim  = table(fun_1)%ndim               ! number of dimensions
+          npt   = size(table(fun_1)%x(1)%values)  ! number of points
+          matparam%ntable = numtabl               ! number of tables
+          allocate(matparam%table(numtabl))      ! allocate table array
+          table_mat =>  matparam%table(1:numtabl) ! material table pointer
+          table_mat(1:numtabl)%notable = 0        ! initialization of table identifiers array
+!
+          ! scale factor
+          scalefac = matparam%uparam(5)
+!
+          ! table number 1 - loading function
+          stiffini = zero
+          if (fun_1 > 0) then
+            table_mat(1)%notable = fun_1
+            ndim = table(fun_1)%ndim
+            table_mat(1)%ndim = ndim
+            allocate(table_mat(1)%x(ndim))
+            ! loop over dimensions to copy abscissa
+            do i = 1,ndim
+              npt = size(table(fun_1)%x(i)%values)
+              call my_alloc(table_mat(1)%x(i)%values, npt, "table_mat(1)%x(i)%values")
+              table_mat(1)%x(i)%values(1:npt) = table(fun_1)%x(i)%values(1:npt)
+            end do
+            ! 1 dimension, stress vs strain loading
+            if (ndim == 1) then
+              npt = size(table(fun_1)%x(1)%values)
+              call my_alloc(table_mat(1)%y1d, npt, "table_mat(1)%y1d", stat=stat)
+              table_mat(1)%y1d(1:npt) = table(fun_1)%y%values(1:npt)
+              ! 2 dimensions, stress vs strain vs strain rate
+            else if (ndim == 2) then
+              npt  = size(table(fun_1)%x(1)%values)
+              len2 = size(table(fun_1)%x(2)%values)
+              call my_alloc(table_mat(1)%y2d, npt, len2, "table_mat(1)%y2d", stat=stat)
+              do i=1,npt
+                do j=1,len2
+                  table_mat(1)%y2d(i,j) = table(fun_1)%y%values((j-1)*npt+i)
+                end do
+              end do
+              ! 3 dimensions, stress vs strain vs strain rate vs volume fraction
+            else if (ndim == 3) then
+              npt  = size(table(fun_1)%x(1)%values)
+              len2 = size(table(fun_1)%x(2)%values)
+              len3 = size(table(fun_1)%x(3)%values)
+              call my_alloc(table_mat(1)%y3d, npt, len2, len3, "table_mat(1)%y3d", stat=stat)
+              do i=1,npt
+                do j=1,len2
+                  do k=1,len3
+                    table_mat(1)%y3d(i,j,k) = table(fun_1)%y%values((k-1)*npt*len2+(j-1)*npt+i)
+                  end do
+                end do
+              end do
+            end if
+!
+            ! compute initial slope
+            do i = 1,npt-1
+              dx = table_mat(1)%x(1)%values(i+1) - table_mat(1)%x(1)%values(i)
+              dy = -huge(dy)
+              if (ndim == 1) then
+                dy = table_mat(1)%y1d(i+1) - table_mat(1)%y1d(i)
+              else if (ndim == 2) then
+                dy = table_mat(1)%y2d(i+1,1) - table_mat(1)%y2d(i,1)
+              else if (ndim == 3) then
+                dy = table_mat(1)%y3d(i+1,1,1) - table_mat(1)%y3d(i,1,1)
+              end if
+              dydx = scalefac*dy/dx
+              if (table_mat(1)%x(1)%values(i+1) == zero)then
+                stiffini = max(stiffini,dydx)
+              else if (table_mat(1)%x(1)%values(i) == zero) then
+                stiffini = max(stiffini,dydx)
+              else if (table_mat(1)%x(1)%values(1) >= zero) then
+                dx = table_mat(1)%x(1)%values(2) - table_mat(1)%x(1)%values(1)
+                if (ndim == 1) then
+                  dy = table_mat(1)%y1d(2) - table_mat(1)%y1d(1)
+                else if (ndim == 2) then
+                  dy = table_mat(1)%y2d(2,1) - table_mat(1)%y2d(1,1)
+                else if (ndim == 3) then
+                  dy = table_mat(1)%y3d(2,1,1) - table_mat(1)%y3d(1,1,1)
+                end if
+                stiffini = max(stiffini, scalefac*dy/dx)
+              end if
+            end do
+          end if
+!
+          stiffini = max(stiffini,matparam%uparam(1))
+          nu = zero
+          c1 = stiffini/three/(one - two*nu)
+          g  = half*stiffini/(one + nu)
+          matparam%uparam(1) = stiffini
+          matparam%uparam(2) = c1
+          matparam%uparam(3) = g
+          pm(20) = stiffini
+          pm(22) = g
+          pm(24) = stiffini
+          pm(32) = c1
+!
+          ! table number 2 - loading function
+          table_mat(2)%notable = 2
+          table_mat(2)%ndim = 1
+          npt = size(table(fun_1)%x(1)%values)
+          call my_alloc(x_ener, npt, "x_ener", stat=stat)
+          call my_alloc(y_ener, npt, "y_ener", stat=stat)
+          x_ener(1:npt) = zero
+          y_ener(1:npt) = zero
+          sizetozero = 1
+          do i = 1, npt-1
+            x_i  = table(fun_1)%x(1)%values(i+1)
+            x_ii = table(fun_1)%x(1)%values(i)
+            if(x_i >= zero .and. x_ii < zero) then
+              sizetozero = i+1
+              exit
+            end if
+          end do
+          do k = 1, npt
+            x_ener(k) = table(fun_1)%x(1)%values(k)
+          end do
+          y_ener(sizetozero) = zero
+          do k = sizetozero+1, npt
+            x_i  = table(fun_1)%x(1)%values(k)
+            x_ii = table(fun_1)%x(1)%values(k-1)
+            y_i  = table(fun_1)%y%values(k)*scalefac
+            y_ii = table(fun_1)%y%values(k-1)*scalefac
+            ener = (x_i-x_ii)*(y_i + y_ii)/two
+            y_ener(k) = y_ener(k-1) + ener
+          end do
+          do k = 1, sizetozero-1
+            kk   = sizetozero - k
+            x_i  = table(fun_1)%x(1)%values(kk)
+            x_ii = table(fun_1)%x(1)%values(kk+1)
+            y_i  = table(fun_1)%y%values(kk)*scalefac
+            y_ii = table(fun_1)%y%values(k+1)*scalefac
+            ener = (x_i-x_ii)*(y_i + y_ii)/two
+            y_ener(kk) = y_ener(kk+1) + ener
+          end do
+          allocate(table_mat(2)%x(ndim), stat=stat)
+          call my_alloc(table_mat(2)%x(1)%values, npt, "table_mat(2)%x(1)%values", stat=stat)
+          call my_alloc(table_mat(2)%y1d, npt, "table_mat(2)%y1d", stat=stat)
+          do i = 1,npt
+            table_mat(2)%x(1)%values(i) = x_ener(i)
+            table_mat(2)%y1d(i) = y_ener(i)
+          end do
+          call my_dealloc(x_ener)
+          call my_dealloc(y_ener)
+!
+        end subroutine law190_upd
+      end module law190_upd_mod
+

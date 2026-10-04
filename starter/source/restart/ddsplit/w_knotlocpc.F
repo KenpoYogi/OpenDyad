@@ -1,0 +1,63 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    w_knotlocpc   ../starter/source/restart/ddsplit/w_knotlocpc.F
+!||--- called by ------------------------------------------------------
+!||    w_knotloc     ../starter/source/restart/ddsplit/w_knotloc.F
+!||====================================================================
+      SUBROUTINE W_KNOTLOCPC(KNOTLOCPC,KNOTLOCPC_L,MAXGEO,NUMNOD_L,NODLOCAL)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "ige3d_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NUMNOD_L,MAXGEO,NODLOCAL(*)
+      my_real
+     .        KNOTLOCPC(DEG_MAX,3,*),KNOTLOCPC_L(DEG_MAX,3,*)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, K, L, DECALGEO
+C-----------------------------------------------
+
+      DO I = 1, MAXGEO
+        DECALGEO=(I-1)*NUMNOD_L
+        DO L=1,NUMNOD_L
+          DO J = 1, 3
+            DO K = 1, DEG_MAX  !4*3
+              KNOTLOCPC_L(K,J,DECALGEO+NODLOCAL(L)) = KNOTLOCPC(K,J,DECALGEO+L)
+            ENDDO
+          ENDDO
+        ENDDO
+      ENDDO
+C
+      RETURN
+      END

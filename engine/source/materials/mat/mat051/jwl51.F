@@ -1,0 +1,222 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    jwlun51    ../engine/source/materials/mat/mat051/jwl51.F
+!||--- called by ------------------------------------------------------
+!||    sigeps51   ../engine/source/materials/mat/mat051/sigeps51.F90
+!||====================================================================
+      SUBROUTINE JWLUN51 (TIME,XL,TBURN,UPARAM,DD,MU,MUP1,
+     .          VOLUME,DVOL,V1OLD,EINT1,VISCMAX,
+     .          Q1,PEXT,P1,PM1,
+     .          RHO,RHO10,MAS1,SSP1, QA,QB,BFRAC,DPDE)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   I N P U T   O U T P U T   A r g u m e n t s
+C-----------------------------------------------
+      my_real, INTENT(IN) :: TIME,XL,TBURN,DD,
+     .                       VOLUME,V1OLD,EINT1,
+     .                       PEXT,PM1,
+     .                       RHO10,MAS1,
+     .                       UPARAM(*),QA,QB
+      my_real, INTENT(INOUT) :: SSP1, P1, DVOL, RHO, BFRAC, MU, VISCMAX, Q1, DPDE
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IBFRAC
+      my_real AA,BB,P0,VDET,BHE,B1,B2,W1,R1,R2,R1M,ER1M,R2M,ER2M,
+     .        QAL,QBL,DPDMU,MUP1,C01,C11,
+     .        Psol, Pgas, Psol_min, Pgas_min, SSP_unreacted, SSP_reacted
+C-----------------------------------------------
+      VDET  = UPARAM(42)
+      BHE   = UPARAM(44)
+      B1    = UPARAM(45)
+      C01   = UPARAM(49)
+      C11   = UPARAM(50)
+      B2    = UPARAM(51)
+      R1    = UPARAM(52)
+      R2    = UPARAM(53)
+      W1    = UPARAM(54)
+      IBFRAC= NINT(UPARAM(68))
+C
+      IF(R1 == ZERO) R1=EP30
+      IF(R2 == ZERO) R2=EP30
+C
+      DVOL = VOLUME - V1OLD
+C
+      !--------------------------------!
+      ! Calculation of BFRAC in [0,1]  !
+      !--------------------------------!
+      RHO = MAS1 / VOLUME
+      IF(BFRAC < ONE) THEN
+       BFRAC = ZERO
+       IF(IBFRAC/=1 .AND. TIME > -TBURN) BFRAC = VDET*(TIME+TBURN)*TWO_THIRD/XL
+       IF(IBFRAC/=2) BFRAC  = MAX( BFRAC , BHE * (ONE - RHO10/RHO) )
+       IF(BFRAC < EM03) THEN
+         BFRAC = ZERO
+       ELSEIF(BFRAC > ONE) THEN
+         BFRAC = ONE
+       ENDIF
+      ENDIF
+
+      !--------------------------------!
+      ! SSP & ARTIFICIAL VISCO         !
+      !--------------------------------!
+      MUP1          = RHO/RHO10
+      MU            = MUP1 - ONE
+      R1M           = R1/MUP1
+      R2M           = R2/MUP1
+      ER1M          = EXP(-R1M)
+      ER2M          = EXP(-R2M)
+      AA            = W1/VOLUME
+      P0            = B1*(ONE-W1/R1M)*ER1M + B2*(ONE-W1/R2M)*ER2M
+      P1            = P0 + AA*EINT1   !total jwl pressure for ssp
+      DPDMU         = B1*ER1M*( (-W1*MUP1/R1) + R1M - W1) + B2*ER2M*( (-W1*MUP1/R2) + R2M - W1) + W1*EINT1/VOLUME +P1*W1
+      DPDMU         = ABS(DPDMU) / MUP1  ! if DPDMU <0 => numerical error during energy integration (increase iteration number or reduce submaterial volume change ratio)
+      SSP_reacted   = SQRT(DPDMU/RHO10)
+      SSP_unreacted = SQRT(C11/RHO10)
+      SSP1          = MAX(BFRAC*SSP_reacted,(ONE-BFRAC)*SSP_unreacted)
+      QAL           = QA*XL
+      QAL           = QAL*QAL
+      QBL           = QB*XL
+      VISCMAX       = RHO*(QAL*MAX(ZERO,DD) + QBL*SSP1)
+      Q1            = VISCMAX*MAX(ZERO,DD)
+      BB            = HALF*(VOLUME-V1OLD)
+      AA            = AA
+      P1            = ( P0-PEXT + AA*EINT1 )!  /  (ONE+AA*BB)
+
+
+      !--------------------------------!
+      ! Linear and jwl eos             !
+      !--------------------------------!
+      Psol     = C01+C11*MU           !linear eos relative pressure
+      Psol_min = PM1                  !p<0 allowed for solid phase. Default : -EP30
+      Psol     = MAX(Psol,Psol_min)
+
+      Pgas     = P1                   !jwl eos relative to Pext
+      Pgas_min = -PEXT                !p>0 for detonation products
+      Pgas     = MAX(Pgas,Pgas_min)
+
+      P1       = BFRAC*Pgas + (ONE-BFRAC)*Psol
+
+
+      !--------------------------------!
+      ! Update SSP with current state  !
+      !--------------------------------!
+      DPDMU         = B1*ER1M*( (-W1*MUP1/R1) + R1M - W1) + B2*ER2M*( (-W1*MUP1/R2) + R2M - W1) + W1*EINT1/VOLUME +(P1+PEXT)*W1
+      DPDMU         = ABS(DPDMU) / MUP1  ! if DPDMU <0 => numerical error during energy integration (increase iteration number or reduce submaterial volume change ratio)
+      SSP_reacted   = SQRT(DPDMU/RHO10)
+      SSP_unreacted = SQRT(C11/RHO10)
+      SSP1          = MAX(BFRAC*SSP_reacted,(ONE-BFRAC)*SSP_unreacted)
+      DPDE          = BFRAC*W1/MUP1
+C
+      RETURN
+      END
+
+
+!||====================================================================
+!||    jwl51      ../engine/source/materials/mat/mat051/jwl51.F
+!||--- called by ------------------------------------------------------
+!||    sigeps51   ../engine/source/materials/mat/mat051/sigeps51.F90
+!||====================================================================
+      SUBROUTINE JWL51 (UPARAM,
+     .          V1,V1OLD,MU1,MUP1,EINT1,
+     .          PEXT,P1,PM1,
+     .          RHO1,RHO10,MAS1,SSP1,BFRAC,V10, DPDE1)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   I N P U T   O U T P U T   A r g u m e n t s
+C-----------------------------------------------
+      my_real,INTENT(IN) :: V1,V1OLD,
+     .                      PEXT,PM1,
+     .                      RHO10,MAS1,
+     .                      UPARAM(*),BFRAC, V10
+      my_real,INTENT(INOUT) :: RHO1, MU1, EINT1, P1, SSP1,  DPDE1
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IBFRAC
+      my_real AA,BB,P0,VDET,BHE,B1,B2,W1,R1,R2,R1M,ER1M,R2M,ER2M,
+     .        MUP1,C11,C01,SSP_PRODUCTS,SSP_UNREACTED,
+     .        Psol, Pgas, Psol_min, Pgas_min,DPDMU
+C-----------------------------------------------
+      VDET   = UPARAM(42)
+      BHE    = UPARAM(44)
+      B1     = UPARAM(45)
+      C01    = UPARAM(49)
+      C11    = UPARAM(50)
+      B2     = UPARAM(51)
+      R1     = UPARAM(52)
+      R2     = UPARAM(53)
+      W1     = UPARAM(54)
+      IBFRAC = NINT(UPARAM(68))
+C------------------------
+      RHO1   = MAS1/V1
+      MUP1   = RHO1/RHO10
+      MU1    = MUP1 - ONE
+
+      R1M    = R1/MUP1
+      R2M    = R2/MUP1
+      ER1M   = EXP(-R1M)
+      ER2M   = EXP(-R2M)
+
+      AA       = W1*MUP1/V10 !W1/V1    same digits this way
+      AA       = AA
+      BB       = HALF*(V1-V1OLD)
+      P0       = B1*(ONE-W1/R1M)*ER1M + B2*(ONE-W1/R2M)*ER2M
+      P1 = P0 - PEXT + AA * EINT1
+
+      !--------------------------------!
+      ! Linear and jwl eos             !
+      !--------------------------------!
+      Psol     = C01+C11*MU1          !linear eos relative pressure
+      Psol_min = PM1                  !p<0 allowed for solid phase. Default : -EP30
+      Psol     = MAX(Psol,Psol_min)
+
+      Pgas     = P1                   !jwl eos relative to Pext
+      Pgas_min = -PEXT                !p>0 for detonation products
+      Pgas     = MAX(Pgas,Pgas_min)
+
+      P1       = BFRAC*Pgas + (ONE-BFRAC)*Psol
+
+      !--------------------------------!
+      ! Sound Speed                    !
+      !--------------------------------!
+      DPDMU         = B1*ER1M*( (-W1*MUP1/R1) + R1M - W1) + B2*ER2M*( (-W1*MUP1/R2) + R2M - W1)
+     .              + W1*EINT1/V1 + (Pgas+PEXT)*W1
+      DPDMU         = ABS(DPDMU) / MUP1
+      SSP_PRODUCTS  = SQRT(DPDMU/RHO10)
+      SSP_UNREACTED = SQRT(C11/RHO10)
+      SSP1          = (ONE-BFRAC)*SSP_UNREACTED + BFRAC*SSP_PRODUCTS
+
+      DPDE1 = BFRAC * W1/MUP1
+
+      RETURN
+      END
+

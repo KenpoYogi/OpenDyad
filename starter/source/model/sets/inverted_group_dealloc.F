@@ -1,0 +1,82 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    inverted_group_dealloc   ../starter/source/model/sets/inverted_group_dealloc.F
+!||--- called by ------------------------------------------------------
+!||    lectur                   ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    inverted_group_mod       ../starter/share/modules1/inverted_group_mod.F
+!||====================================================================
+        SUBROUTINE INVERTED_GROUP_DEALLOC(INV_GROUP)
+!$COMMENT
+!       INVERTED_GROUP_DEALLOC description
+!       deallocation of the different arrays of INV_GROUP structure
+!       
+!       INVERTED_GROUP_DEALLOC organization :
+!           none
+!$ENDCOMMENT
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------  
+      USE INVERTED_GROUP_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        TYPE(INVERTGROUP_STRUCT_) :: INV_GROUP
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+
+!   ----------------------------------------
+        IF(INV_GROUP%ALREADY_ALLOC) THEN
+
+            call my_dealloc(INV_GROUP%INDPARTS)
+            call my_dealloc(INV_GROUP%INDPARTQ)
+            call my_dealloc(INV_GROUP%INDPARTC)
+            call my_dealloc(INV_GROUP%INDPARTT)
+            call my_dealloc(INV_GROUP%INDPARTP)
+            call my_dealloc(INV_GROUP%INDPARTTG)
+            call my_dealloc(INV_GROUP%INDPARTTRIA)
+            call my_dealloc(INV_GROUP%INDPARTR)
+            call my_dealloc(INV_GROUP%INDPARTSPH)
+
+            call my_dealloc(INV_GROUP%PARTS)
+            call my_dealloc(INV_GROUP%PARTQ)
+            call my_dealloc(INV_GROUP%PARTT)
+            call my_dealloc(INV_GROUP%PARTP)
+            call my_dealloc(INV_GROUP%PARTTG)
+            call my_dealloc(INV_GROUP%PARTTRIA)
+            call my_dealloc(INV_GROUP%PARTR)
+            call my_dealloc(INV_GROUP%PARTSPH)
+        ENDIF   
+!   ---------------------------------------- 
+
+        RETURN
+        END SUBROUTINE INVERTED_GROUP_DEALLOC

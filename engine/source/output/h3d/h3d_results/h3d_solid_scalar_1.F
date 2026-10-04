@@ -1,0 +1,3168 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    h3d_solid_scalar_1             ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||--- called by ------------------------------------------------------
+!||    funct_python_update_elements   ../engine/source/tools/curve/funct_python_update_elements.F90
+!||    h3d_solid_scalar               ../engine/source/output/h3d/h3d_results/h3d_solid_scalar.F
+!||--- calls      -----------------------------------------------------
+!||    h3d_write_scalar               ../engine/source/output/h3d/h3d_results/h3d_write_scalar.F
+!||    initbuf                        ../engine/share/resol/initbuf.F
+!||    output_div_u                   ../engine/source/output/anim/generate/output_div_u.F
+!||    output_schlieren               ../engine/source/output/anim/generate/output_schlieren.F
+!||    srotorth                       ../engine/source/elements/solid/srotorth.F
+!||    ths_marea                      ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||    ths_vol                        ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||--- uses       -----------------------------------------------------
+!||    ale_connectivity_mod           ../common_source/modules/ale/ale_connectivity_mod.F
+!||    aleanim_mod                    ../common_source/modules/aleanim_mod.F
+!||    alefvm_mod                     ../common_source/modules/ale/alefvm_mod.F
+!||    elbufdef_mod                   ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod                    ../common_source/modules/elements/element_mod.F90
+!||    h3d_mod                        ../engine/share/modules/h3d_mod.F
+!||    initbuf_mod                    ../engine/share/resol/initbuf.F
+!||    mat_elem_mod                   ../common_source/modules/mat_elem/mat_elem_mod.F90
+!||    matparam_def_mod               ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||    multi_fvm_mod                  ../common_source/modules/ale/multi_fvm_mod.F90
+!||    multimat_param_mod             ../common_source/modules/multimat_param_mod.F90
+!||    names_and_titles_mod           ../common_source/modules/names_and_titles_mod.F
+!||    schlieren_mod                  ../engine/share/modules/schlieren_mod.F
+!||====================================================================
+      SUBROUTINE H3D_SOLID_SCALAR_1(CALLED_FROM_PYTHON,
+     .                  ELBUF_TAB       ,SOLID_SCALAR ,IPARG       ,
+     .                  IXS             ,PM           ,BUFMAT      ,
+     .                  EHOUR           ,
+     .                  IPM             ,
+     .                  X               ,V            ,W           ,ALE_CONNECT ,
+     .                  ID_ELEM         ,ITY_ELEM     ,IPARTS      ,LAYER_INPUT ,
+     .                  IR_INPUT        ,IS_INPUT     ,IT_INPUT    ,IUVAR_INPUT , H3D_PART    ,
+     .                  IS_WRITTEN_SOLID,INFO1        ,KEYWORD     ,FANI_CELL   ,
+     .                  MULTI_FVM       ,NG           ,IDMDS       ,IMDSVAR     ,
+     .                  ID              ,MAT_PARAM    ,MODE        )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+        USE INITBUF_MOD
+        USE MAT_ELEM_MOD
+        USE ELBUFDEF_MOD
+        USE SCHLIEREN_MOD
+        USE H3D_MOD
+        USE MULTI_FVM_MOD
+        USE ALE_CONNECTIVITY_MOD
+        USE ALEFVM_MOD , only:ALEFVM_Param
+        USE ALEANIM_MOD , ONLY : FANI_CELL_
+        USE NAMES_AND_TITLES_MOD, ONLY: NCHARLINE100
+        USE MULTIMAT_PARAM_MOD , ONLY : M51_N0PHAS, M51_NVPHAS
+        USE MATPARAM_DEF_MOD , ONLY : MATPARAM_STRUCT_
+        use element_mod , only : nixs
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+C argument for initbuf
+#include      "vect01_c.inc"
+#include      "mvsiz_p.inc"
+!NGROUP NFILSOL N2D
+#include      "com01_c.inc"
+!NUMELS NUMNOD
+#include      "com04_c.inc"
+!NPROPM, NPROPMI NPARG
+#include      "param_c.inc"
+!ISPMD
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        LOGICAL, INTENT(IN) :: CALLED_FROM_PYTHON
+        my_real
+     .     SOLID_SCALAR(*),X(3,*),V(3,*),W(3,*),EHOUR(*),
+     .     PM(NPROPM,*)
+        my_real, INTENT(IN),TARGET :: BUFMAT(*)
+        INTEGER IPARG(NPARG,*),IXS(NIXS,*),
+     .     IPM(NPROPMI,*),
+     .     ID_ELEM(*),ITY_ELEM(*),IPARTS(*),ID,
+     .     H3D_PART(*),IS_WRITTEN_SOLID(*),INFO1,LAYER_INPUT,IR_INPUT,IS_INPUT,IT_INPUT,
+     .     IUVAR_INPUT,NG,IDMDS,IMDSVAR
+        TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+        CHARACTER(NCHARLINE100):: KEYWORD
+        TYPE(FANI_CELL_), INTENT(IN) :: FANI_CELL
+        TYPE(MULTI_FVM_STRUCT), INTENT(IN) :: MULTI_FVM
+        TYPE(t_ale_connectivity), INTENT(IN) :: ALE_CONNECT
+        TYPE (MATPARAM_STRUCT_) ,DIMENSION(NUMMAT) ,INTENT(IN) :: MAT_PARAM
+        INTEGER ,INTENT(IN) :: MODE
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        my_real
+     .     EVAR(MVSIZ),
+     .     VALUE(MVSIZ),MASS(MVSIZ),PRES(MVSIZ),MASS0,VOL
+        my_real
+     .     OFF, P,VONM2,S1,S2,S3,DMGMX,FAC,
+     .     S11,S22,S33,S4,S5,S6,VONM,GAMA(6),
+     .     T11,T21,T31,T12,T22,T32,T13,T23,T33,
+     .     PHI,THETA,PSI,DAMMAX,VEL(0:3),VFRAC(MVSIZ,1:21),
+     .     CUMUL(3),VX,VY,VZ,NX,NY,NZ,SURF,TMP_2(MVSIZ,3)
+        my_real
+     .     G1(MVSIZ,3),G2(MVSIZ,3),G3(MVSIZ,3),VOLN(MVSIZ),AREAM(MVSIZ),
+     .     RHO0,DET(MVSIZ),EZZ(MVSIZ),MAXDAMINI,E33
+        INTEGER I,II,J,NEL,NPTR,NPTS,NPTT,NLAY,L,IFAIL,ILAY,
+     .          IR,IS,IT,IL,MLW, NUVAR,IUS,NFAIL,
+     .          N,K,JTURB,MT,IALEL,
+     .          NLAY_FAIL,
+     .          OFFSET, IPT,
+     .          IUVAR,IPOS,
+     .          IALEFVM_FLG, IMAT,IADBUF,NUPARAM,ICSIG,NC(8),IEOS,NMOD,MAT_ID,FAIL_ID
+        INTEGER
+     .          ISOLNOD,IVISC,NPTG,TSHELL,TSH_ORT,
+     .          IOK_PART(MVSIZ),JJ(6),IRUPT,IOK,NPG_PLANE,IIR,
+     .          IS_WRITTEN_VALUE(MVSIZ),NFRAC,IU(4),IV,NB_FACE,KFACE,IS_EULER,IS_ALE,IAD2
+        LOGICAL DETECTED
+        CHARACTER*5 BUFF
+        TYPE(G_BUFEL_)  ,POINTER :: GBUF
+        TYPE(L_BUFEL_)  ,POINTER :: LBUF, LBUF1,LBUF2
+        TYPE(BUF_MAT_)  ,POINTER :: MBUF
+        TYPE(BUF_FAIL_) ,POINTER :: FBUF
+        TYPE(BUF_EOS_)  ,POINTER :: EBUF
+        my_real, DIMENSION(:), POINTER  :: UVARF,DAMF,DFMAX,TDELE
+        my_real, DIMENSION(:) ,POINTER  :: UPARAM
+        INTEGER :: ISUBMAT,NVAREOS,NTILLOTSON,IMAT_TILLOTSON
+        INTEGER :: MID,IERR
+        my_real :: vi(21) !< submaterial volumes at reference densities (max submat : 21)
+        my_real :: v0i(21) !< submaterial volumes at reference densities (max submat : 21)
+        my_real :: v0g !< global volume at reference density (mixture)
+        my_real :: RHO0i(21) !< submaterial initial mass densities (max submat : 21)
+        my_real :: RHOi(21) !< submaterial  mass densities (max submat : 21)
+        my_real :: RHO0g !< global initial mass density (mixture)
+C-----------------------------------------------
+
+        CALL INITBUF(   IPARG   ,NG      ,
+     2          MLW     ,NEL     ,NFT     ,IAD     ,ITY     ,
+     3          NPT     ,JALE    ,ISMSTR  ,JEUL    ,JTUR    ,
+     4          JTHE    ,JLAG    ,JMULT   ,JHBE    ,JIVF    ,
+     5          NVAUX   ,JPOR    ,JCVT    ,JCLOSE  ,JPLASOL ,
+     6          IREP    ,IINT    ,IGTYP   ,ISRAT   ,ISROT   ,
+     7          ICSEN   ,ISORTH  ,ISORTHG ,IFAILURE,JSMS    )
+
+        IF (MLW /= 13) THEN
+          NFT = IPARG(3,NG)
+          ISOLNOD = IPARG(28,NG)
+          IVISC = IPARG(61,NG)
+          IOK_PART(1:NEL) = 0
+          LFT=1
+          LLT=NEL
+          IS_EULER=IPARG(11,NG)
+          IS_ALE=IPARG(7,NG)
+c
+          DO I=1,6
+            JJ(I) = NEL*(I-1)
+          ENDDO
+c
+          DO I=1,NEL
+            VALUE(I) = ZERO
+            IS_WRITTEN_VALUE(I) = 0
+          ENDDO
+C-----------------------------------------------
+          IF (ITY == 1) THEN
+c           SOLID ELEMENTS
+            IF (JCVT==1.AND.ISORTH/=0) JCVT=2
+C-----------------------------------------------
+            GBUF => ELBUF_TAB(NG)%GBUF
+            MBUF => ELBUF_TAB(NG)%BUFLY(1)%MAT(1,1,1)
+            LBUF => ELBUF_TAB(NG)%BUFLY(1)%LBUF(1,1,1)
+            EBUF => ELBUF_TAB(NG)%BUFLY(1)%EOS(1,1,1)
+            NLAY = ELBUF_TAB(NG)%NLAY
+            NPTR = ELBUF_TAB(NG)%NPTR
+            NPTS = ELBUF_TAB(NG)%NPTS
+            NPTT = ELBUF_TAB(NG)%NPTT
+            NPTG = NPTT*NPTS*NPTR*NLAY
+            NVAREOS = ELBUF_TAB(NG)%BUFLY(1)%NVAR_EOS
+            TSHELL  = 0
+            TSH_ORT = 0
+            IF (IGTYP==20 .OR. IGTYP==21 .OR. IGTYP==22) TSHELL = 1
+            IF (IGTYP==21 .OR. IGTYP==22) TSH_ORT = 1
+
+            IF (ITY == 1) OFFSET = 0
+c
+            IF(.NOT. CALLED_FROM_PYTHON) THEN
+              DO  I=1,NEL
+                IF (ITY == 1) THEN
+                  ID_ELEM(OFFSET+NFT+I) = IXS(NIXS,NFT+I)
+                  ITY_ELEM(OFFSET+NFT+I) = 1
+                  IF( H3D_PART(IPARTS(NFT+I)) == 1) IOK_PART(I) = 1
+                ENDIF
+              ENDDO
+            ENDIF
+c
+            ILAY = LAYER_INPUT
+            IUVAR = IUVAR_INPUT
+            IF (KEYWORD == 'MDS') IUVAR = IMDSVAR
+            IR = IR_INPUT
+            IS = IS_INPUT
+            IT = IT_INPUT
+            IF (ILAY == -2) ILAY = 1
+            IF (ILAY == -3) ILAY = NLAY
+            IF (TSHELL == 1.AND.(IR_INPUT/=-1.AND.IS_INPUT/=-1.AND.IT_INPUT/=-1)) THEN
+              IF (JHBE==15 ) THEN
+                ILAY = IS_INPUT
+                IR = 1
+                IS = 1
+                IT = 1
+              ELSEIF (JHBE==14 ) THEN
+                ICSIG = IPARG(17,NG)
+                IF (ICSIG==100) THEN
+                  IR = IS_INPUT
+                  IS = IT_INPUT
+                  ILAY = IR_INPUT
+                ELSEIF (ICSIG==10) THEN
+                  ILAY = IS_INPUT
+                  IR = IT_INPUT
+                  IS = IR_INPUT
+                ELSEIF (ICSIG==1) THEN
+                  ILAY = IT_INPUT
+                END IF
+                IT = 1
+              ELSE
+                ILAY = IS_INPUT
+                IS = 1
+              END IF
+            END IF
+C-----------------------------------------------
+C Mass computation
+C-----------------------------------------------
+            IF (KEYWORD == 'MASS') THEN
+              GBUF => ELBUF_TAB(NG)%GBUF
+              IALEL=IPARG(7,NG)+IPARG(11,NG)
+              DO I=1,NEL
+                N = I + NFT
+                IF (MLW == 0 .or. MLW == 13 .or. IGTYP == 0) THEN
+                  MASS(I) = ZERO
+                ELSEIF(IALEL == 0)THEN
+                  MT=IXS(1,N)
+                  MASS(I)=PM(89,MT)*GBUF%VOL(I)
+                ELSE
+                  OFF = MIN(GBUF%OFF(I),ONE)
+                  MASS(I)=GBUF%RHO(I)*GBUF%VOL(I)*OFF
+                ENDIF
+                IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .            MASS(I) = MASS(I) * GBUF%FILL(I)
+              ENDDO
+            ENDIF
+C-----------
+            IF (MLW /= 0 .and. MLW /= 13 .and. IGTYP /= 0) THEN
+              JTURB=IPARG(12,NG)*(IPARG(7,NG)+IPARG(11,NG))
+C--------------------------------------------------
+              IF (KEYWORD == 'MASS') THEN   ! MASS
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = MASS(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DT')THEN
+C--------------------------------------------------
+                IF(GBUF%G_DT>0)THEN
+                  DO I=1,NEL
+                    VALUE(I) = GBUF%DT(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'EPSP' .AND. (MLW /= 12 .AND. MLW /=14 .AND. MLW /= 25))THEN
+C--------------------------------------------------
+                IF (ILAY == -1) THEN
+                  DO I=1,NEL
+                    IF (MLW == 10 .OR. MLW == 21) THEN
+                      VALUE(I) = LBUF%EPSQ(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ELSEIF (GBUF%G_PLA > 0) THEN
+                      VALUE(I) = GBUF%PLA(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDIF
+                  ENDDO
+                ELSE
+                  DO I=1,NEL
+                    IF(ELBUF_TAB(NG)%BUFLY(ILAY)%L_PLA > 0) THEN
+                      VALUE(I) = ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(1,1,1)%PLA(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDIF
+                  ENDDO
+                ENDIF
+
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'WPLA' .AND. (MLW == 12 .OR. MLW == 14 .OR. MLW == 25))THEN
+C--------------------------------------------------
+                DO I=LFT,LLT
+                  VALUE(I) = ZERO
+                ENDDO
+                IF (ISOLNOD == 16 .OR. ISOLNOD == 20.OR.
+     .             (ISOLNOD == 8  .AND.JHBE == 14).OR.
+     .             ((ISOLNOD == 6 .OR.ISOLNOD == 8).AND.JHBE == 15).OR. 
+     .             ((ISOLNOD == 6).AND.JHBE == 24))THEN
+                  DO IL=1,NLAY
+                    IF (ELBUF_TAB(NG)%BUFLY(IL)%L_PLA > 0) THEN
+                      DO IS=1,NPTS
+                        DO IT=1,NPTT
+                          DO IR=1,NPTR
+                            LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                            DO I=LFT,LLT
+                              VALUE(I) = VALUE(I) + LBUF%PLA(I)/NPTG
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDIF
+                  ENDDO
+                ELSE
+                  DO I=LFT,LLT
+                    IF (GBUF%G_PLA > 0)THEN
+                      VALUE(I) = GBUF%PLA(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDIF
+                  ENDDO
+                ENDIF ! Isolid ...
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'TSAIWU' .AND. GBUF%G_TSAIWU > 0) THEN
+C--------------------------------------------------
+                DO I=LFT,LLT
+                  VALUE(I) = ZERO
+                ENDDO
+                DO IL=1,NLAY
+                  IF (ELBUF_TAB(NG)%BUFLY(IL)%L_TSAIWU > 0) THEN
+                    DO IS=1,NPTS
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                          DO I=LFT,LLT
+                            VALUE(I) = VALUE(I) + LBUF%TSAIWU(I)/NPTG
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DENS')THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%RHO(I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSE
+                  DO I=1,NEL
+                    VALUE(I) = GBUF%RHO(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'TEMP')THEN
+C--------------------------------------------------
+              IF (JTHE /= 0) THEN
+                VALUE(1:NEL) = ELBUF_TAB(NG)%GBUF%TEMP(1:NEL)
+                IS_WRITTEN_VALUE(1:NEL) = 1
+              ELSE
+                VALUE(1:NEL) = ZERO
+                DO IL=1,NLAY
+                  IF (ELBUF_TAB(NG)%BUFLY(IL)%L_TEMP > 0) THEN
+                    IS_WRITTEN_VALUE(1:NEL) = 1
+                    DO IT=1,ELBUF_TAB(NG)%BUFLY(IL)%NPTT
+                      DO IS=1,NPTS
+                        DO IR=1,NPTR
+                          LBUF => ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                          VALUE(1:NEL) = VALUE(1:NEL) + LBUF%TEMP(1:NEL)/NPTG
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDIF
+                ENDDO
+              ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'P')THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%PRES(I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSE
+                  DO I=1,NEL
+                    II = (I-1)*6
+                    N = I + NFT
+                    S11 = GBUF%SIG(JJ(1) + I)
+                    S22 = GBUF%SIG(JJ(2) + I)
+                    S33 = GBUF%SIG(JJ(3) + I)
+                    S4  = GBUF%SIG(JJ(4) + I)
+                    S5  = GBUF%SIG(JJ(5) + I)
+                    S6  = GBUF%SIG(JJ(6) + I)
+                    IF(IVISC > 0 ) THEN
+                      S11 = S11 + LBUF%VISC(JJ(1) + I)
+                      S22 = S22 + LBUF%VISC(JJ(2) + I)
+                      S33 = S33 + LBUF%VISC(JJ(3) + I)
+                      S4  = S4  + LBUF%VISC(JJ(4) + I)
+                      S5  = S5  + LBUF%VISC(JJ(5) + I)
+                      S6  = S6  + LBUF%VISC(JJ(6) + I)
+                    ENDIF
+                    P = - (S11  + S22 + S33 ) * THIRD
+                    VALUE(I) = P
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VONM')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  N = I + NFT
+                  S11 = GBUF%SIG(JJ(1) + I)
+                  S22 = GBUF%SIG(JJ(2) + I)
+                  S33 = GBUF%SIG(JJ(3) + I)
+                  S4  = GBUF%SIG(JJ(4) + I)
+                  S5  = GBUF%SIG(JJ(5) + I)
+                  S6  = GBUF%SIG(JJ(6) + I)
+                  IF(IVISC > 0 ) THEN
+                    S11 = S11 + LBUF%VISC(JJ(1) + I)
+                    S22 = S22 + LBUF%VISC(JJ(2) + I)
+                    S33 = S33 + LBUF%VISC(JJ(3) + I)
+                    S4  = S4  + LBUF%VISC(JJ(4) + I)
+                    S5  = S5  + LBUF%VISC(JJ(5) + I)
+                    S6  = S6  + LBUF%VISC(JJ(6) + I)
+                  ENDIF
+                  P = - (S11  + S22 + S33 ) * THIRD
+                  S1= S11 + P
+                  S2= S22 + P
+                  S3= S33 + P
+                  VONM2= THREE*(S4*S4  +  S5*S5 + S6*S6 +
+     .                 HALF*(S1*S1 + S2*S2  + S3*S3) )
+                  VONM= SQRT(VONM2)
+                  VALUE(I) = VONM
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .              VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'K' .and. JTURB /= 0)THEN
+C--------------------------------------------------
+C                 ENERGIE TURBULENTE
+                DO I=1,NEL
+                  VALUE(I) = GBUF%RK(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'TVIS')THEN
+C--------------------------------------------------
+C               VISCOSITE TURBULENTE
+                DO I=1,NEL
+                  N = I + NFT
+                  IF((MLW == 6 .OR. MLW == 17).AND.JTURB/=0)THEN
+                    MT=IXS(1,N)
+                    VALUE(I) = PM(81,MT) * GBUF%RK(I)**2
+     .                                / MAX(EM15,GBUF%RE(I))
+                    IS_WRITTEN_VALUE(I) = 1
+                  ELSEIF(MLW == 46 .OR. MLW == 47)THEN
+                    VALUE(I) = MBUF%VAR(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VORTX')THEN
+C--------------------------------------------------
+C               VORTICITY-X
+                IF(MLW /= 151)THEN
+                  DO I=1,NEL
+                    VALUE(I) = FANI_CELL%VORT_X(I+NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(MLW == 151)THEN
+                  !ITY = IPARG(5, NG)
+                  NB_FACE = 6
+                  DO I=1,NEL
+                    II = I + NFT
+                    IAD2 = ALE_CONNECT%ee_connect%iad_connect(II)
+                    NB_FACE = ALE_CONNECT%ee_connect%iad_connect(II+1)-IAD2
+                    CUMUL(1:3)=ZERO
+                    DO KFACE = 1, NB_FACE
+                      IV = ALE_CONNECT%ee_connect%connected(IAD2 + KFACE - 1)
+                      NX = ZERO !MULTI_FVM%FACE_DATA%NORMAL(1, KFACE, II)
+                      NY = MULTI_FVM%FACE_DATA%NORMAL(2, KFACE, II)
+                      NZ = MULTI_FVM%FACE_DATA%NORMAL(3, KFACE, II)
+                      SURF = MULTI_FVM%FACE_DATA%SURF(KFACE, II)
+                      VX = ZERO !MULTI_FVM%VEL(1, II)
+                      VY = MULTI_FVM%VEL(2, II)
+                      VZ = MULTI_FVM%VEL(3, II)
+                      IF(IV /=0)THEN
+                        VX = ZERO ! HALF(VX + MULTI_FVM%VEL(1, IV))
+                        VY = HALF*(VY + MULTI_FVM%VEL(2, IV))
+                        VZ = HALF*(VZ + MULTI_FVM%VEL(3, IV))
+                      ENDIF
+                      CUMUL(1)=CUMUL(1)+SURF*(NY*VZ-NZ*VY)
+                      !CUMUL(2)=CUMUL(2)+NZ*VX-NX*VZ
+                      !CUMUL(3)=CUMUL(3)+NX*VY-NY*VX
+                    ENDDO
+                    CUMUL(1)=CUMUL(1)/GBUF%VOL(I)
+                    VALUE(I) = CUMUL(1)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VORTY')THEN
+C--------------------------------------------------
+C               VORTICITY-Y
+                IF(MLW /= 151)THEN
+                  DO I=1,NEL
+                    VALUE(I) = FANI_CELL%VORT_Y(I+NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(MLW == 151)THEN
+                  !ITY = IPARG(5, NG)
+                  NB_FACE = 6
+
+                  DO I=1,NEL
+                    II = I + NFT
+                    IAD2 = ALE_CONNECT%ee_connect%iad_connect(II)
+                    NB_FACE = ALE_CONNECT%ee_connect%iad_connect(II+1)-IAD2
+                    CUMUL(1:3)=ZERO
+                    DO KFACE = 1, NB_FACE
+                      IV = ALE_CONNECT%ee_connect%connected(IAD2 + KFACE - 1)
+                      NX = MULTI_FVM%FACE_DATA%NORMAL(1, KFACE, II)
+                      NY = ZERO !MULTI_FVM%FACE_DATA%NORMAL(2, KFACE, II)
+                      NZ = MULTI_FVM%FACE_DATA%NORMAL(3, KFACE, II)
+                      SURF = MULTI_FVM%FACE_DATA%SURF(KFACE, II)
+                      VX = MULTI_FVM%VEL(1, II)
+                      VY = ZERO !MULTI_FVM%VEL(2, II)
+                      VZ = MULTI_FVM%VEL(3, II)
+                      IF(IV /=0)THEN
+                        VX = HALF*(VX + MULTI_FVM%VEL(1, IV))
+                        VY = ZERO !HALF(VY + MULTI_FVM%VEL(2, IV))
+                        VZ = HALF*(VZ + MULTI_FVM%VEL(3, IV))
+                      ENDIF
+                      !CUMUL(1)=CUMUL(1)+NY*VZ-NZ*VY
+                      CUMUL(2)=CUMUL(2)+SURF*(NZ*VX-NX*VZ)
+                      !CUMUL(3)=CUMUL(3)+NX*VY-NY*VX
+                    ENDDO
+                    CUMUL(2)=CUMUL(2)/GBUF%VOL(I)
+                    VALUE(I) = CUMUL(2)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VORTZ')THEN
+C--------------------------------------------------
+C               VORTICITY-Z
+                IF(MLW /= 151)THEN
+                  DO I=1,NEL
+                    VALUE(I) = FANI_CELL%VORT_Z(I+NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(MLW == 151)THEN
+                  !ITY = IPARG(5, NG)
+                  NB_FACE = 6
+                  DO I=1,NEL
+                    II = I + NFT
+                    IAD2 = ALE_CONNECT%ee_connect%iad_connect(II)
+                    NB_FACE = ALE_CONNECT%ee_connect%iad_connect(II+1)-IAD2
+                    CUMUL(1:3)=ZERO
+                    DO KFACE = 1, NB_FACE
+                      IV = ALE_CONNECT%ee_connect%connected(IAD2 + KFACE - 1)
+                      NX = MULTI_FVM%FACE_DATA%NORMAL(1, KFACE, II)
+                      NY = MULTI_FVM%FACE_DATA%NORMAL(2, KFACE, II)
+                      NZ = ZERO !MULTI_FVM%FACE_DATA%NORMAL(3, KFACE, II)
+                      SURF = MULTI_FVM%FACE_DATA%SURF(KFACE, II)
+                      VX = MULTI_FVM%VEL(1, II)
+                      VY = MULTI_FVM%VEL(2, II)
+                      VZ = ZERO !MULTI_FVM%VEL(3, II)
+                      IF(IV /=0)THEN
+                        VX = HALF*(VX + MULTI_FVM%VEL(1, IV))
+                        VY = HALF*(VY + MULTI_FVM%VEL(2, IV))
+                        VZ = ZERO !HALF(VZ + MULTI_FVM%VEL(3, IV))
+                      ENDIF
+                      !CUMUL(1)=CUMUL(1)+NY*VZ-NZ*VY
+                      !CUMUL(2)=CUMUL(2)+NZ*VX-NX*VZ
+                      CUMUL(3)=CUMUL(3)+SURF*(NX*VY-NY*VX)
+                    ENDDO
+                    CUMUL(3)=CUMUL(3)/GBUF%VOL(I)
+                    VALUE(I) = CUMUL(3)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VORT')THEN
+C--------------------------------------------------
+C               VORTICITE
+                DO I=1,NEL
+                  IF(MLW == 6 .OR. MLW == 17)THEN
+                    VALUE(I) = LBUF%VK(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ELSEIF(MLW == 46 .OR. MLW == 47)THEN
+                    VALUE(I) = MBUF%VAR(NEL+I)      ! UVAR(I,2)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DAM1' .AND.MLW == 24)THEN
+C--------------------------------------------------
+C                dam 1
+                DO I=1,NEL
+                  VALUE(I) = LBUF%DAM(JJ(1) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DAM2' .AND.MLW == 24)THEN
+C--------------------------------------------------
+C                dam 2
+                DO I=1,NEL
+                  VALUE(I) = LBUF%DAM(JJ(2) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DAM3' .AND.MLW == 24)THEN
+C--------------------------------------------------
+C                dam 3
+                DO I=1,NEL
+                  VALUE(I) = LBUF%DAM(JJ(3) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGX')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%SIG(JJ(1) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .                  VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IF(IVISC > 0) THEN
+                    VALUE(I) = VALUE(I) + LBUF%VISC(JJ(1)+I)
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGY')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%SIG(JJ(2) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .                  VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IF(IVISC > 0) THEN
+                    VALUE(I) = VALUE(I) + LBUF%VISC(JJ(2)+I)
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGZ')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%SIG(JJ(3) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .                  VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IF(IVISC > 0) THEN
+                    VALUE(I) = VALUE(I) + LBUF%VISC(JJ(3)+I)
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGXY')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%SIG(JJ(4) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .                  VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IF(IVISC > 0) THEN
+                    VALUE(I) = VALUE(I) + LBUF%VISC(JJ(4)+I)
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGYZ')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%SIG(JJ(5) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .                  VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IF(IVISC > 0) THEN
+                    VALUE(I) = VALUE(I) + LBUF%VISC(JJ(5)+I)
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGZX')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%SIG(JJ(6) + I)
+                  IS_WRITTEN_VALUE(I) = 1
+                  IF( NFILSOL /= 0 .AND. GBUF%G_FILL /= 0 )
+     .                  VALUE(I) = VALUE(I) * GBUF%FILL(I)
+                  IF(IVISC > 0) THEN
+                    VALUE(I) = VALUE(I) + LBUF%VISC(JJ(6)+I)
+                  ENDIF
+                ENDDO
+C--------------------------------------------------
+              ELSEIF((KEYWORD == 'USER' .AND. MLW>=28 .AND. MLW/=51) .OR. KEYWORD == 'MDS') THEN
+C--------------------------------------------------
+c UVAR=IUVAR
+                IMAT = IXS(1,NFT+1)
+                IF( (KEYWORD == 'MDS' .AND. IMAT == IDMDS) .OR. KEYWORD == 'USER' )THEN
+                  IF ( IUVAR > 0) THEN
+                    IF (ISOLNOD == 8 .AND. MLW == 59) THEN
+c                     output = global damage variables of /fail/connect
+                      MT = IXS(1,NFT+1)
+                      IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                      NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL
+                      IF (IRUPT == 20) THEN
+                        NPTG = 4
+                        DO IR=1,NFAIL
+                          DO IPT = 1,NPTG
+                            UVARF =>
+     .                      ELBUF_TAB(NG)%BUFLY(1)%FAIL(IPT,1,1)%FLOC(IR)%VAR
+                            DO I=1,NEL
+                              VALUE(I) = MAX(VALUE(I),UVARF((IUVAR-1)*NEL + I))
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDIF
+                    ELSE
+                      DO IL=1,NLAY
+                        DO IS=1,NPTS
+                          DO IT=1,NPTT
+                            DO IR=1,NPTR
+                              MBUF => ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)
+                              DO I=1,NEL
+                                N = I + NFT
+                                MT=IXS(1,N)
+                                NUVAR = IPM(8,MT)
+                                IF (IUVAR <= NUVAR) THEN
+                                  VALUE(I) = VALUE(I)
+     .                                         + MBUF%VAR(I+(IUVAR-1)*NEL)/NPTG
+                                  IS_WRITTEN_VALUE(I) = 1
+                                ENDIF
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'HOURGLASS')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = EHOUR(NFT+I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'EPSD') THEN
+C--------------------------------------------------
+                VALUE(1:NEL) = GBUF%EPSD(1:NEL)
+                IS_WRITTEN_VALUE(1:NEL) = 1
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'WPLA' .AND. MLW == 25) THEN
+C--------------------------------------------------
+C               wpla by layer for law 25
+                IOK = 0
+                DO I=1,NEL
+                  EVAR(I) = ZERO
+                ENDDO
+                IUS = INFO1
+                IF (ISOLNOD == 16.OR.ISOLNOD == 20.OR.
+     .             (ISOLNOD == 8.AND.JHBE == 14).OR.
+     .             ((ISOLNOD == 6.OR.ISOLNOD == 8).AND.JHBE == 15).OR. 
+     .             ((ISOLNOD == 6).AND.JHBE == 24))THEN
+                  IF (IUS <= NPTG) THEN
+                    DO IL=1,NLAY
+                      IF (ELBUF_TAB(NG)%BUFLY(IL)%L_PLA > 0) THEN
+                        IOK = 1
+                        DO IS=1,NPTS
+                          DO IT=1,NPTT
+                            DO IR=1,NPTR
+                              LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                              DO I=1,NEL
+                                VALUE(I) = VALUE(I) + LBUF%PLA(I)
+                                IS_WRITTEN_VALUE(I) = 1
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'FLAY' .AND. MLW == 25) THEN
+C--------------------------------------------------
+C---            failed layers per element for law 25
+                DO I=1,NEL
+                  EVAR(I) = ZERO
+                ENDDO
+                IF( ISOLNOD == 16.OR.ISOLNOD == 20.OR.
+     .             (ISOLNOD == 8.AND.JHBE == 14).OR.
+     .            ((ISOLNOD == 6 .OR. ISOLNOD == 8).AND.JHBE == 15).OR. 
+     .             ((ISOLNOD == 6).AND.JHBE == 24)) THEN
+c
+                  NPG_PLANE = NPTR * NPTS * NPTT
+                  DO I=1,NEL
+                    DO IL=1,NLAY
+                      VALUE(I)   = ZERO
+                      DO J=1,NPTR
+                        DO K=1,NPTS
+                          DO L=1,NPTT
+                            LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(J,K,L)
+                            IF (LBUF%OFF(I) == 0) VALUE(I) = VALUE(I) + ONE
+                            IF(INT(VALUE(I))>=NPG_PLANE) EVAR(I)=EVAR(I)+ONE
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VFRAC1') THEN
+C--------------------------------------------------
+                IF(MLW==37)THEN
+                  IUS=3 !law37 user4 and user5
+                ELSEIF(MLW==51)THEN
+                  IMAT = IXS(1,NFT+1)
+                  IADBUF = IPM(7,IMAT)
+                  NUPARAM= IPM(9,IMAT)
+                  uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                  ISUBMAT=UPARAM(276+1)
+                  IUS=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                ENDIF
+                IF (MLW==51 .OR. MLW==37)THEN
+                  DO IL=1,NLAY
+                    DO IS=1,NPTS
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          MBUF => ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)
+                          DO I=1,NEL
+                            VALUE(I) = VALUE(I) + MBUF%VAR(I+(IUS)*NEL)/NPTG
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VFRAC2') THEN
+C--------------------------------------------------
+                IF(MLW==37)THEN
+                  IUS=4 !law37 user4 and user5
+                ELSEIF(MLW==51)THEN
+                  IMAT = IXS(1,NFT+1)
+                  IADBUF = IPM(7,IMAT)
+                  NUPARAM= IPM(9,IMAT)
+                  uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                  ISUBMAT=UPARAM(276+2)
+                  IUS=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                ENDIF
+                IF (MLW==51 .OR. MLW==37)THEN
+                  DO IL=1,NLAY
+                    DO IS=1,NPTS
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          MBUF => ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)
+                          DO I=1,NEL
+                            VALUE(I) = VALUE(I) + MBUF%VAR(I+(IUS)*NEL)/NPTG
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VFRAC3') THEN
+C--------------------------------------------------
+                IF(MLW==37)THEN
+                  IUS=5 !law37 user4 and user5
+                ELSEIF(MLW==51)THEN
+                  IMAT = IXS(1,NFT+1)
+                  IADBUF = IPM(7,IMAT)
+                  NUPARAM= IPM(9,IMAT)
+                  uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                  ISUBMAT=UPARAM(276+3)
+                  IUS=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                ENDIF
+                IF (MLW==51)THEN
+                  DO IL=1,NLAY
+                    DO IS=1,NPTS
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          MBUF => ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)
+                          DO I=1,NEL
+                            VALUE(I) = VALUE(I) + MBUF%VAR(I+(IUS)*NEL)/NPTG
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VFRAC4') THEN
+C--------------------------------------------------
+                IF(MLW==37)THEN
+                  IUS=6 !law37 user4 and user5
+                ELSEIF(MLW==51)THEN
+                  IMAT = IXS(1,NFT+1)
+                  IADBUF = IPM(7,IMAT)
+                  NUPARAM= IPM(9,IMAT)
+                  uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                  ISUBMAT=UPARAM(276+4)
+                  IUS=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                ENDIF
+                IF (MLW==51)THEN
+                  DO IL=1,NLAY
+                    DO IS=1,NPTS
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          MBUF => ELBUF_TAB(NG)%BUFLY(IL)%MAT(IR,IS,IT)
+                          DO I=1,NEL
+                            VALUE(I) = VALUE(I) + MBUF%VAR(I+(IUS)*NEL)/NPTG
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD(1:9) == 'M151VFRAC') THEN
+C--------------------------------------------------
+                IF (MLW == 151 .AND. MULTI_FVM%NBMAT > 1) THEN
+                  READ(KEYWORD, '(A9,I10)') BUFF, IMAT
+                  IF (IMAT > 0 .AND. IMAT <= NLAY) THEN
+                    DO I=1,NEL
+                      VALUE(I) = MULTI_FVM%PHASE_ALPHA(IMAT, I + NFT)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD(1:8) == 'M151ENER') THEN
+C--------------------------------------------------
+                IF (MLW == 151 .AND. MULTI_FVM%NBMAT > 1) THEN
+                  READ(KEYWORD, '(A8,I10)') BUFF, IMAT
+                  IF (IMAT > 0 .AND. IMAT <= NLAY) THEN
+                    DO I=1,NEL
+                      IF (MULTI_FVM%PHASE_RHO(IMAT, I + NFT) > 0) THEN
+                        VALUE(I) = MULTI_FVM%PHASE_EINT(IMAT, I + NFT) /
+     .                       MULTI_FVM%PHASE_RHO(IMAT, I + NFT)
+                      ELSE
+                        VALUE(I) = ZERO
+                      ENDIF
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD(1:8) == 'M151PRES') THEN
+C--------------------------------------------------
+                IF (MLW == 151 .AND. MULTI_FVM%NBMAT > 1) THEN
+                  READ(KEYWORD, '(A8,I10)') BUFF, IMAT
+                  IF (IMAT > 0 .AND. IMAT <= NLAY) THEN
+                    DO I=1,NEL
+                      VALUE(I) = MULTI_FVM%PHASE_PRES(IMAT, I + NFT)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD(1:8) == 'M151DENS') THEN
+C--------------------------------------------------
+                IF (MLW == 151 .AND. MULTI_FVM%NBMAT > 1) THEN
+                  READ(KEYWORD, '(A8,I10)') BUFF, IMAT
+                  IF (IMAT > 0 .AND. IMAT <= NLAY) THEN
+                    DO I=1,NEL
+                      VALUE(I) = MULTI_FVM%PHASE_RHO(IMAT, I + NFT)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'ORTHD/PSI')THEN
+C--------------------------------------------------
+C           EULER ANGLE : rotation of ORTHOTROPIC SYSTEM wrt GLOBAL SYSTEM
+c ILAYER=NULL NPT=NULL
+                IF(ILAY == -1) ILAY = 1
+                IF ( (ILAY <= NLAY .AND. ILAY > 0) .AND.
+     .              IR <= NPTR .AND. IR > 0 .AND.  IS <= NPTS .AND. IS > 0 .AND. IT <= NPTT .AND. IT > 0) THEN
+                  IF ( IGTYP == 6 .OR. IGTYP == 21 .OR. IGTYP == 22 ) THEN
+                    LBUF => ELBUF_TAB(NG)%BUFLY(MAX(1,ILAY))%LBUF(1,1,1)
+                    DO I=1,NEL
+                      N = I + NFT
+                      IF(ISORTH ==1) THEN
+C                      for jhbe=14, average values are in the corota frame.
+                        IF(IGTYP == 21 .OR. IGTYP == 22) THEN
+                          GAMA(1)= LBUF%GAMA(JJ(1)+I)
+                          GAMA(2)= LBUF%GAMA(JJ(2)+I)
+                          GAMA(3)= ZERO
+                          GAMA(4)= ZERO
+                          GAMA(5)= ZERO
+                          GAMA(6)= ZERO
+                        ELSE
+                          GAMA(1) = GBUF%GAMA(JJ(1)+I)
+                          GAMA(2) = GBUF%GAMA(JJ(2)+I)
+                          GAMA(3) = GBUF%GAMA(JJ(3)+I)
+                          GAMA(4) = GBUF%GAMA(JJ(4)+I)
+                          GAMA(5) = GBUF%GAMA(JJ(5)+I)
+                          GAMA(6) = GBUF%GAMA(JJ(6)+I)
+                        ENDIF
+                        CALL SROTORTH(X,IXS(1,N),
+     .                                   GAMA,JHBE,IGTYP,IPARG(17,NG) )
+C--------
+                        T11=GAMA(1)
+                        T21=GAMA(2)
+                        T31=GAMA(3)
+                        T12=GAMA(4)
+                        T22=GAMA(5)
+                        T32=GAMA(6)
+                        T13=T21*T32-T31*T22
+                        T23=T31*T12-T11*T32
+                        T33=T11*T22-T21*T12
+                        IF (ABS(T31) - ONE  < EM20)THEN
+                          THETA = -ASIN(T31)
+                          PSI  = ATAN2(T32/COS(THETA),T33/COS(THETA))
+                        ELSE
+                          IF(T31 == -ONE)THEN
+                            PSI = ATAN2(T12,T13)
+                          ELSE
+                            PSI = ATAN2(-T12,-T13)
+                          ENDIF
+                        ENDIF
+                        VALUE(I) = PSI*HUNDRED80/PI
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'ORTHD/THETA')THEN
+C--------------------------------------------------
+C           EULER ANGLE : rotation of ORTHOTROPIC SYSTEM wrt GLOBAL SYSTEM
+c ILAYER=NULL NPT=NULL
+                IF(ILAY == -1) ILAY = 1
+                IF ( (ILAY <= NLAY .AND. ILAY > 0) .AND.
+     .              IR <= NPTR .AND. IR > 0 .AND.  IS <= NPTS .AND. IS > 0 .AND. IT <= NPTT .AND. IT > 0) THEN
+                  IF ( IGTYP == 6 .OR. IGTYP == 21 .OR. IGTYP == 22 ) THEN
+                    LBUF => ELBUF_TAB(NG)%BUFLY(MAX(1,ILAY))%LBUF(1,1,1)
+                    DO I=1,NEL
+                      N = I + NFT
+                      IF(ISORTH ==1) THEN
+C                      for jhbe=14, average values are in the corota frame.
+                        IF(IGTYP == 21 .OR. IGTYP == 22) THEN
+                          GAMA(1)= LBUF%GAMA(JJ(1)+I)
+                          GAMA(2)= LBUF%GAMA(JJ(2)+I)
+                          GAMA(3)= ZERO
+                          GAMA(4)= ZERO
+                          GAMA(5)= ZERO
+                          GAMA(6)= ZERO
+                        ELSE
+                          GAMA(1) = GBUF%GAMA(JJ(1)+I)
+                          GAMA(2) = GBUF%GAMA(JJ(2)+I)
+                          GAMA(3) = GBUF%GAMA(JJ(3)+I)
+                          GAMA(4) = GBUF%GAMA(JJ(4)+I)
+                          GAMA(5) = GBUF%GAMA(JJ(5)+I)
+                          GAMA(6) = GBUF%GAMA(JJ(6)+I)
+                        ENDIF
+                        CALL SROTORTH(X,IXS(1,N),
+     .                                   GAMA,JHBE,IGTYP,IPARG(17,NG) )
+C--------
+                        T11=GAMA(1)
+                        T21=GAMA(2)
+                        T31=GAMA(3)
+                        T12=GAMA(4)
+                        T22=GAMA(5)
+                        T32=GAMA(6)
+                        T13=T21*T32-T31*T22
+                        T23=T31*T12-T11*T32
+                        T33=T11*T22-T21*T12
+                        IF (ABS(T31) - ONE  < EM20)THEN
+                          THETA = -ASIN(T31)
+                        ELSE
+                          IF(T31 == -ONE)THEN
+                            THETA = PI / TWO
+                          ELSE
+                            THETA = - PI / TWO
+                          ENDIF
+                        ENDIF
+                        VALUE(I) = THETA*HUNDRED80/PI
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'ORTHD/PHI')THEN
+C--------------------------------------------------
+C           EULER ANGLE : rotation of ORTHOTROPIC SYSTEM wrt GLOBAL SYSTEM
+c ILAYER=NULL NPT=NULL
+                IF(ILAY == -1) ILAY = 1
+                IF ( (ILAY <= NLAY .AND. ILAY > 0) .AND.
+     .              IR <= NPTR .AND. IR > 0 .AND.  IS <= NPTS .AND. IS > 0 .AND. IT <= NPTT .AND. IT > 0) THEN
+                  IF ( IGTYP == 6 .OR. IGTYP == 21 .OR. IGTYP == 22 ) THEN
+                    LBUF => ELBUF_TAB(NG)%BUFLY(MAX(1,ILAY))%LBUF(1,1,1)
+                    DO I=1,NEL
+                      N = I + NFT
+                      IF(ISORTH ==1) THEN
+C                      for jhbe=14, average values are in the corota frame.
+                        IF(IGTYP == 21 .OR. IGTYP == 22) THEN
+                          GAMA(1)= LBUF%GAMA(JJ(1)+I)
+                          GAMA(2)= LBUF%GAMA(JJ(2)+I)
+                          GAMA(3)= ZERO
+                          GAMA(4)= ZERO
+                          GAMA(5)= ZERO
+                          GAMA(6)= ZERO
+                        ELSE
+                          GAMA(1) = GBUF%GAMA(JJ(1)+I)
+                          GAMA(2) = GBUF%GAMA(JJ(2)+I)
+                          GAMA(3) = GBUF%GAMA(JJ(3)+I)
+                          GAMA(4) = GBUF%GAMA(JJ(4)+I)
+                          GAMA(5) = GBUF%GAMA(JJ(5)+I)
+                          GAMA(6) = GBUF%GAMA(JJ(6)+I)
+                        ENDIF
+                        CALL SROTORTH(X,IXS(1,N),
+     .                                   GAMA,JHBE,IGTYP,IPARG(17,NG) )
+C--------
+                        T11=GAMA(1)
+                        T21=GAMA(2)
+                        T31=GAMA(3)
+                        T12=GAMA(4)
+                        T22=GAMA(5)
+                        T32=GAMA(6)
+                        T13=T21*T32-T31*T22
+                        T23=T31*T12-T11*T32
+                        T33=T11*T22-T21*T12
+                        IF (ABS(T31) - ONE  < EM20)THEN
+                          THETA = -ASIN(T31)
+                          PHI  = ATAN2(T21/COS(THETA),T11/COS(THETA))
+                        ELSE
+                          PHI = ZERO
+                        ENDIF
+                        VALUE(I) = PHI*HUNDRED80/PI
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'BFRAC')THEN
+C--------------------------------------------------
+                !BURN FRACTION explosive EOS
+                IF(GBUF%G_BFRAC > 0) THEN
+                  IF (MLW==151)THEN
+                    DO I=1,NEL
+                      VALUE(I)=-EP30
+                    ENDDO
+                    DO ILAY=1,NLAY
+                      DO I=1,NEL
+                        VALUE(I) =  MAX(VALUE(I),MULTI_FVM%BFRAC(ILAY,I+NFT))
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDDO
+                  ELSE
+                    VALUE(1:NEL) = GBUF%BFRAC(1:NEL)
+                    IS_WRITTEN_VALUE(1:NEL) = 1
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VDAM1')THEN
+C--------------------------------------------------
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                  IF (ISOLNOD == 8 .AND. MLW == 83) THEN
+c                   output = damage variables of /fail/snconnect
+                    MT = IXS(1,NFT+1)
+                    IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL! ng= ngroup
+                    IF (IRUPT == 26) THEN
+                      NPTG = 4
+                      DO IR=1,NFAIL
+                        DO IPT = 1,NPTG
+                          DAMF =>
+     .                             ELBUF_TAB(NG)%BUFLY(1)%FAIL(IPT,1,1)%FLOC(IR)%DAM
+                          DO I=1,NEL
+                            EVAR(I) = MAX(EVAR(I) ,DAMF(I))
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                      DO I=1,NEL
+                        VALUE(I) = EVAR(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+c ILAYER=NULL IR= IS= IT=
+                ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                   IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                  IF (ISOLNOD == 8 .AND. MLW == 83) THEN
+c                   output = damage variables of /fail/snconnect
+                    MT = IXS(1,NFT+1)
+                    IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL! ng= ngroup
+                    IF (IRUPT == 26) THEN
+                      DO IIR=1,NFAIL
+                        DAMF =>
+     .                  ELBUF_TAB(NG)%BUFLY(1)%FAIL(IR,1,1)%FLOC(IIR)%DAM
+                        DO I=1,NEL
+                          EVAR(I) = DAMF(I)
+                        ENDDO
+                      ENDDO
+                      DO I=1,NEL
+                        VALUE(I) = EVAR(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VDAM2')THEN
+C--------------------------------------------------
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                  IF (ISOLNOD == 8 .AND. MLW == 83) THEN
+c                   output = damage variables of /fail/snconnect
+                    MT = IXS(1,NFT+1)
+                    IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL! ng= ngroup
+                    IF (IRUPT == 26) THEN
+                      NPTG = 4
+                      DO IR=1,NFAIL
+                        DO IPT = 1,NPTG
+                          DAMF =>
+     .                             ELBUF_TAB(NG)%BUFLY(1)%FAIL(IPT,1,1)%FLOC(IR)%DAM
+                          DO I=1,NEL
+                            EVAR(I) = MAX(EVAR(I) ,DAMF(NEL + I))
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                      DO I=1,NEL
+                        VALUE(I) = EVAR(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+c ILAYER=NULL IR= IS= IT=
+                ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                   IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                  IF (ISOLNOD == 8 .AND. MLW == 83) THEN
+c                   output = damage variables of /fail/snconnect
+                    MT = IXS(1,NFT+1)
+                    IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL! ng= ngroup
+                    IF (IRUPT == 26) THEN
+                      DO IIR=1,NFAIL
+                        DAMF =>
+     .                  ELBUF_TAB(NG)%BUFLY(1)%FAIL(IR,1,1)%FLOC(IIR)%DAM
+                        DO I=1,NEL
+                          EVAR(I) = DAMF(NEL+I)
+                        ENDDO
+                      ENDDO
+                      DO I=1,NEL
+                        VALUE(I) = EVAR(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VDAM3')THEN
+C--------------------------------------------------
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                  IF (ISOLNOD == 8 .AND. MLW == 83) THEN
+c                   output = damage variables of /fail/snconnect
+                    MT = IXS(1,NFT+1)
+                    IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL! ng= ngroup
+                    IF (IRUPT == 26) THEN
+                      NPTG = 4
+                      DO IR=1,NFAIL
+                        DO IPT = 1,NPTG
+                          DAMF =>
+     .                             ELBUF_TAB(NG)%BUFLY(1)%FAIL(IPT,1,1)%FLOC(IR)%DAM
+                          DO I=1,NEL
+                            EVAR(I) = MAX(EVAR(I) ,DAMF(2*NEL + I))
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                      DO I=1,NEL
+                        VALUE(I) = EVAR(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+c ILAYER=NULL IR= IS= IT=
+                ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                   IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                  IF (ISOLNOD == 8 .AND. MLW == 83) THEN
+c                   output = damage variables of /fail/snconnect
+                    MT = IXS(1,NFT+1)
+                    IRUPT = mat_param(MT)%FAIL(1)%IRUPT
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(1)%NFAIL! ng= ngroup
+                    IF (IRUPT == 26) THEN
+                      DO IIR=1,NFAIL
+                        DAMF =>
+     .                  ELBUF_TAB(NG)%BUFLY(1)%FAIL(IR,1,1)%FLOC(IIR)%DAM
+                        DO I=1,NEL
+                          EVAR(I) = DAMF(2*NEL+I)
+                        ENDDO
+                      ENDDO
+                      DO I=1,NEL
+                        VALUE(I) = EVAR(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DAMA') THEN
+C--------------------------------------------------
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                  DO I=1,NEL
+                    EVAR(I) = ZERO
+                  ENDDO
+                  IF (MLW == 120) THEN
+                    DO IL=1,NLAY
+                      DO IS=1,NPTS
+                        DO IT=1,NPTT
+                          DO IIR=1,NPTR
+                            DFMAX=>
+     .                        ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IIR,IS,IT)%DMG
+                            DO I=1,NEL
+                              VALUE(I) = MAX(VALUE(I),DFMAX(I))
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ELSE
+                    DO IL=1,NLAY
+                      NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+                      DO IS=1,NPTS
+                        DO IT=1,NPTT
+                          DO IIR=1,NPTR
+                            DO IR=1,NFAIL
+                              DFMAX=>
+     .                          ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)%FLOC(IR)%DAMMX
+                              DO I=1,NEL
+                                VALUE(I) = MAX(VALUE(I),DFMAX(I))
+                                IS_WRITTEN_VALUE(I) = 1
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDIF
+c ILAYER=NULL IR= IS= IT=
+                ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                     IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                  IF (MLW == 120) THEN
+                    IIR = IR
+                    IUS = NLAY*IIR*IS*IT
+                    DAMMAX = ZERO
+                    IF (IIR <= NPTR.AND.IS <= NPTS.AND.IT <= NPTT) THEN
+                      DO IL=1,NLAY
+                        DFMAX=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IIR,IS,IT)%DMG
+                        DO I=1,NEL
+                          VALUE(I) = MAX(VALUE(I),DFMAX(I))
+                          IS_WRITTEN_VALUE(I) = 1
+                        ENDDO
+                      ENDDO
+                    ENDIF
+                  ELSE
+                    IIR = IR
+                    IUS = NLAY*IIR*IS*IT
+                    DAMMAX = ZERO
+                    IF (IIR <= NPTR.AND.IS <= NPTS.AND.IT <= NPTT) THEN
+                      DO IL=1,NLAY
+                        NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+                        DO IR=1,NFAIL
+                          DFMAX=>
+     .                      ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)%FLOC(IR)%DAMMX
+                          DO I=1,NEL
+                            VALUE(I) = MAX(VALUE(I),DFMAX(I))
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ELSEIF ( ILAY > 0 .AND. ILAY <= NLAY .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                     IS >= 0 .AND.  IS <= NPTS) THEN
+                  IF(MLW == 120)THEN
+                    DFMAX=>ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(IR,IS,IT)%DMG
+                    DO I=1,NEL
+                      VALUE(I) = MAX(VALUE(I),DFMAX(I))
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(ILAY)%NFAIL
+                    DO IIR=1,NFAIL
+                      DFMAX=>
+     .                  ELBUF_TAB(NG)%BUFLY(ILAY)%FAIL(IR,IS,IT)%FLOC(IIR)%DAMMX
+                      DO I=1,NEL
+                        VALUE(I) = MAX(VALUE(I),DFMAX(I))
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'FAILURE') THEN
+C--------------------------------------------------
+                IF (MODE == -1) THEN 
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                  IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                    DO I = 1,NEL
+                      NLAY_FAIL = 0
+                      DO IL=1,NLAY
+                        IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                        NFAIL = mat_param(IMAT)%NFAIL
+                        DO IFAIL = 1,NFAIL
+                          FAIL_ID = mat_param(IMAT)%FAIL(IFAIL)%FAIL_ID
+                          IF (FAIL_ID == ID) THEN
+                            DO IS=1,NPTS
+                              DO IT=1,NPTT
+                                DO IIR=1,NPTR
+                                  FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)
+                                  DMGMX = FBUF%FLOC(IFAIL)%DAMMX(I)
+                                  VALUE(I) = VALUE(I) + DMGMX/(NPTR*NPTS*NPTT)
+                                  IS_WRITTEN_VALUE(I) = 1
+                                  NLAY_FAIL = NLAY_FAIL + 1
+                                ENDDO
+                              ENDDO
+                            ENDDO
+                          ENDIF
+                        ENDDO
+                      ENDDO
+                      IF (NLAY_FAIL > 0) VALUE(I) = VALUE(I)/NLAY_FAIL
+                    ENDDO
+c ILAYER=NULL IR= IS= IT=
+                  ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                     IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                    IIR = IR
+                    IF (IIR <= NPTR.AND.IS <= NPTS.AND.IT <= NPTT) THEN
+                      DO I = 1,NEL
+                        NLAY_FAIL = 0
+                        DO IL=1,NLAY
+                          IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                          NFAIL = mat_param(IMAT)%NFAIL
+                          DO IFAIL = 1,NFAIL
+                            FAIL_ID = mat_param(IMAT)%FAIL(IFAIL)%FAIL_ID
+                            IF (FAIL_ID == ID) THEN
+                              FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)
+                              VALUE(I) = VALUE(I) + FBUF%FLOC(IFAIL)%DAMMX(I)
+                              IS_WRITTEN_VALUE(I) = 1
+                              NLAY_FAIL = NLAY_FAIL + 1
+                            ENDIF
+                          ENDDO
+                        ENDDO
+                        IF (NLAY_FAIL > 0) VALUE(I) = VALUE(I)/NLAY_FAIL
+                      ENDDO
+                    ENDIF
+                  ELSEIF ( ILAY > 0 .AND. ILAY <= NLAY .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                     IS >= 0 .AND.  IS <= NPTS) THEN
+                    IMAT = ELBUF_TAB(NG)%BUFLY(ILAY)%IMAT
+                    NFAIL = mat_param(IMAT)%NFAIL
+                    DO IFAIL = 1,NFAIL
+                      FAIL_ID = mat_param(IMAT)%FAIL(IFAIL)%FAIL_ID
+                      IF (FAIL_ID == ID) THEN
+                        FBUF => ELBUF_TAB(NG)%BUFLY(ILAY)%FAIL(IR,IS,IT)
+                        DO I = 1,NEL
+                          VALUE(I) = FBUF%FLOC(IFAIL)%DAMMX(I)
+                          IS_WRITTEN_VALUE(I) = 1
+                        ENDDO
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ELSE
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                  IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                    DO I = 1,NEL
+                      NLAY_FAIL = 0
+                      DO IL=1,NLAY
+                        IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                        NFAIL = mat_param(IMAT)%NFAIL
+                        DO IFAIL = 1,NFAIL
+                          FAIL_ID = mat_param(IMAT)%FAIL(IFAIL)%FAIL_ID
+                          NMOD    = mat_param(IMAT)%FAIL(IFAIL)%NMOD
+                          IF ((FAIL_ID == ID).AND.(MODE <= NMOD)) THEN
+                            DO IS=1,NPTS
+                              DO IT=1,NPTT
+                                DO IIR=1,NPTR
+                                  FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)
+                                  DMGMX = FBUF%FLOC(IFAIL)%DAMMX(MODE*NEL + I)
+                                  VALUE(I) = VALUE(I) + DMGMX/(NPTR*NPTS*NPTT)
+                                  IS_WRITTEN_VALUE(I) = 1
+                                  NLAY_FAIL = NLAY_FAIL + 1         
+                                ENDDO
+                              ENDDO
+                            ENDDO 
+                          ENDIF
+                        ENDDO
+                      ENDDO
+                      IF (NLAY_FAIL > 0) VALUE(I) = VALUE(I)/NLAY_FAIL
+                    ENDDO
+c ILAYER=NULL IR= IS= IT=
+                  ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                     IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                    IIR = IR
+                    IF (IIR <= NPTR.AND.IS <= NPTS.AND.IT <= NPTT) THEN
+                      DO I = 1,NEL
+                        NLAY_FAIL = 0
+                        DO IL=1,NLAY
+                          IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                          NFAIL = mat_param(IMAT)%NFAIL
+                          DO IFAIL = 1,NFAIL
+                            FAIL_ID = mat_param(IMAT)%FAIL(IFAIL)%FAIL_ID
+                            NMOD    = mat_param(IMAT)%FAIL(IFAIL)%NMOD
+                            IF ((FAIL_ID == ID).AND.(MODE <= NMOD)) THEN
+                              FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)
+                              VALUE(I) = VALUE(I) + FBUF%FLOC(IFAIL)%DAMMX(MODE*NEL + I)
+                              IS_WRITTEN_VALUE(I) = 1
+                              NLAY_FAIL = NLAY_FAIL + 1
+                            ENDIF
+                          ENDDO
+                        ENDDO
+                        IF (NLAY_FAIL > 0) VALUE(I) = VALUE(I)/NLAY_FAIL
+                      ENDDO
+                    ENDIF
+                  ELSEIF ( ILAY > 0 .AND. ILAY <= NLAY .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                     IS >= 0 .AND.  IS <= NPTS) THEN
+                    IMAT  = ELBUF_TAB(NG)%BUFLY(ILAY)%IMAT
+                    NFAIL = mat_param(IMAT)%NFAIL
+                    DO IFAIL = 1,NFAIL
+                      FAIL_ID = mat_param(IMAT)%FAIL(IFAIL)%FAIL_ID
+                      NMOD    = mat_param(IMAT)%FAIL(IFAIL)%NMOD
+                      IF ((FAIL_ID == ID).AND.(MODE <= NMOD)) THEN
+                        FBUF => ELBUF_TAB(NG)%BUFLY(ILAY)%FAIL(IR,IS,IT)
+                        DO I = 1,NEL
+                          VALUE(I) = FBUF%FLOC(IFAIL)%DAMMX(MODE*NEL + I)
+                          IS_WRITTEN_VALUE(I) = 1
+                        ENDDO 
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'DAMG') THEN
+C--------------------------------------------------
+c
+                IF (GBUF%G_DMG > 0) THEN
+c
+                  ! Resetting values
+                  DO I=1,NEL
+                    VALUE(I) = ZERO
+                  ENDDO
+c
+                  ! If no MODE is requested 
+                  IF (MODE == -1) THEN 
+                    ! If nothing is specified by the user, computing a mean value
+                    IF (IR == -1 .AND. IS == -1 .AND. IT == -1 .AND. ILAY == -1) THEN
+c
+                      ! Filling the value table
+                      DO IL=1,NLAY
+                        IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                        MAT_ID = mat_param(IMAT)%MAT_ID
+                        IF ((ID == -1) .OR. ((ID > 0).AND.(MAT_ID == ID))) THEN 
+                          DO IS=1,NPTS
+                            DO IT=1,NPTT
+                              DO IR=1,NPTR
+                                LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                                DO I=LFT,LLT
+                                  VALUE(I) = VALUE(I) + LBUF%DMG(I)/NPTG
+                                  IS_WRITTEN_VALUE(I) = 1
+                                ENDDO
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDIF
+                      ENDDO
+c
+                    ! If integratiion point is specified by the user
+                    ELSEIF ( IR >= 0 .AND. IR <= NPTR .AND.
+     .                       IS >= 0 .AND. IS <= NPTS .AND.
+     .                       IT >= 0 .AND. IT <= NPTT) THEN
+c
+                      ! Filling the value table
+                      DO IL=1,NLAY
+                        IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                        MAT_ID = mat_param(IMAT)%MAT_ID
+                        IF ((ID == -1) .OR. ((ID > 0).AND.(MAT_ID == ID))) THEN 
+                          LBUF => ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                          DO I=1,NEL
+                            VALUE(I) = VALUE(I) + LBUF%DMG(I)/NLAY
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDIF
+                      ENDDO
+c
+                    ! If the layer is specified by the user
+                    ELSEIF (ILAY > 0 .AND. ILAY <= NLAY) THEN
+                      IMAT = ELBUF_TAB(NG)%BUFLY(ILAY)%IMAT
+                      MAT_ID = mat_param(IMAT)%MAT_ID
+                      IF ((ID == -1) .OR. ((ID > 0).AND.(MAT_ID == ID))) THEN 
+                        DO IS=1,NPTS
+                          DO IT=1,NPTT
+                            DO IR=1,NPTR
+                              LBUF=>ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(IR,IS,IT)
+                              DO I=LFT,LLT
+                                VALUE(I) = VALUE(I) + LBUF%DMG(I)/(NPTR*NPTS*NPTT)
+                                IS_WRITTEN_VALUE(I) = 1
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDIF
+                    ENDIF
+c
+                  ! If MODE is requested (MODE > 0) with a specific ID (ID > 0)
+                  ELSE    
+                    ! If nothing is specified by the user, computing a mean value
+                    IF (IR == -1 .AND. IS == -1 .AND. IT == -1 .AND. ILAY == -1) THEN
+c
+                      ! Filling the value table
+                      DO IL=1,NLAY
+                        IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                        NMOD = mat_param(IMAT)%NMOD
+                        MAT_ID = mat_param(IMAT)%MAT_ID
+                        IF ((NMOD > 0 .AND. MODE <= NMOD) .AND. (MAT_ID == ID)) THEN 
+                          DO IS=1,NPTS
+                            DO IT=1,NPTT
+                              DO IR=1,NPTR
+                                LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                                DO I=LFT,LLT
+                                  VALUE(I) = VALUE(I) + LBUF%DMG(NEL*MODE+I)/NPTG
+                                  IS_WRITTEN_VALUE(I) = 1
+                                ENDDO
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDIF
+                      ENDDO
+c
+                    ! If integratiion point is specified by the user
+                    ELSEIF ( IR >= 0 .AND. IR <= NPTR .AND.
+     .                       IS >= 0 .AND. IS <= NPTS .AND.
+     .                       IT >= 0 .AND. IT <= NPTT) THEN
+c
+                      ! Filling the value table
+                      DO IL=1,NLAY
+                        IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+                        NMOD = mat_param(IMAT)%NMOD
+                        MAT_ID = mat_param(IMAT)%MAT_ID
+                        IF ((NMOD > 0 .AND. MODE <= NMOD) .AND. (MAT_ID == ID)) THEN 
+                          LBUF => ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                          DO I=1,NEL
+                            VALUE(I) = VALUE(I) + LBUF%DMG(NEL*MODE+I)/NLAY
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDIF
+                      ENDDO
+c
+                    ! If the layer is specified by the user
+                    ELSEIF (ILAY > 0 .AND. ILAY <= NLAY) THEN
+                      IMAT = ELBUF_TAB(NG)%BUFLY(ILAY)%IMAT
+                      NMOD = mat_param(IMAT)%NMOD
+                      MAT_ID = mat_param(IMAT)%MAT_ID
+                      IF ((NMOD > 0 .AND. MODE <= NMOD) .AND. (MAT_ID == ID)) THEN 
+                        DO IS=1,NPTS
+                          DO IT=1,NPTT
+                            DO IR=1,NPTR
+                              LBUF=>ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(IR,IS,IT)
+                              DO I=LFT,LLT
+                                VALUE(I) = VALUE(I) + LBUF%DMG(NEL*MODE+I)/(NPTR*NPTS*NPTT)
+                                IS_WRITTEN_VALUE(I) = 1
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDIF
+                    ENDIF                    
+                  ENDIF
+c
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'DAMINI') THEN
+C--------------------------------------------------
+                ! Resetting values
+                DO I=1,NEL
+                  VALUE(I) = ZERO
+                ENDDO
+c ILAYER=NULL IR=NULL IS=NULL IT=NULL
+                IF ( ILAY == -1 .AND. IR == -1 .AND. IS == -1 .AND. IT == -1) THEN
+                  DO IL=1,NLAY
+                    NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+                    DO IS=1,NPTS
+                      DO IT=1,NPTT
+                        DO IIR=1,NPTR
+                          FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)
+                          DO I=1,NEL
+                            MAXDAMINI = ZERO
+                            DO IR=1,NFAIL
+                              IF (FBUF%FLOC(IR)%LF_DAMINI > 0) THEN
+                                MAXDAMINI = MAX(MAXDAMINI,FBUF%FLOC(IR)%DAMINI(I))
+                              ENDIF
+                            ENDDO
+                            VALUE(I) = VALUE(I) + MAXDAMINI/(NPTS*NPTR*NPTT*NLAY)
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+c ILAYER=NULL IR= IS= IT=
+                ELSEIF ( ILAY == -1 .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                   IS >= 0 .AND.  IS <= NPTS .AND. IT >= 0 .AND. IT <= NPTT) THEN
+                  IIR = IR
+                  IF (IIR <= NPTR .AND. IS <= NPTS .AND. IT <= NPTT) THEN
+                    DO IL=1,NLAY
+                      NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+                      FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)
+                      DO I=1,NEL
+                        MAXDAMINI = ZERO
+                        DO IR=1,NFAIL
+                          IF (FBUF%FLOC(IR)%LF_DAMINI > 0) THEN
+                            MAXDAMINI = MAX(MAXDAMINI,FBUF%FLOC(IR)%DAMINI(I))
+                          ENDIF
+                        ENDDO
+                        VALUE(I) = VALUE(I) + MAXDAMINI/NLAY
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDDO
+                  ENDIF
+c ILAYER= IR= IS= IT=
+                ELSEIF ( ILAY > 0 .AND. ILAY <= NLAY .AND. IR >= 0 .AND. IR <= NPTR .AND.
+     .                   IS >= 0 .AND.  IS <= NPTS) THEN
+                  NFAIL = ELBUF_TAB(NG)%BUFLY(ILAY)%NFAIL
+                  FBUF => ELBUF_TAB(NG)%BUFLY(ILAY)%FAIL(IR,IS,IT)
+                  DO I=1,NEL
+                    MAXDAMINI = ZERO
+                    DO IIR=1,NFAIL
+                      IF (FBUF%FLOC(IIR)%LF_DAMINI > 0) THEN
+                        MAXDAMINI = MAX(MAXDAMINI,FBUF%FLOC(IIR)%DAMINI(I))
+                      ENDIF
+                    ENDDO
+                    VALUE(I) = MAXDAMINI
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'TDEL') THEN
+C--------------------------------------------------
+                DO IL=1,NLAY
+                  NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL
+                  DO IS=1,NPTS
+                    DO IT=1,NPTT
+                      DO IIR=1,NPTR
+                        DO IR=1,NFAIL
+                          TDELE=>
+     .                      ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IIR,IS,IT)%FLOC(IR)%TDEL
+                          DO I=1,NEL
+                            VALUE(I) = MAX(VALUE(I),TDELE(I))
+                            IS_WRITTEN_VALUE(I) = 1
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SSP') THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I=1,NEL
+                    VALUE(I) = MULTI_FVM%SOUND_SPEED(I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSE
+                  L = ELBUF_TAB(NG)%BUFLY(1)%L_SSP
+                  IF(L /= 0)THEN
+                    DO I=1,NEL
+                      VALUE(I) = LBUF%SSP(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VOLU') THEN
+C--------------------------------------------------
+                IF (GBUF%G_VOL > 0) THEN
+                  IALEL=IPARG(7,NG)+IPARG(11,NG)
+                  IF(IALEL==0)THEN
+                    MT = IXS(1,NFT+1)
+                    DO I=1,NEL
+                      VALUE(I) = PM(1,MT)*GBUF%VOL(I)
+                      IF(GBUF%RHO(I)>ZERO)VALUE(I) = VALUE(I)/GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%VOL(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SCHLIEREN') THEN
+C--------------------------------------------------
+                IALEL=IPARG(7,NG)+IPARG(11,NG)
+                IF(IALEL /= 0)THEN
+                  CALL OUTPUT_SCHLIEREN(
+     1                           EVAR  ,IXS  ,X         ,
+     2                           IPARG ,WA_L ,ELBUF_TAB ,ALE_CONNECT ,GBUF%VOL,
+     3                           NG    ,NIXS ,ITY)
+                  DO I=1,NEL
+                    VALUE(I) = EVAR(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DOMAIN') THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = ISPMD
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'FILL') THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%FILL(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'SIGEQ') THEN  !  /ANIM/ELEM/SIGEQ
+C--------------------------------------------------
+                !  equivalent stress - other then VON MISES
+                IF (GBUF%G_SEQ > 0) THEN  !  non VON MISES
+
+                  NPTG = NLAY*NPTR*NPTS*NPTT
+                  DO IL=1,NLAY
+                    DO IT=1,NPTT
+                      DO IR=1,NPTR
+                        DO IS=1,NPTS
+                          LBUF =>  ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                          IF (ELBUF_TAB(NG)%BUFLY(IL)%L_SEQ > 0) THEN
+                            DO I=1,NEL
+                              VALUE(I) = VALUE(I) + LBUF%SEQ(I)/NPTG
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ELSE
+                            DO I=1,NEL
+                              S11 = LBUF%SIG(JJ(1) + I)
+                              S22 = LBUF%SIG(JJ(2) + I)
+                              S33 = LBUF%SIG(JJ(3) + I)
+                              S4  = LBUF%SIG(JJ(4) + I)
+                              S5  = LBUF%SIG(JJ(5) + I)
+                              S6  = LBUF%SIG(JJ(6) + I)
+                              IF (IVISC > 0) THEN
+                                S11 = S11 + LBUF%VISC(JJ(1) + I)
+                                S22 = S22 + LBUF%VISC(JJ(2) + I)
+                                S33 = S33 + LBUF%VISC(JJ(3) + I)
+                                S4  = S4  + LBUF%VISC(JJ(4) + I)
+                                S5  = S5  + LBUF%VISC(JJ(5) + I)
+                                S6  = S6  + LBUF%VISC(JJ(6) + I)
+                              ENDIF
+                              P = - (S11 + S22 + S33) * THIRD
+                              S1 = S11 + P
+                              S2 = S22 + P
+                              S3 = S33 + P
+                              VONM2 =  THREE*(S4*S4 + S5*S5 + S6*S6 +
+     .                                HALF*(S1*S1 + S2*S2 + S3*S3))
+                              VONM = SQRT(VONM2)
+                              VALUE(I) = VALUE(I) + VONM/NPTG
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ENDIF ! IF (ELBUF_TAB(NG)%BUFLY(IL)%L_SEQ > 0)
+                        ENDDO ! DO IS=1,NPTS
+                      ENDDO ! DO IR=1,NPTR
+                    ENDDO ! DO IT=1,NPTT
+                  ENDDO ! DO IL=1,NLAY
+                ELSE                      ! VON MISES
+                  DO I=1,NEL
+                    S11 = GBUF%SIG(JJ(1) + I)
+                    S22 = GBUF%SIG(JJ(2) + I)
+                    S33 = GBUF%SIG(JJ(3) + I)
+                    S4  = GBUF%SIG(JJ(4) + I)
+                    S5  = GBUF%SIG(JJ(5) + I)
+                    S6  = GBUF%SIG(JJ(6) + I)
+                    IF (IVISC > 0) THEN
+                      S11 = S11 + LBUF%VISC(JJ(1) + I)
+                      S22 = S22 + LBUF%VISC(JJ(2) + I)
+                      S33 = S33 + LBUF%VISC(JJ(3) + I)
+                      S4  = S4  + LBUF%VISC(JJ(4) + I)
+                      S5  = S5  + LBUF%VISC(JJ(5) + I)
+                      S6  = S6  + LBUF%VISC(JJ(6) + I)
+                    ENDIF
+                    P = - (S11 + S22 + S33) * THIRD
+                    S1 = S11 + P
+                    S2 = S22 + P
+                    S3 = S33 + P
+                    VONM2 = THREE*(S4*S4 + S5*S5 + S6*S6 +
+     .                     HALF*(S1*S1 + S2*S2 + S3*S3))
+                    VONM = SQRT(VONM2)
+                    VALUE(I) = VONM
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO ! DO I=1,NEL
+                ENDIF ! IF (GBUF%G_SEQ > 0)
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'NL_EPSP') THEN
+C--------------------------------------------------
+                IF (GBUF%G_PLANL > 0) THEN
+                  DO I=LFT,LLT
+                    VALUE(I) = ZERO
+                  ENDDO
+                  IF (ILAY == -1) THEN
+                    DO IL=1,NLAY
+                      IF (ELBUF_TAB(NG)%BUFLY(IL)%L_PLANL > 0) THEN
+                        DO IS=1,NPTS
+                          DO IT=1,NPTT
+                            DO IR=1,NPTR
+                              LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                              DO I=LFT,LLT
+                                VALUE(I) = VALUE(I) + LBUF%PLANL(I)/NPTG
+                                IS_WRITTEN_VALUE(I) = 1
+                              ENDDO
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDIF
+                    ENDDO
+                  ELSE
+                    IF (ELBUF_TAB(NG)%BUFLY(ILAY)%L_PLANL > 0) THEN
+                      DO IS=1,NPTS
+                        DO IT=1,NPTT
+                          DO IR=1,NPTR
+                            LBUF=>ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(IR,IS,IT)
+                            DO I=LFT,LLT
+                              VALUE(I) = VALUE(I) + LBUF%PLANL(I)/(NPTR*NPTS*NPTT)
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'NL_EPSD') THEN
+C--------------------------------------------------
+                IF (GBUF%G_EPSDNL > 0) THEN
+                  DO I=LFT,LLT
+                    VALUE(I) = ZERO
+                  ENDDO
+                  DO IL=1,NLAY
+                    IF (ELBUF_TAB(NG)%BUFLY(IL)%L_EPSDNL > 0) THEN
+                      DO IS=1,NPTS
+                        DO IT=1,NPTT
+                          DO IR=1,NPTR
+                            LBUF=>ELBUF_TAB(NG)%BUFLY(IL)%LBUF(IR,IS,IT)
+                            DO I=LFT,LLT
+                              VALUE(I) = VALUE(I) + LBUF%EPSDNL(I)/NPTG
+                              IS_WRITTEN_VALUE(I) = 1
+                            ENDDO
+                          ENDDO
+                        ENDDO
+                      ENDDO
+                    ENDIF
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'BULK') THEN  !  /ANIM/ELEM/QVIS
+C--------------------------------------------------
+                IF (GBUF%G_QVIS > 0) THEN
+                  DO I=1,NEL
+                    VALUE(I) = GBUF%QVIS(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'TDET') THEN  !  /ANIM/ELEM/TDET
+C--------------------------------------------------
+                IF (GBUF%G_TB > 0) THEN
+                  DO I=1,NEL
+                    VALUE(I) = -GBUF%TB(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'MOMX') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%MOM(JJ(1) + I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'MOMY') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%MOM(JJ(2) + I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'MOMZ') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%MOM(JJ(3) + I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'MOMXY') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                 GBUF%MOM(JJ(2)+I)*GBUF%MOM(JJ(2)+I) )
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'MOMYZ') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                 GBUF%MOM(JJ(3)+I)*GBUF%MOM(JJ(3)+I) )
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'MOMXZ') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                 GBUF%MOM(JJ(3)+I)*GBUF%MOM(JJ(3)+I) )
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == '|MOM|') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                   GBUF%MOM(JJ(2)+I)*GBUF%MOM(JJ(2)+I)+
+     .                                   GBUF%MOM(JJ(3)+I)*GBUF%MOM(JJ(3)+I) )
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VELX') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%VEL(1, I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%MOM(JJ(1) + I) / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VELY') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%VEL(2, I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%MOM(JJ(2) + I) / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VELZ') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%VEL(3, I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%MOM(JJ(3) + I) / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VELXY') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                 GBUF%MOM(JJ(2)+I)*GBUF%MOM(JJ(2)+I) )  / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VELYZ') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                 GBUF%MOM(JJ(3)+I)*GBUF%MOM(JJ(3)+I) )  / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'VELXZ') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                 GBUF%MOM(JJ(3)+I)*GBUF%MOM(JJ(3)+I) )  / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == '|VEL|') THEN
+C--------------------------------------------------
+                MT          = IXS(1,NFT+1)
+                IALEFVM_FLG = IPM(251,MT)
+                IF(IALEFVM_FLG >= 2)THEN
+                  IF (ISOLNOD == 8)THEN
+                    DO I=1,NEL
+                      VALUE(I) = SQRT ( GBUF%MOM(JJ(1)+I)*GBUF%MOM(JJ(1)+I)+
+     .                                   GBUF%MOM(JJ(2)+I)*GBUF%MOM(JJ(2)+I)+
+     .                                   GBUF%MOM(JJ(3)+I)*GBUF%MOM(JJ(3)+I) ) / GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'AMS')THEN
+C--------------------------------------------------
+                IF(GBUF%G_ISMS > 0) THEN
+                  DO I=1,NEL
+                    VALUE(I) = GBUF%ISMS(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'EINTM' .OR. KEYWORD == 'ENER')THEN
+C--------------------------------------------------
+                !LAG: GBUF%VOL = V0,    GBUF%EINT=rho0.e
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%EINT(I + NFT) / MULTI_FVM%RHO(I + NFT)  !
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSE
+                  IALEL=IPARG(7,NG)+IPARG(11,NG)
+                  IF(IALEL == 0)THEN
+                    DO I=1,NEL
+                      N = I + NFT
+                      MT=IXS(1,N)
+                      VALUE(I) = GBUF%EINT(I)/MAX(EM20,PM(89,MT))   !
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%EINT(I)/MAX(EM20,GBUF%RHO(I))  !
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'EINTV')THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%EINT(I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSE
+                  IALEL=IPARG(7,NG)+IPARG(11,NG)
+                  IF(IALEL == 0)THEN
+                    DO I=1,NEL
+                      N = I + NFT
+                      MT=IXS(1,N)
+                      VALUE(I) = GBUF%EINT(I)/MAX(EM20,PM(89,MT))*GBUF%RHO(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%EINT(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'EINT')THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VALUE(I) = MULTI_FVM%EINT(I + NFT) * GBUF%VOL(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSE
+                  IALEL=IPARG(7,NG)+IPARG(11,NG)
+                  IF(IALEL == 0)THEN
+                    DO I=1,NEL
+                      N = I + NFT
+                      MT=IXS(1,N)
+                      VOL=GBUF%VOL(I)*PM(89,MT)/GBUF%RHO(I)
+                      VALUE(I) = GBUF%EINT(I)/PM(89,MT)*GBUF%RHO(I)*VOL
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%EINT(I)*GBUF%VOL(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD(1:4) == 'ENTH')THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    PRES(I) = MULTI_FVM%PRES(I + NFT)
+                  ENDDO
+                ELSE
+                  DO I=1,NEL
+                    PRES(I) = - (GBUF%SIG(JJ(1) + I)+ GBUF%SIG(JJ(2) + I) + GBUF%SIG(JJ(3) + I))*THIRD
+                  ENDDO
+                ENDIF
+                !GBUF%EINT is rho.e
+C--------------------------------------------------
+                IF(KEYWORD == 'ENTH')THEN
+                  IF (MLW == 151) THEN
+                    DO I = 1, NEL
+                      VALUE(I) = MULTI_FVM%EINT(I + NFT) / MULTI_FVM%RHO(I + NFT) + PRES(I)*GBUF%VOL(I) !
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    IALEL=IPARG(7,NG)+IPARG(11,NG)
+                    IF(IALEL == 0)THEN
+                      DO I=1,NEL
+                        N = I + NFT
+                        MT=IXS(1,N)
+                        MASS0=GBUF%VOL(I)*PM(89,MT)
+                        VOL=MASS0/MAX(EM20,GBUF%RHO(I))
+                        VALUE(I) = GBUF%EINT(I)/MAX(EM20,PM(89,MT)) + PRES(I)*VOL
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ELSE
+                      DO I=1,NEL
+                        VALUE(I) = GBUF%EINT(I)/GBUF%RHO(I) + PRES(I)*GBUF%VOL(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+C--------------------------------------------------
+                ELSEIF(KEYWORD == 'ENTHV')THEN
+                  IF (MLW == 151) THEN
+                    DO I = 1, NEL
+                      VALUE(I) = MULTI_FVM%EINT(I + NFT) / MULTI_FVM%RHO(I + NFT)/GBUF%VOL(I) + PRES(I) !
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    IALEL=IPARG(7,NG)+IPARG(11,NG)
+                    IF(IALEL == 0)THEN
+                      DO I=1,NEL
+                        N = I + NFT
+                        MT=IXS(1,N)
+                        MASS0=GBUF%VOL(I)*PM(89,MT)
+                        VOL=MASS0/MAX(EM20,GBUF%RHO(I))
+                        VALUE(I) = GBUF%EINT(I)/MAX(EM20,PM(89,MT))/VOL + PRES(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ELSE
+                      DO I=1,NEL
+                        VALUE(I) = GBUF%EINT(I)/GBUF%VOL(I)/GBUF%RHO(I) + PRES(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+C--------------------------------------------------
+                ELSEIF(KEYWORD == 'ENTHM')THEN
+                  IF (MLW == 151) THEN
+                    DO I = 1, NEL
+                      MASS(I) = MULTI_FVM%RHO(I + NFT)*GBUF%VOL(I)
+                      VALUE(I) = (MULTI_FVM%EINT(I + NFT) / MULTI_FVM%RHO(I + NFT) + PRES(I)*GBUF%VOL(I))/MASS(I) !
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    IALEL=IPARG(7,NG)+IPARG(11,NG)
+                    IF(IALEL == 0)THEN
+                      DO I=1,NEL
+                        N = I + NFT
+                        MT=IXS(1,N)
+                        MASS0=GBUF%VOL(I)*PM(89,MT)
+                        VOL=MASS0/MAX(EM20,GBUF%RHO(I))
+                        MASS(I)=MASS0
+                        VALUE(I) = (GBUF%EINT(I)/MAX(EM20,PM(89,MT)) + PRES(I)*VOL)/MASS(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ELSE
+                      DO I=1,NEL
+                        MASS(I)=GBUF%RHO(I)*GBUF%VOL(I)
+                        VALUE(I) = (GBUF%EINT(I)/GBUF%RHO(I) + PRES(I)*GBUF%VOL(I))/MASS(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF!IALEL
+                  ENDIF!MLW
+                ENDIF!keyword subcase
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'OFF')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  IF (GBUF%G_OFF > 0) THEN
+                    IF(GBUF%OFF(I) > ONE) THEN
+                      VALUE(I) = GBUF%OFF(I) - ONE
+                    ELSEIF((GBUF%OFF(I) >= ZERO .AND. GBUF%OFF(I) <= ONE)) THEN
+                      VALUE(I) = GBUF%OFF(I)
+                    ELSE
+                      VALUE(I) = -ONE
+                    ENDIF
+                  ENDIF
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'MACH') THEN
+C--------------------------------------------------
+                IF (MLW == 151) THEN
+                  DO I = 1, NEL
+                    VEL(1) = MULTI_FVM%VEL(1, I + NFT)
+                    VEL(2) = MULTI_FVM%VEL(2, I + NFT)
+                    VEL(3) = MULTI_FVM%VEL(3, I + NFT)
+                    VEL(0) = SQRT(VEL(1)*VEL(1)+VEL(2)*VEL(2)+VEL(3)*VEL(3))
+                    VALUE(I) = VEL(0)/MULTI_FVM%SOUND_SPEED(I + NFT)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF(ALEFVM_Param%ISOLVER>1)THEN
+                  L = ELBUF_TAB(NG)%BUFLY(1)%L_SSP
+                  IF(ELBUF_TAB(NG)%BUFLY(1)%L_SSP /= 0)THEN
+                    LBUF => ELBUF_TAB(NG)%BUFLY(1)%LBUF(1,1,1)
+                    DO  I=1,NEL
+                      VEL(1) = GBUF%MOM(JJ(1) + I) / GBUF%RHO(I)
+                      VEL(2) = GBUF%MOM(JJ(2) + I) / GBUF%RHO(I)
+                      VEL(3) = GBUF%MOM(JJ(3) + I) / GBUF%RHO(I)
+                      VEL(0) = SQRT(VEL(1)*VEL(1)+VEL(2)*VEL(2)+VEL(3)*VEL(3))
+                      VALUE(I) = VEL(0)/LBUF%SSP(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ELSE
+                  L = ELBUF_TAB(NG)%BUFLY(1)%L_SSP
+                  IF(ELBUF_TAB(NG)%BUFLY(1)%L_SSP /= 0)THEN
+                    LBUF => ELBUF_TAB(NG)%BUFLY(1)%LBUF(1,1,1)
+                    IF(IS_ALE /= 0)THEN
+                      !ale
+                      TMP_2(1:NEL,1:3) = ZERO
+                      DO J=1,8
+                        DO  I=1,NEL
+                          TMP_2(I,1)=TMP_2(I,1) + V(1,IXS(J+1,I+NFT))-W(1,IXS(J+1,I+NFT))
+                          TMP_2(I,2)=TMP_2(I,2) + V(2,IXS(J+1,I+NFT))-W(2,IXS(J+1,I+NFT))
+                          TMP_2(I,3)=TMP_2(I,3) + V(3,IXS(J+1,I+NFT))-W(3,IXS(J+1,I+NFT))
+                        ENDDO
+                      ENDDO
+                      DO  I=1,NEL
+                        VEL(1) = TMP_2(I,1)*ONE_OVER_8
+                        VEL(2) = TMP_2(I,2)*ONE_OVER_8
+                        VEL(3) = TMP_2(I,3)*ONE_OVER_8
+                        VALUE(I) = SQRT(VEL(1)*VEL(1)+VEL(2)*VEL(2)+VEL(3)*VEL(3))/LBUF%SSP(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ELSE
+                      !euler and lagrange
+                      TMP_2(1:NEL,1:3) = ZERO
+                      DO J=1,8
+                        DO  I=1,NEL
+                          TMP_2(I,1)=TMP_2(I,1)+V(1,IXS(J+1,I+NFT))
+                          TMP_2(I,2)=TMP_2(I,2)+V(2,IXS(J+1,I+NFT))
+                          TMP_2(I,3)=TMP_2(I,3)+V(3,IXS(J+1,I+NFT))
+                        ENDDO
+                      ENDDO
+                      DO  I=1,NEL
+                        VEL(1) = TMP_2(I,1)*ONE_OVER_8
+                        VEL(2) = TMP_2(I,2)*ONE_OVER_8
+                        VEL(3) = TMP_2(I,3)*ONE_OVER_8
+                        VALUE(I) = SQRT(VEL(1)*VEL(1)+VEL(2)*VEL(2)+VEL(3)*VEL(3))/LBUF%SSP(I)
+                        IS_WRITTEN_VALUE(I) = 1
+                      ENDDO
+                    ENDIF
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'GROUP')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = NG
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'INTERNAL.ID')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = I+NFT
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'LOCAL.ID')THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = I
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'THICK' )THEN
+C--------vol=mass/rho=vol0*rho0/rho  make sure GBUF%RHO is well computed in elem
+C--------thick = vol/A_m : new routine to compute A_m
+                MT = IXS(1,NFT+1)
+                RHO0 = PM(1,MT)
+                IF (ISOLNOD == 6 )THEN
+C-- 2g1=2-1+5-4; 2g2 = 3-1+6-4
+                  DO I=1,NEL
+                    N = I + NFT
+                    NC(1:3) = IXS(2:4,N)
+                    NC(4:6) = IXS(6:8,N)
+                    G1(I,1:3) = X(1:3,NC(2))-X(1:3,NC(1))+X(1:3,NC(5))-X(1:3,NC(4))
+                    G2(I,1:3) = X(1:3,NC(3))-X(1:3,NC(1))+X(1:3,NC(6))-X(1:3,NC(4))
+                  ENDDO
+                  CALL THS_MAREA(G1(1,1),G1(1,2),G1(1,3),G2(1,1),G2(1,2),G2(1,3),DET,NEL)
+                  DO I=1,NEL
+                    VOLN(I)=GBUF%VOL(I)*RHO0/GBUF%RHO(I)
+                    AREAM(I) =ONE_OVER_8*DET(I)
+                    VALUE(I) = VOLN(I)/AREAM(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF (ISOLNOD == 8 )THEN
+C-- 4g1=2+3+6+7-1-4-5-8; 4g2 = 3+4+7+8-1-2-5-6; 4g3 = 5+6+7+8-1-2-3-4;
+                  IF (JHBE==14 ) THEN
+                    DO I=1,NEL
+                      N = I + NFT
+                      NC(1:8) = IXS(2:9,N)
+                      G1(I,1:3) = X(1:3,NC(2))+X(1:3,NC(3))+X(1:3,NC(6))+X(1:3,NC(7))
+     .                           -X(1:3,NC(1))-X(1:3,NC(4))-X(1:3,NC(5))-X(1:3,NC(8))
+                      G2(I,1:3) = X(1:3,NC(3))+X(1:3,NC(4))+X(1:3,NC(7))+X(1:3,NC(8))
+     .                           -X(1:3,NC(1))-X(1:3,NC(2))-X(1:3,NC(5))-X(1:3,NC(6))
+                      G3(I,1:3) = X(1:3,NC(5))+X(1:3,NC(6))+X(1:3,NC(7))+X(1:3,NC(8))
+     .                           -X(1:3,NC(1))-X(1:3,NC(2))-X(1:3,NC(3))-X(1:3,NC(4))
+                    ENDDO
+C------RHO0 isn't right w/ composite
+                    IF (IGTYP==22) THEN
+                      CALL THS_VOL(G1(1,1),G1(1,2),G1(1,3),G2(1,1),G2(1,2),G2(1,3),
+     .                             G3(1,1),G3(1,2),G3(1,3),DET,NEL)
+                      VOLN(1:NEL)=ZEP015625*DET(1:NEL)
+                    ELSE
+                      VOLN(1:NEL)=GBUF%VOL(1:NEL)*RHO0/GBUF%RHO(1:NEL)
+                    END IF
+                    ICSIG = IPARG(17,NG)
+                    SELECT CASE (ICSIG)
+                     CASE (1)  ! g2,g3
+                      CALL THS_MAREA(G2(1,1),G2(1,2),G2(1,3),G3(1,1),G3(1,2),G3(1,3),DET,NEL)
+                     CASE (10)  ! g1,g2
+                      CALL THS_MAREA(G1(1,1),G1(1,2),G1(1,3),G2(1,1),G2(1,2),G2(1,3),DET,NEL)
+                     CASE (100)  ! g3,g1
+                      CALL THS_MAREA(G3(1,1),G3(1,2),G3(1,3),G1(1,1),G1(1,2),G1(1,3),DET,NEL)
+                    END SELECT
+                    DO I=1,NEL
+                      AREAM(I) =ONE_OVER_16*DET(I)
+                      VALUE(I) = VOLN(I)/AREAM(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ELSE
+                    DO I=1,NEL
+                      N = I + NFT
+                      NC(1:8) = IXS(2:9,N)
+                      G1(I,1:3) = X(1:3,NC(2))+X(1:3,NC(3))+X(1:3,NC(6))+X(1:3,NC(7))
+     .                           -X(1:3,NC(1))-X(1:3,NC(4))-X(1:3,NC(5))-X(1:3,NC(8))
+                      G2(I,1:3) = X(1:3,NC(3))+X(1:3,NC(4))+X(1:3,NC(7))+X(1:3,NC(8))
+     .                           -X(1:3,NC(1))-X(1:3,NC(2))-X(1:3,NC(5))-X(1:3,NC(6))
+                    ENDDO
+                    CALL THS_MAREA(G1(1,1),G1(1,2),G1(1,3),G2(1,1),G2(1,2),G2(1,3),DET,NEL)
+                    DO I=1,NEL
+                      VOLN(I)=GBUF%VOL(I)*RHO0/GBUF%RHO(I)
+                      AREAM(I) =ONE_OVER_16*DET(I)
+                      VALUE(I) = VOLN(I)/AREAM(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  END IF
+                ELSEIF (ISOLNOD == 16 .OR. ISOLNOD == 20) THEN
+C---- approximated by S8
+                  DO I=1,NEL
+                    N = I + NFT
+                    NC(1:8) = IXS(2:9,N)
+                    G1(I,1:3) = X(1:3,NC(2))+X(1:3,NC(3))+X(1:3,NC(6))+X(1:3,NC(7))
+     .                         -X(1:3,NC(1))-X(1:3,NC(4))-X(1:3,NC(5))-X(1:3,NC(8))
+                    G2(I,1:3) = X(1:3,NC(3))+X(1:3,NC(4))+X(1:3,NC(7))+X(1:3,NC(8))
+     .                         -X(1:3,NC(1))-X(1:3,NC(2))-X(1:3,NC(5))-X(1:3,NC(6))
+                  ENDDO
+                  CALL THS_MAREA(G1(1,1),G1(1,2),G1(1,3),G2(1,1),G2(1,2),G2(1,3),DET,NEL)
+                  DO I=1,NEL
+                    VOLN(I)=GBUF%VOL(I)*RHO0/GBUF%RHO(I)
+                    AREAM(I) =ONE_OVER_16*DET(I)
+                    VALUE(I) = VOLN(I)/AREAM(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ELSEIF (ISOLNOD == 4 .OR. ISOLNOD == 10) THEN
+C---- doesn't make sense
+                END IF
+              ELSEIF(KEYWORD == 'THIN')THEN
+                IF(TSHELL == 1)THEN
+                  FAC = ONE/NLAY
+                  EZZ(1:NEL) = ZERO
+                  IF (JHBE==15 ) THEN
+                    FAC = ONE/NLAY
+                    DO ILAY=1,NLAY
+                      LBUF => ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(1,1,1)
+                      DO I=1,NEL
+                        EZZ(I) = EZZ(I)+FAC*LBUF%STRA(JJ(3)+I)
+                      ENDDO
+                    END DO
+                    VALUE(1:NEL) = -HUNDRED*(EXP(EZZ(1:NEL))-ONE)
+                    IS_WRITTEN_VALUE(1:NEL) = 1
+                  ELSEIF (JHBE==14 ) THEN
+                    FAC = ONE/(NLAY*NPTR*NPTS)
+                    DO IR=1,NPTR
+                      DO IS=1,NPTS
+                        DO ILAY=1,NLAY
+                          LBUF => ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(IR,IS,1)
+                          DO I=1,NEL
+                            EZZ(I) = EZZ(I)+FAC*LBUF%STRA(JJ(3)+I)
+                          ENDDO
+                        ENDDO  ! IL=1,NLAY
+                      ENDDO   ! IS=1,NPTS
+                    ENDDO    ! IR=1,NPTR
+                    VALUE(1:NEL) = -HUNDRED*(EXP(EZZ(1:NEL))-ONE)
+                    IS_WRITTEN_VALUE(1:NEL) = 1
+                  ELSEIF (JHBE==16 ) THEN
+                    DO I=1,NEL
+                      N = I + NFT
+                      NC(1:8) = IXS(2:9,N)
+                      G3(I,1:3) = X(1:3,NC(5))+X(1:3,NC(6))+X(1:3,NC(7))+X(1:3,NC(8))
+     .                           -X(1:3,NC(1))-X(1:3,NC(2))-X(1:3,NC(3))-X(1:3,NC(4))
+                    ENDDO
+                    FAC = ONE/(NLAY*NPTR*NPTT)
+                    DO IT=1,NPTT
+                      DO IR=1,NPTR
+                        DO ILAY=1,NLAY
+                          LBUF => ELBUF_TAB(NG)%BUFLY(ILAY)%LBUF(IR,1,IT)
+C-------strain is calculated in basic system of S16 will be done later
+                          DO I=1,NEL
+                            E33 = G3(I,1)*G3(I,1)*LBUF%STRA(JJ(1)+I)
+     .                           +G3(I,2)*G3(I,2)*LBUF%STRA(JJ(2)+I)
+     .                           +G3(I,3)*G3(I,3)*LBUF%STRA(JJ(3)+I)
+     .                           +G3(I,1)*G3(I,2)*LBUF%STRA(JJ(4)+I)
+     .                           +G3(I,2)*G3(I,3)*LBUF%STRA(JJ(5)+I)
+     .                           +G3(I,3)*G3(I,1)*LBUF%STRA(JJ(6)+I)
+                            EZZ(I) = EZZ(I)+FAC*E33
+                          ENDDO
+                        ENDDO!IL=1,NLAY
+                      ENDDO!IR=1,NPTR
+                    ENDDO!IT=1,NPTT
+                    VALUE(1:NEL) = HUNDRED*EZZ(1:NEL)
+                    IS_WRITTEN_VALUE(1:NEL) = 1
+                  END IF
+                ELSEIF (ISOLNOD == 8 .OR. ISOLNOD == 20) THEN
+                  IF (JCVT==0 ) THEN
+                    DO I=1,NEL
+                      N = I + NFT
+                      NC(1:8) = IXS(2:9,N)
+                      G3(I,1:3) = X(1:3,NC(5))+X(1:3,NC(6))+X(1:3,NC(7))+X(1:3,NC(8))
+     .                           -X(1:3,NC(1))-X(1:3,NC(2))-X(1:3,NC(3))-X(1:3,NC(4))
+                    ENDDO
+                    FAC = ONE/(NPTR*NPTS*NPTT)
+                    DO IT=1,NPTT
+                      DO IR=1,NPTR
+                        DO IS=1,NPTS
+                          LBUF => ELBUF_TAB(NG)%BUFLY(1)%LBUF(IR,IS,IT)
+                          DO I=1,NEL
+                            E33 = G3(I,1)*G3(I,1)*LBUF%STRA(JJ(1)+I)
+     .                           +G3(I,2)*G3(I,2)*LBUF%STRA(JJ(2)+I)
+     .                           +G3(I,3)*G3(I,3)*LBUF%STRA(JJ(3)+I)
+     .                           +G3(I,1)*G3(I,2)*LBUF%STRA(JJ(4)+I)
+     .                           +G3(I,2)*G3(I,3)*LBUF%STRA(JJ(5)+I)
+     .                           +G3(I,3)*G3(I,1)*LBUF%STRA(JJ(6)+I)
+                            EZZ(I) = EZZ(I)+FAC*E33
+                          ENDDO
+                        ENDDO!IL=1,NLAY
+                      ENDDO!IR=1,NPTR
+                    ENDDO!IT=1,NPTT
+                    VALUE(1:NEL) = HUNDRED*EZZ(1:NEL)
+                    IS_WRITTEN_VALUE(1:NEL) = 1
+                  ELSE
+                    FAC = ONE/(NPTR*NPTS*NPTT)
+                    SELECT CASE (JHBE)
+                     CASE (1,17)
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          DO IS=1,NPTS
+                            LBUF => ELBUF_TAB(NG)%BUFLY(1)%LBUF(IR,IS,IT)
+                            DO I=1,NEL
+                              EZZ(I) = EZZ(I)+FAC*LBUF%STRA(JJ(2)+I)
+                            ENDDO
+                          ENDDO!IL=1,NLAY
+                        ENDDO!IR=1,NPTR
+                      ENDDO!IT=1,NPTT
+                      VALUE(1:NEL) = HUNDRED*EZZ(1:NEL)
+                      IS_WRITTEN_VALUE(1:NEL) = 1
+                     CASE (24,14)
+                      DO IT=1,NPTT
+                        DO IR=1,NPTR
+                          DO IS=1,NPTS
+                            LBUF => ELBUF_TAB(NG)%BUFLY(1)%LBUF(IR,IS,IT)
+                            DO I=1,NEL
+                              EZZ(I) = EZZ(I)+FAC*LBUF%STRA(JJ(3)+I)
+                            ENDDO
+                          ENDDO
+                        ENDDO!IR=1,NPTR
+                      ENDDO!IT=1,NPTT
+                      VALUE(1:NEL) = HUNDRED*EZZ(1:NEL)
+                      IS_WRITTEN_VALUE(1:NEL) = 1
+                    END SELECT
+                  END IF
+                END IF !(TSHELL == 1)THEN
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'COLOR') THEN
+C--------------------------------------------------
+                GBUF => ELBUF_TAB(NG)%GBUF
+                IF (MLW == 151) THEN
+                  NFRAC=MULTI_FVM%NBMAT
+                  DO IMAT=1,NFRAC
+                    LBUF => ELBUF_TAB(NG)%BUFLY(IMAT)%LBUF(1,1,1)
+                    DO I=1,NEL
+                      VFRAC(I,IMAT) = LBUF%VOL(I) / GBUF%VOL(I)
+                    ENDDO
+                  ENDDO
+                ELSEIF(MLW == 20)THEN
+                  NFRAC=2
+                  DO I=1,NEL
+                    VFRAC(I,1) = ELBUF_TAB(NG)%BUFLY(1)%LBUF(1,1,1)%VOL(I) / GBUF%VOL(I)
+                    VFRAC(I,2) = ELBUF_TAB(NG)%BUFLY(2)%LBUF(1,1,1)%VOL(I) / GBUF%VOL(I)
+                  ENDDO
+                ELSEIF(MLW == 37)THEN
+                  MBUF => ELBUF_TAB(NG)%BUFLY(1)%MAT(1,1,1)
+                  NFRAC=2
+                  DO  I=1,NEL
+                    VFRAC(I,1) = MBUF%VAR(I+3*NEL)
+                    VFRAC(I,2) = MBUF%VAR(I+4*NEL)
+                  ENDDO
+                ELSEIF(MLW == 51)THEN
+                  !get UPARAM
+                  IMAT = IXS(1,NFT+1)
+                  IADBUF = IPM(7,IMAT)
+                  NUPARAM= IPM(9,IMAT)
+                  uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                  !bijective order           !indexes
+                  ISUBMAT=UPARAM(276+1);     IU(1)=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                  ISUBMAT=UPARAM(276+2);     IU(2)=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                  ISUBMAT=UPARAM(276+3);     IU(3)=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                  ISUBMAT=UPARAM(276+4);     IU(4)=M51_N0PHAS+(ISUBMAT-1)*M51_NVPHAS
+                  MBUF => ELBUF_TAB(NG)%BUFLY(1)%MAT(1,1,1)
+                  NFRAC=4
+                  DO  I=1,NEL
+                    VFRAC(I,1) = MBUF%VAR(I+IU(1)*NEL)
+                    VFRAC(I,2) = MBUF%VAR(I+IU(2)*NEL)
+                    VFRAC(I,3) = MBUF%VAR(I+IU(3)*NEL)
+                    VFRAC(I,4) = MBUF%VAR(I+IU(4)*NEL)
+                  ENDDO
+                ELSE
+                  NFRAC=0
+                  !VFRAC(1:NEL,1:21)=ZERO
+                ENDIF
+                IF(NFRAC>0)THEN
+                  DO I=1,NEL
+                    VALUE(I)=ZERO
+                    DO IMAT=1,NFRAC
+                      VALUE(I) = VALUE(I) + VFRAC(I,IMAT)*IMAT
+                    ENDDO
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'VONM/TMAX') THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%TM_YIELD(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'SIGEQ/TMAX') THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%TM_SEQ(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'ENER/TMAX') THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%TM_EINT(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DAMA/TMAX') THEN
+C--------------------------------------------------
+                DO I=1,NEL
+                  VALUE(I) = GBUF%TM_DMG(I)
+                  IS_WRITTEN_VALUE(I) = 1
+                ENDDO
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'TILLOTSON') THEN
+C--------------------------------------------------
+                MT = IXS(1,NFT+1)
+                IF (MLW == 151) THEN
+                  !count number of submaterial based on /EOS/TILLOTSON (IEOS=3)
+                  NTILLOTSON = 0
+                  DO IMAT=1,NLAY
+                    IEOS =  IPM(4, mat_param(MT)%MULTIMAT%MID(IMAT) )
+                    IF(IEOS == 3)THEN
+                      NTILLOTSON = NTILLOTSON + 1
+                      IMAT_TILLOTSON = IMAT
+                    ENDIF
+                  ENDDO
+                  !several Tillotson EoS   Value= sum ( Region_i*10**(i-1),  i=1,imat)
+                  IF(NTILLOTSON > 1)THEN
+                    FAC=ONE
+                    DO IMAT=1,NLAY
+                      IEOS =  IPM(4, mat_param(MT)%MULTIMAT%MID(IMAT) )
+                      IF(IEOS == 3)THEN
+                        EBUF => ELBUF_TAB(NG)%BUFLY(IMAT)%EOS(1,1,1)
+                        NVAREOS = ELBUF_TAB(NG)%BUFLY(IMAT)%NVAR_EOS
+                        DO I=1,NEL
+                          VALUE(I) = VALUE(I) + EBUF%VAR(I) * FAC
+                          IS_WRITTEN_VALUE(I) = 1
+                        ENDDO
+                      ENDIF
+                      FAC=FAC*TEN
+                    ENDDO
+                    !single Tillotson EoS   Value=  Region_i
+                  ELSEIF(NTILLOTSON == 1)THEN
+                    EBUF => ELBUF_TAB(NG)%BUFLY(IMAT_TILLOTSON)%EOS(1,1,1)
+                    NVAREOS = ELBUF_TAB(NG)%BUFLY(IMAT_TILLOTSON)%NVAR_EOS
+                    DO I=1,NEL
+                      VALUE(I) = EBUF%VAR(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ELSE
+                  !monomaterial law
+                  IEOS = IPM(4,MT)
+                  IF(IEOS == 3)THEN
+                    EBUF => ELBUF_TAB(NG)%BUFLY(1)%EOS(1,1,1)
+                    NVAREOS = ELBUF_TAB(NG)%BUFLY(1)%NVAR_EOS
+                    DO  I=1,NEL
+                      VALUE(I) = EBUF%VAR(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                  ENDIF
+                ENDIF
+C--------------------------------------------------
+              ELSEIF(KEYWORD == 'DIV(U)') THEN
+C--------------------------------------------------
+                IALEL=IPARG(7,NG)+IPARG(11,NG)
+                IF(IALEL /= 0)THEN
+                  CALL OUTPUT_DIV_U(
+     1                       EVAR   ,IXS       ,X       ,V       , IPARG  ,ELBUF_TAB ,NG    ,NIXS      ,1,
+     2                       NUMELS ,NEL       ,NUMNOD  ,NPARG   , NGROUP ,N2D , NFT)
+                  DO I=1,NEL
+                    VALUE(I) = EVAR(I)
+                    IS_WRITTEN_VALUE(I) = 1
+                  ENDDO
+                ENDIF
+C--------------------------------------------------
+              ELSEIF (KEYWORD == 'ECONTROL')THEN
+C--------------------------------------------------
+                IF (GBUF%G_EINT_DISTOR>0) THEN
+                    DO I=1,NEL
+                      VALUE(I) = GBUF%EINT_DISTOR(I)
+                      IS_WRITTEN_VALUE(I) = 1
+                    ENDDO
+                ENDIF
+!--------------------------------------------------
+              elseif(keyword == 'VSTRAIN') then
+!--------------------------------------------------
+                do i=1,nel
+                  mt = ixs(1,i+nft)
+                  if(mlw == 151)then
+                    !multimaterial 151 (collocated scheme)
+                      do ilay=1,nlay
+                        mid = mat_param(mt)%multimat%mid(ilay)
+                        rho0i (ilay) = pm(89,mid)
+                        Vi (ilay) = multi_fvm%phase_alpha(ilay,i+nft) * gbuf%vol(i)
+                        V0i (ilay) =  multi_fvm%phase_rho(ilay,i+nft) * Vi(ilay) / rho0i(ilay)         !rho0.V0 = rho.V
+                      enddo
+                      V0g = sum(V0i)
+                      RHO0g = zero
+                      do ilay=1,nlay
+                        RHO0g = RHO0g + rho0i(ilay)*V0i(ilay)
+                      end do
+                      RHO0g = RHO0g / V0g
+                      value(i) = multi_fvm%rho(i+nft) / RHO0g - ONE
+                      is_written_value(i) = 1
+
+                  elseif(mlw == 51)then
+                    !multimaterial 51 (staggered scheme)
+                    imat   = ixs(1,nft+1)
+                    iadbuf = ipm(7,imat)
+                    nuparam= ipm(9,imat)
+                    uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                    mbuf => elbuf_tab(ng)%bufly(1)%mat(1,1,1)
+                    ipos = 1
+                    !bijective order           !indexes
+                    isubmat = nint(uparam(276+1));   iu(1)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    isubmat = nint(uparam(276+2));   iu(2)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    isubmat = nint(uparam(276+3));   iu(3)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    isubmat = nint(uparam(276+4));   iu(4)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    vfrac(i,1) = mbuf%var(i+iu(1)*nel)
+                    vfrac(i,2) = mbuf%var(i+iu(2)*nel)
+                    vfrac(i,3) = mbuf%var(i+iu(3)*nel)
+                    vfrac(i,4) = mbuf%var(i+iu(4)*nel)
+                    ipos = 12
+                    !bijective order           !indexes
+                    isubmat = nint(uparam(276+1));   iu(1)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    isubmat = nint(uparam(276+2));   iu(2)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    isubmat = nint(uparam(276+3));   iu(3)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    isubmat = nint(uparam(276+4));   iu(4)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                    rhoi(1) = mbuf%var(i+iu(1)*nel)
+                    rhoi(2) = mbuf%var(i+iu(2)*nel)
+                    rhoi(3) = mbuf%var(i+iu(3)*nel)
+                    rhoi(4) = mbuf%var(i+iu(4)*nel)
+                    do ilay=1,4
+                      mid = mat_param(mt)%multimat%mid(ilay)
+                      rho0i (ilay) = pm(89,mid)
+                      Vi (ilay) = vfrac(i,ilay) * gbuf%vol(i)
+                      ipos = 12
+                      V0i (ilay) =  rhoi(ilay) * Vi(ilay) / rho0i(ilay)         !rho0.V0 = rho.V
+                    enddo
+                    V0g = sum(V0i)
+                    RHO0g = zero
+                    do ilay=1,4
+                      RHO0g = RHO0g + rho0i(ilay)*V0i(ilay)
+                    end do
+                    RHO0g = RHO0g / V0g
+                    value(i) = gbuf%rho(i) / RHO0g - ONE
+                    is_written_value(i) = 1
+
+                  elseif(mlw == 37)then
+                    !multimaterial 37 (staggered scheme)
+                    imat   = ixs(1,nft+1)
+                    iadbuf = ipm(7,imat)
+                    nuparam= ipm(9,imat)
+                    uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                    mbuf => elbuf_tab(ng)%bufly(1)%mat(1,1,1)
+                    rho0i(1) = uparam(11)
+                    rho0i(2) = uparam(12)
+                    Vi(1) = mbuf%var(i+3*nel) * gbuf%vol(i) !UVAR(I,4)  = VFRAC1
+                    Vi(2) = mbuf%var(i+4*nel) * gbuf%vol(i) !UVAR(I,5)  = VFRAC2
+                    rhoi(1) = mbuf%var(i+2*nel) !UVAR(I,3)  = RHO1
+                    rhoi(2) = mbuf%var(i+1*nel) !UVAR(I,2)  = RHO2
+                    V0i(1) =  rhoi(1) * Vi(1) / rho0i(1)         !rho0.V0 = rho.V
+                    V0i(2) =  rhoi(2) * Vi(2) / rho0i(2)         !rho0.V0 = rho.V
+                    V0g = sum(V0i)
+                    RHO0g = zero
+                    do ilay=1,nlay
+                      RHO0g = RHO0g + rho0i(ilay)*V0i(ilay)
+                    end do
+                    RHO0g = RHO0g / V0g
+                    value(i) = gbuf%rho(i) / RHO0g - ONE
+                    is_written_value(i) = 1
+
+                  elseif(mlw == 20)then
+                    !multimaterial 20 (staggered scheme)
+                    lbuf1  => elbuf_tab(ng)%bufly(1)%lbuf(1,1,1)
+                    lbuf2  => elbuf_tab(ng)%bufly(2)%lbuf(1,1,1)
+                    mid = mat_param(mt)%multimat%mid(1)
+                    rho0i(1) = pm(89,mid)
+                    mid = mat_param(mt)%multimat%mid(2)
+                    rho0i(2) = pm(89,mid)
+                    Vi(1) = lbuf1%vol(i)
+                    Vi(2) = lbuf2%vol(i)
+                    rhoi(1) = lbuf1%rho(i)
+                    rhoi(2) = lbuf2%rho(i)
+                    V0i(1) =  rhoi(1) * Vi(1) / rho0i(1)         !rho0.V0 = rho.V
+                    V0i(2) =  rhoi(2) * Vi(2) / rho0i(2)         !rho0.V0 = rho.V
+                    V0g = sum(V0i)
+                    RHO0g = zero
+                    do ilay=1,nlay
+                      RHO0g = RHO0g + rho0i(ilay)*V0i(ilay)
+                    end do
+                    RHO0g = RHO0g / V0g
+                    value(i) = gbuf%rho(i) / RHO0g - ONE
+                    is_written_value(i) = 1
+
+                  else
+                    !general case (monomaterial law)
+                    if(pm(89,mt) > zero)then
+                      value(i) = gbuf%rho(i) / pm(89,mt) - one
+                      is_written_value(i) = 1
+                    end if
+                  end if
+
+                enddo
+!--------------------------------------------------
+              elseif(keyword(1:8) == 'VSTRAIN/') then
+!--------------------------------------------------
+                detected = .false.
+                read(keyword(9:), '(I2)', IOSTAT=ierr) ilay
+                if(ierr == 0 .and. ilay > 0) then
+                  if(mlw == 151 .and. ilay <= min(10,multi_fvm%nbmat))detected = .true.
+                  if(mlw ==  51 .and. ilay <= 4                      )detected = .true.
+                  if(mlw ==  37 .and. ilay <= 2                      )detected = .true.
+                  if(mlw ==  20 .and. ilay <= 2                      )detected = .true.
+                end if
+                if(detected)then
+                  do i=1,nel
+                    mt = ixs(1,i+nft)
+
+                    if(mlw == 151)then
+                      !multimaterial 151 (collocated scheme)
+                        mid = mat_param(mt)%multimat%mid(ilay)
+                        rho0i(ilay) = pm(89,mid)
+                        Vi(ilay) = multi_fvm%phase_alpha(ilay,i+nft) * gbuf%vol(i)
+                        V0i(ilay) = multi_fvm%phase_rho(ilay,i+nft) * Vi(ilay) / rho0i(ilay)         !rho0.V0 = rho.V
+                        value(i) = multi_fvm%phase_rho(ilay,i+nft) / rho0i(ilay) - ONE
+                        is_written_value(i) = 1
+
+                    elseif(mlw == 51)then
+                      !multimaterial 51 (staggered scheme)
+                      imat = ixs(1,nft+1)
+                      iadbuf = ipm(7,imat)
+                      nuparam= ipm(9,imat)
+                      uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                      mbuf => elbuf_tab(ng)%bufly(1)%mat(1,1,1)
+                      mid = mat_param(mt)%multimat%mid(ilay)
+                      rho0i(ilay) = pm(89,mid)
+                      ipos = 1
+                      !bijective order           !indexes
+                      isubmat = nint(uparam(276+ilay));   iu(1)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                      vfrac(i,ilay) = mbuf%var(i+iu(ilay)*nel)
+                      Vi(ilay) = vfrac(i,ilay) * gbuf%vol(i)
+                      ipos = 12
+                      !bijective order           !indexes
+                      isubmat = nint(uparam(276+ilay));   iu(ilay)=m51_n0phas +(isubmat-1)*m51_nvphas  + ipos-1
+                      rhoi(ilay) = mbuf%var(i+iu(ilay)*nel)
+                      V0i (ilay) =  rhoi(ilay) * Vi(ilay) / rho0i(ilay)         !rho0.V0 = rho.V
+                      value(i) = rhoi(ilay) / rho0i(ilay) - ONE
+                      is_written_value(i) = 1
+
+                    elseif(mlw == 37)then
+                      !multimaterial 37 (staggered scheme)
+                      imat = ixs(1,nft+1)
+                      iadbuf = ipm(7,imat)
+                      nuparam= ipm(9,imat)
+                      uparam => bufmat(iadbuf:iadbuf+nuparam-1)
+                      mbuf => elbuf_tab(ng)%bufly(1)%mat(1,1,1)
+                      rho0i(ilay) = uparam(10+ilay)
+                      Vi(ilay) = mbuf%var(i+(ilay+2)*nel) * gbuf%vol(i)
+                      rhoi(ilay) = mbuf%var(i+(3-ilay)*nel) !UVAR(I,3)  = RHO1
+                      V0i(ilay) =  rhoi(ilay) * Vi(ilay) / rho0i(ilay)
+                      value(i) = rhoi(ilay) / rho0i(ilay) - ONE
+                      is_written_value(i) = 1
+
+                    elseif(mlw == 20)then
+                      !multimaterial 20 (staggered scheme)
+                      lbuf  => elbuf_tab(ng)%bufly(ilay)%lbuf(1,1,1)
+                      mid = mat_param(mt)%multimat%mid(ilay)
+                      rho0i(ilay) = pm(89,mid)
+                      Vi(ilay) = lbuf%vol(i)
+                      rhoi(ilay) = lbuf%rho(i)
+                      V0i(ilay) =  rhoi(ilay) * Vi(ilay) / rho0i(ilay)         !rho0.V0 = rho.V
+                      value(i) = rhoi(ilay) / rho0i(ilay) - ONE
+                      is_written_value(i) = 1
+
+                    else
+                      !general case (monomaterial law)
+                      is_written_value(i) = 0
+                    end if
+                enddo
+
+              end if
+!--------------------------------------------------
+!--------------------------------------------------
+              ENDIF
+C--------------------------------------------------
+              IF(CALLED_FROM_PYTHON) THEN
+                 SOLID_SCALAR(1:NEL) = VALUE(1:NEL)
+              ELSE
+                CALL H3D_WRITE_SCALAR(IOK_PART,IS_WRITTEN_SOLID,SOLID_SCALAR,NEL,OFFSET,NFT,
+     .           VALUE,IS_WRITTEN_VALUE)
+              ENDIF
+            ENDIF
+          ENDIF
+        ENDIF
+
+C-----------------------------------------------
+        RETURN
+      END
+!||====================================================================
+!||    ths_marea            ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||--- called by ------------------------------------------------------
+!||    h3d_solid_scalar_1   ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||====================================================================
+      SUBROUTINE THS_MAREA(RX, RY, RZ, SX, SY, SZ, DET,NEL)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER NEL
+        my_real, DIMENSION(MVSIZ), INTENT(IN) :: RX,RY,RZ
+        my_real, DIMENSION(MVSIZ), INTENT(IN) :: SX,SY,SZ
+        my_real, DIMENSION(MVSIZ), INTENT(OUT) :: DET
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        INTEGER I
+        my_real
+     .     E3X(NEL), E3Y(NEL), E3Z(NEL)
+C~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        DO I=1,NEL
+C---------E3------------
+          E3X(I) = RY(I) * SZ(I) - RZ(I) * SY(I)
+          E3Y(I) = RZ(I) * SX(I) - RX(I) * SZ(I)
+          E3Z(I) = RX(I) * SY(I) - RY(I) * SX(I)
+          DET(I) = SQRT(E3X(I)*E3X(I) + E3Y(I)*E3Y(I) + E3Z(I)*E3Z(I))
+        ENDDO
+c-----------
+        RETURN
+      END
+!||====================================================================
+!||    ths_vol              ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||--- called by ------------------------------------------------------
+!||    h3d_solid_scalar_1   ../engine/source/output/h3d/h3d_results/h3d_solid_scalar_1.F
+!||====================================================================
+      SUBROUTINE THS_VOL(RX, RY, RZ, SX, SY, SZ, TX, TY, TZ,DET,NEL)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER NEL
+        my_real, DIMENSION(MVSIZ), INTENT(IN) :: RX,RY,RZ
+        my_real, DIMENSION(MVSIZ), INTENT(IN) :: SX,SY,SZ
+        my_real, DIMENSION(MVSIZ), INTENT(IN) :: TX,TY,TZ
+        my_real, DIMENSION(MVSIZ), INTENT(OUT) :: DET
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        INTEGER I
+        my_real JAC1, JAC2, JAC3, JAC4, JAC5, JAC6, JAC7, JAC8, JAC9
+C~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        DO I=1,NEL
+          JAC1 = RX(I)
+          JAC2 = RY(I)
+          JAC3 = RZ(I)
+          JAC4 = SX(I)
+          JAC5 = SY(I)
+          JAC6 = SZ(I)
+          JAC7 = TX(I)
+          JAC8 = TY(I)
+          JAC9 = TZ(I)
+          DET(I) = JAC1 * (JAC5 * JAC9 - JAC8 * JAC6) +
+     .             JAC2 * (JAC6 * JAC7 - JAC4 * JAC9) +
+     .             JAC3 * (JAC4 * JAC8 - JAC7 * JAC5)
+        ENDDO
+c-----------
+        RETURN
+      END

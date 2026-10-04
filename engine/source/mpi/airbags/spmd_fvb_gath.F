@@ -1,0 +1,296 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+C
+!||====================================================================
+!||    spmd_fvb_gath    ../engine/source/mpi/airbags/spmd_fvb_gath.F
+!||--- called by ------------------------------------------------------
+!||    fv_up_switch     ../engine/source/airbag/fv_up_switch.F
+!||    fvbag1           ../engine/source/airbag/fvbag1.F
+!||    fvbric           ../engine/source/airbag/fvbric.F
+!||    fvmesh1          ../engine/source/airbag/fvmesh.F
+!||    fvrezone1        ../engine/source/airbag/fvrezone.F
+!||    lecfvbag         ../engine/source/input/lecfvbag.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod        ../engine/share/modules/fvbag_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE SPMD_FVB_GATH(IFV, X, XXX, XXXA, XXXSA,
+     .                         IDO)
+C Gather local X into XXX,XXXA,XXXSA on the PMAIN of the FVM
+C depending on IDO
+
+C IF IDO = 1 : gather  X(1:NN_L)  into X
+C IF IDO = 2 : gather  X(1:NN_L)  into X
+C                  and X(1:NNA_L) into XXXA 
+C                  and X(1:NNSA_L) into XXXSA 
+C IF IDO = 3 : gather  X(1:NN_L + NNI_L) into X 
+C                  and X(1:NNA_L) into XXXA 
+C                  and X(1:NNSA_L) into XXXSA 
+C IF IDO = 4 : gather  X(1:NN_L + NNI_L)  into X
+
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE FVBAG_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IFV, IDO
+      my_real
+     .        X(3,*), XXX(3,*), XXXA(3,*), XXXSA(3,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER II, I, ITAG, LEN, ITAB(3,NSPMD-1),REQ(2*(NSPMD-1)),
+     .        STAT(MPI_STATUS_SIZE,2*(NSPMD-1)), IERR, LENI, LENR,
+     .        IADI(NSPMD-1), IADR(NSPMD-1), IAD, I1, I2, IAD1, IAD2,
+     .        J, J1, ITABL(3), PMAIN, MSGOFF, IDO1, IDO2
+      INTEGER, DIMENSION(:), ALLOCATABLE :: IBUF
+      my_real
+     .       , DIMENSION(:), ALLOCATABLE :: RBUF
+C
+      DATA MSGOFF/204/
+C
+      IDO2 = 0
+      IDO1 = IDO
+      IF (IDO == 4) THEN
+        IDO1 = 1
+        IDO2 = 1 ! add NNI_L
+      ELSEIF (IDO == 3) THEN
+        IDO2 = 1 ! add NNI_L
+      ENDIF 
+
+      IF (FVSPMD(IFV)%RANK == 0) THEN
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+           ITAB(1,I) = FVSPMD(IFV)%ITAB(1,I)
+           IF( IDO2 == 1) ITAB(1,I)=ITAB(1,I)+FVSPMD(IFV)%ITAB(4,I)
+           IF (IDO1 > 1) THEN
+              ITAB(2,I)=FVSPMD(IFV)%ITAB(2,I)
+              ITAB(3,I)=FVSPMD(IFV)%ITAB(3,I)
+           ELSE
+              ITAB(2,I)=0
+              ITAB(3,I)=0
+           ENDIF
+         ENDDO
+ 
+         LENI=0
+         LENR=0
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+            II=II+1
+            IADI(II)=LENI+1
+            IADR(II)=LENR+1
+            LENI=LENI+ITAB(1,II)+ITAB(2,II)+ITAB(3,II)
+            LENR=LENR+3*(ITAB(1,II)+ITAB(2,II)+ITAB(3,II))
+         ENDDO
+         call my_alloc(IBUF, LENI, "IBUF")
+         call my_alloc(RBUF, LENR, "RBUF")
+         RBUF(1:LENR) = ZERO
+         IBUF(1:LENI) = 0
+C reception of integers
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+            II=II+1
+            ITAG=MSGOFF
+            IAD=IADI(II)
+            LEN=ITAB(1,II)+ITAB(2,II)+ITAB(3,II)
+            REQ(II) = MPI_REQUEST_NULL
+            IF(LEN > 0) CALL MPI_IRECV(IBUF(IAD), LEN, MPI_INTEGER, I,
+     .                     ITAG, FVSPMD(IFV)%MPI_COMM, REQ(II), IERR)
+         ENDDO
+C reception of reals
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+            II=II+1
+            ITAG=MSGOFF
+            IAD=IADR(II)
+            LEN=3*(ITAB(1,II)+ITAB(2,II)+ITAB(3,II))
+            REQ(FVSPMD(IFV)%NSPMD-1+II) = MPI_REQUEST_NULL
+            IF(LEN >0 ) CALL MPI_IRECV(RBUF(IAD), LEN, REAL, I, ITAG,
+     .      FVSPMD(IFV)%MPI_COMM, REQ(FVSPMD(IFV)%NSPMD-1+II), IERR)
+         ENDDO
+C filling of output tables xxx, xxxa, xxksa
+         LEN = FVSPMD(IFV)%NN_L
+C Addition Internal nodes
+         IF(IDO2 == 1)LEN = LEN + FVSPMD(IFV)%NNI_L
+         DO I=1,LEN
+            I1=FVSPMD(IFV)%IBUF_L(1,I)
+            I2=FVSPMD(IFV)%IBUF_L(2,I)
+            XXX(1,I1)=X(1,I2)
+            XXX(2,I1)=X(2,I2)
+            XXX(3,I1)=X(3,I2)
+         ENDDO
+         IF (IDO1 > 1) THEN
+            DO I=1,FVSPMD(IFV)%NNA_L
+               I1=FVSPMD(IFV)%IBUFA_L(1,I)
+               I2=FVSPMD(IFV)%IBUFA_L(2,I)
+               IF (I2 <= NUMNOD) THEN
+                  ! IF MESHGEMS IS USED, EXTRA NODES ARE NOT INCLUDED WITHIN THE NUMNOD NODES
+                  XXXA(1,I1)=X(1,I2)
+                  XXXA(2,I1)=X(2,I2)
+                  XXXA(3,I1)=X(3,I2)
+               ENDIF
+            ENDDO
+            DO I=1,FVSPMD(IFV)%NNSA_L
+               I1=FVSPMD(IFV)%IBUFSA_L(1,I)
+               I2=FVSPMD(IFV)%IBUFSA_L(2,I)
+               IF (I2 <= NUMNOD) THEN
+                  ! IF MESHGEMS IS USED, EXTRA NODES ARE NOT INCLUDED WITHIN THE NUMNOD NODES
+                  XXXSA(1,I1)=X(1,I2)
+                  XXXSA(2,I1)=X(2,I2)
+                  XXXSA(3,I1)=X(3,I2)
+               ENDIF
+            ENDDO
+         ENDIF
+
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+            CALL MPI_WAIT(REQ(I), STAT, IERR)
+            CALL MPI_WAIT(REQ(FVSPMD(IFV)%NSPMD-1+I), STAT, IERR)
+            II=II+1
+            IAD1=IADI(II)
+            IAD2=IADR(II)
+            DO J=1,ITAB(1,II)
+               J1=IBUF(IAD1-1+J)
+               XXX(1,J1)=RBUF(IAD2-1+3*(J-1)+1)
+               XXX(2,J1)=RBUF(IAD2-1+3*(J-1)+2)
+               XXX(3,J1)=RBUF(IAD2-1+3*(J-1)+3)
+            ENDDO
+            IAD1=IAD1+ITAB(1,II)
+            IAD2=IAD2+3*ITAB(1,II)
+            DO J=1,ITAB(2,II)
+               J1=IBUF(IAD1-1+J)
+               XXXA(1,J1)=RBUF(IAD2-1+3*(J-1)+1)
+               XXXA(2,J1)=RBUF(IAD2-1+3*(J-1)+2)
+               XXXA(3,J1)=RBUF(IAD2-1+3*(J-1)+3)
+            ENDDO
+            IAD1=IAD1+ITAB(2,II)
+            IAD2=IAD2+3*ITAB(2,II)
+            DO J=1,ITAB(3,II)
+               J1=IBUF(IAD1-1+J)
+               XXXSA(1,J1)=RBUF(IAD2-1+3*(J-1)+1)
+               XXXSA(2,J1)=RBUF(IAD2-1+3*(J-1)+2)
+               XXXSA(3,J1)=RBUF(IAD2-1+3*(J-1)+3)
+            ENDDO
+         ENDDO
+         call my_dealloc(IBUF)
+         call my_dealloc(RBUF)
+      ELSE IF(FVSPMD(IFV)%RANK > 0) THEN
+         ITABL(1)=FVSPMD(IFV)%NN_L
+C Addition Internal nodes
+         IF(IDO2== 1 ) ITABL(1)=ITABL(1)+FVSPMD(IFV)%NNI_L
+         IF (IDO1 > 1) THEN
+            ITABL(2)=FVSPMD(IFV)%NNA_L
+            ITABL(3)=FVSPMD(IFV)%NNSA_L
+         ELSE
+            ITABL(2)=0
+            ITABL(3)=0
+         ENDIF
+         PMAIN=FVSPMD(IFV)%PMAIN
+C
+         LEN=ITABL(1)+ITABL(2)+ITABL(3)
+         call my_alloc(IBUF, LEN, "IBUF")
+         call my_alloc(RBUF, 3*LEN, "RBUF")
+         IAD1=1
+         IAD2=1
+         LEN = FVSPMD(IFV)%NN_L
+         IF(IDO2 == 1) LEN = LEN + FVSPMD(IFV)%NNI_L
+         DO I=1,LEN
+            I1=FVSPMD(IFV)%IBUF_L(1,I)
+            I2=FVSPMD(IFV)%IBUF_L(2,I)
+            IBUF(IAD1-1+I)=I1
+            RBUF(IAD2-1+3*(I-1)+1)=X(1,I2)
+            RBUF(IAD2-1+3*(I-1)+2)=X(2,I2)
+            RBUF(IAD2-1+3*(I-1)+3)=X(3,I2)
+         ENDDO
+         IF (IDO1 > 1) THEN
+            IAD1=IAD1+LEN
+            IAD2=IAD2+3*LEN
+            DO I=1,FVSPMD(IFV)%NNA_L
+               I1=FVSPMD(IFV)%IBUFA_L(1,I)
+               I2=FVSPMD(IFV)%IBUFA_L(2,I)
+               IBUF(IAD1-1+I)=I1
+               IF (I2 <= NUMNOD) THEN
+                  ! IF MESHGEMS IS USED, EXTRA NODES ARE NOT INCLUDED WITHIN THE NUMNOD NODES
+                  RBUF(IAD2-1+3*(I-1)+1)=X(1,I2)
+                  RBUF(IAD2-1+3*(I-1)+2)=X(2,I2)
+                  RBUF(IAD2-1+3*(I-1)+3)=X(3,I2)
+               ENDIF
+            ENDDO
+            IAD1=IAD1+FVSPMD(IFV)%NNA_L
+            IAD2=IAD2+3*FVSPMD(IFV)%NNA_L
+            DO I=1,FVSPMD(IFV)%NNSA_L
+               I1=FVSPMD(IFV)%IBUFSA_L(1,I)
+               I2=FVSPMD(IFV)%IBUFSA_L(2,I)
+               IBUF(IAD1-1+I)=I1
+               IF (I2 <= NUMNOD) THEN
+                  ! IF MESHGEMS IS USED, EXTRA NODES ARE NOT INCLUDED WITHIN THE NUMNOD NODES
+                  RBUF(IAD2-1+3*(I-1)+1)=X(1,I2)
+                  RBUF(IAD2-1+3*(I-1)+2)=X(2,I2)
+                  RBUF(IAD2-1+3*(I-1)+3)=X(3,I2)
+               ENDIF
+            ENDDO
+         ENDIF
+C
+         ITAG=MSGOFF
+         LEN=ITABL(1)+ITABL(2)+ITABL(3)
+         REQ(1) = MPI_REQUEST_NULL
+         REQ(2) = MPI_REQUEST_NULL
+         IF(LEN > 0) CALL MPI_ISEND(IBUF, LEN, MPI_INTEGER, 0,
+     .                  ITAG, FVSPMD(IFV)%MPI_COMM, REQ(1), IERR)
+C
+         ITAG=MSGOFF
+         LEN=3*(ITABL(1)+ITABL(2)+ITABL(3))
+         IF(LEN > 0 ) CALL MPI_ISEND(RBUF, LEN, REAL, 0,
+     .                  ITAG, FVSPMD(IFV)%MPI_COMM, REQ(2), IERR)
+C
+         CALL MPI_WAITALL(2, REQ, STAT, IERR)
+         call my_dealloc(IBUF)
+         call my_dealloc(RBUF)
+      ENDIF
+C
+
+#endif
+      RETURN
+      END

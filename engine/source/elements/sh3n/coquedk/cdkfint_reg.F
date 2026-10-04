@@ -1,0 +1,544 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    cdkfint_reg      ../engine/source/elements/sh3n/coquedk/cdkfint_reg.F
+!||--- called by ------------------------------------------------------
+!||    cdkforc3         ../engine/source/elements/sh3n/coquedk/cdkforc3.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod     ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    nlocal_reg_mod   ../common_source/modules/nlocal_reg_mod.F
+!||====================================================================
+      SUBROUTINE CDKFINT_REG(
+     1   NLOC_DMG,VAR_REG, THK,     NEL,
+     2   OFF,     AREA,    NC1,     NC2,
+     3   NC3,     PX2,     PY2,     PX3,
+     4   PY3,     KSI,     ETA,     BUFNL,
+     5   IMAT,    NDDL,    ITASK,   NG,
+     6   DT2T,    THK0,    AREA0,   NFT)
+C-----------------------------------------------
+C   M o d u l e s
+C----------------------------------------------- 
+      USE NLOCAL_REG_MOD
+      USE ELBUFDEF_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "parit_c.inc"
+#include      "com20_c.inc"
+#include      "com08_c.inc"
+#include      "scr02_c.inc"
+#include      "scr18_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: NFT
+      INTEGER                                    :: NEL,IMAT,NDDL,ITASK,NG
+      INTEGER, DIMENSION(NEL)                    :: NC1,NC2,NC3
+      my_real, DIMENSION(NEL,NDDL), INTENT(INOUT):: 
+     .  VAR_REG
+      my_real, DIMENSION(NEL), INTENT(IN)        :: 
+     .  AREA,OFF,PX2,PY2,PX3,PY3,THK,THK0,AREA0
+      TYPE(NLOCAL_STR_), TARGET                  :: NLOC_DMG 
+      TYPE(BUF_NLOC_)  ,TARGET                   :: BUFNL
+      my_real
+     .  KSI,ETA
+      my_real, INTENT(INOUT)                     ::
+     .  DT2T
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,K,N1,N2,N3,L_NLOC,II,J,NDNOD
+      my_real 
+     .  L2,NTN_UNL1,NTN_UNL2,NTN_UNL3,XI,
+     .  B1,B2,B3,ZETA,SSPNL,
+     .  NTH1,NTH2,BTH1,BTH2,K1,K2,K12,
+     .  NTN_VNL1,NTN_VNL2,NTN_VNL3,H(3),NTVAR1,NTVAR2,
+     .  NTVAR3,LE_MAX,MAXSTIF,DTNOD,DT2P
+      my_real, DIMENSION(:,:), ALLOCATABLE :: 
+     .  F1,F2,F3,STI1,STI2,STI3
+      my_real, DIMENSION(:) ,ALLOCATABLE   :: 
+     . BTB11,BTB12,BTB13,BTB22,BTB23,BTB33,VOL
+      INTEGER, DIMENSION(:), ALLOCATABLE   ::
+     . POS1,POS2,POS3
+      my_real, POINTER, DIMENSION(:)       :: 
+     .  VNL,FNL,UNL,STIFNL,MASS,MASS0,VNL0
+      my_real, POINTER, DIMENSION(:,:)     :: 
+     .  MASSTH,UNLTH,VNLTH,FNLTH
+      my_real, DIMENSION(:,:), ALLOCATABLE :: 
+     .  STIFNLTH,DTN
+c-----------------------------------------------------------------------
+c     VAR_REG :  variable a regulariser (local cumulated plastic strain)
+c     NTVAR  =  NT * VAR_REG
+C=======================================================================
+      ! Recovering non-local parameters
+      L2     = NLOC_DMG%LEN(IMAT)**2 ! Non-local internal length ** 2
+      XI     = NLOC_DMG%DAMP(IMAT)   ! Non-local damping parameter
+      ZETA   = NLOC_DMG%DENS(IMAT)   ! Non-local density
+      SSPNL  = NLOC_DMG%SSPNL(IMAT)  ! Non-local sound speed
+      L_NLOC = NLOC_DMG%L_NLOC       ! Length of non-local tables
+      LE_MAX = NLOC_DMG%LE_MAX(IMAT) ! Maximal length of convergence
+      H(1)   = ONE-ETA-KSI
+      H(2)   = ETA
+      H(3)   = KSI
+      ! Allocation of elementary forces vectors
+      call my_alloc(F1, NEL, NDDL, "F1")
+      call my_alloc(F2, NEL, NDDL, "F2")
+      call my_alloc(F3, NEL, NDDL, "F3")
+      ! Only for nodal timestep
+      IF (NODADT > 0) THEN
+        ! Nodal stiffness
+        call my_alloc(STI1, NEL, NDDL, "STI1")
+        call my_alloc(STI2, NEL, NDDL, "STI2")
+        call my_alloc(STI3, NEL, NDDL, "STI3")
+        ! Non-local mass
+        MASS  => NLOC_DMG%MASS(1:L_NLOC)
+        ! Initial non-local mass
+        MASS0 => NLOC_DMG%MASS0(1:L_NLOC)
+      ENDIF
+      call my_alloc(BTB11, NEL, "BTB11")
+      call my_alloc(BTB12, NEL, "BTB12")
+      call my_alloc(BTB13, NEL, "BTB13")
+      call my_alloc(BTB22, NEL, "BTB22")
+      call my_alloc(BTB23, NEL, "BTB23")
+      call my_alloc(BTB33, NEL, "BTB33")
+      call my_alloc(VOL, NEL, "VOL")
+      call my_alloc(POS1, NEL, "POS1")
+      call my_alloc(POS2, NEL, "POS2")
+      call my_alloc(POS3, NEL, "POS3")
+      ! Recovering non-local data
+      VNL  => NLOC_DMG%VNL(1:L_NLOC)     ! Non-local variable velocities
+      VNL0 => NLOC_DMG%VNL_OLD(1:L_NLOC) ! Non-local variable velocities
+      UNL  => NLOC_DMG%UNL(1:L_NLOC)     ! Non-local cumulated variable
+c         
+      !-----------------------------------------------------------------------
+      ! Computation of the element volume and the BtB matrix product
+      !-----------------------------------------------------------------------
+      ! Loop over elements
+# include "vectorize.inc"
+      DO I=1,NEL
+c
+        ! Recovering the nodes of the triangle element
+        N1  = NLOC_DMG%IDXI(NC1(I))
+        N2  = NLOC_DMG%IDXI(NC2(I))
+        N3  = NLOC_DMG%IDXI(NC3(I))
+c
+        ! Recovering the positions of the first d.o.fs of each nodes
+        POS1(I) = NLOC_DMG%POSI(N1)
+        POS2(I) = NLOC_DMG%POSI(N2)
+        POS3(I) = NLOC_DMG%POSI(N3)  
+c
+        ! Computation of the element volume
+        VOL(I)  = THIRD*AREA(I)*THK(I)
+c 
+        ! Computation of the product BtxB 
+        BTB11(I) = (-PX3(I)-PX2(I))**2 + (-PY2(I)-PY3(I))**2
+        BTB12(I) = (-PX3(I)-PX2(I))*PX2(I) + (-PY2(I)-PY3(I))*PY2(I)
+        BTB13(I) = (-PX3(I)-PX2(I))*PX3(I) + (-PY2(I)-PY3(I))*PY3(I)
+        BTB22(I) = PX2(I)**2 + PY2(I)**2
+        BTB23(I) = PX2(I)*PX3(I) + PY2(I)*PY3(I)
+        BTB33(I) = PX3(I)**2 + PY3(I)**2
+c
+      ENDDO   
+c
+      !-----------------------------------------------------------------------
+      ! Pre-treatment non-local regularization in the thickness
+      !-----------------------------------------------------------------------
+      ! Only if NDDL > 1
+      IF ((NDDL > 1).AND.(L2>ZERO)) THEN 
+c
+        ! Allocation of the velocities predictor
+        IF (NDDL > 2) THEN 
+          IF (NODADT > 0) THEN 
+            call my_alloc(STIFNLTH, NEL, NDDL+1, "STIFNLTH")
+            call my_alloc(DTN, NEL, NDDL+1, "DTN")
+          ENDIF
+          NDNOD = NDDL+1
+        ELSE
+          IF (NODADT > 0) THEN 
+            call my_alloc(STIFNLTH, NEL, NDDL, "STIFNLTH")
+            call my_alloc(DTN, NEL, NDDL, "DTN")
+          ENDIF
+          NDNOD = NDDL
+        ENDIF
+c 
+        ! Pointing the non-local values in the thickness of the corresponding element
+        MASSTH => BUFNL%MASSTH(1:NEL,1:NDNOD)
+        UNLTH  => BUFNL%UNLTH(1:NEL,1:NDNOD)
+        VNLTH  => BUFNL%VNLTH(1:NEL,1:NDNOD)
+        FNLTH  => BUFNL%FNLTH(1:NEL,1:NDNOD)
+c
+        DO K = 1,NDNOD
+          DO I = 1,NEL
+            ! Resetting non-local forces
+            FNLTH(I,K) = ZERO
+            ! Resetting non-local nodal stiffness
+            IF (NODADT > 0) THEN
+              STIFNLTH(I,K) = EM20
+            ENDIF
+          ENDDO
+        ENDDO
+c
+        ! Computation of non-local forces in the shell thickness
+        DO K = 1, NDDL
+c        
+          ! Computation of shape functions value
+          IF ((NDDL==2).AND.(K==2)) THEN 
+            NTH1 = (Z0(K,NDDL) - ZTH(K,NDDL))   / (ZTH(K-1,NDDL) - ZTH(K,NDDL))
+            NTH2 = (Z0(K,NDDL) - ZTH(K-1,NDDL)) / (ZTH(K,NDDL)   - ZTH(K-1,NDDL))
+          ELSE 
+            NTH1 = (Z0(K,NDDL) - ZTH(K+1,NDDL)) / (ZTH(K,NDDL)   - ZTH(K+1,NDDL))
+            NTH2 = (Z0(K,NDDL) - ZTH(K,NDDL))   / (ZTH(K+1,NDDL) - ZTH(K,NDDL))
+          ENDIF
+c          
+          ! Loop over elements
+          DO I = 1,NEL
+            ! Computation of B-matrix values
+            IF ((NDDL==2).AND.(K==2)) THEN
+              BTH1 = (ONE/(ZTH(K-1,NDDL)  - ZTH(K,NDDL)))*(ONE/THK(I))
+              BTH2 = (ONE/(ZTH(K,NDDL)    - ZTH(K-1,NDDL)))*(ONE/THK(I))
+            ELSE
+              BTH1 = (ONE/(ZTH(K,NDDL)    - ZTH(K+1,NDDL)))*(ONE/THK(I))
+              BTH2 = (ONE/(ZTH(K+1,NDDL)  - ZTH(K,NDDL)))*(ONE/THK(I))
+            ENDIF               
+c         
+            ! Computation of the non-local K matrix
+            K1   = L2*(BTH1**2)  + NTH1**2
+            K12  = L2*(BTH1*BTH2)+ (NTH1*NTH2)
+            K2   = L2*(BTH2**2)  + NTH2**2
+c
+            ! Computation of the non-local forces
+            IF ((NDDL==2).AND.(K==2)) THEN
+              FNLTH(I,K-1) = FNLTH(I,K-1) + (K1*UNLTH(I,K-1) + K12*UNLTH(I,K) 
+     .                                    + XI*((NTH1**2)*VNLTH(I,K-1) 
+     .                                    + (NTH1*NTH2)*VNLTH(I,K))
+     .                                    - (NTH1*VAR_REG(I,K)))*VOL(I)*WF(K,NDDL)
+              FNLTH(I,K)   = FNLTH(I,K)   + (K12*UNLTH(I,K-1) + K2*UNLTH(I,K)
+     .                                    + XI*(NTH1*NTH2*VNLTH(I,K-1) 
+     .                                    + (NTH2**2)*VNLTH(I,K))
+     .                                    - NTH2*VAR_REG(I,K))*VOL(I)*WF(K,NDDL)
+            ELSE
+              FNLTH(I,K)   = FNLTH(I,K)   + (K1*UNLTH(I,K) + K12*UNLTH(I,K+1) 
+     .                                    + XI*((NTH1**2)*VNLTH(I,K) 
+     .                                    + (NTH1*NTH2)*VNLTH(I,K+1))
+     .                                    - (NTH1*VAR_REG(I,K)))*VOL(I)*WF(K,NDDL)
+              FNLTH(I,K+1) = FNLTH(I,K+1) + (K12*UNLTH(I,K) + K2*UNLTH(I,K+1)
+     .                                    + XI*(NTH1*NTH2*VNLTH(I,K) 
+     .                                    + (NTH2**2)*VNLTH(I,K+1))
+     .                                    - NTH2*VAR_REG(I,K))*VOL(I)*WF(K,NDDL)
+            ENDIF
+c
+            ! Computation of non-local nodal stiffness
+            IF (NODADT > 0) THEN 
+              IF ((NDDL==2).AND.(K==2)) THEN
+                STIFNLTH(I,K-1) = STIFNLTH(I,K-1) + MAX(ABS(K1)+ABS(K12),ABS(K12)+ABS(K2))*VOL(I)*WF(K,NDDL)
+                STIFNLTH(I,K)   = STIFNLTH(I,K)   + MAX(ABS(K1)+ABS(K12),ABS(K12)+ABS(K2))*VOL(I)*WF(K,NDDL)
+              ELSE
+                STIFNLTH(I,K)   = STIFNLTH(I,K)   + MAX(ABS(K1)+ABS(K12),ABS(K12)+ABS(K2))*VOL(I)*WF(K,NDDL) 
+                STIFNLTH(I,K+1) = STIFNLTH(I,K+1) + MAX(ABS(K1)+ABS(K12),ABS(K12)+ABS(K2))*VOL(I)*WF(K,NDDL) 
+              ENDIF              
+            ENDIF
+c
+          ENDDO
+        ENDDO
+c       
+        ! Updating non-local mass with /DT/NODA
+        IF (NODADT > 0) THEN
+C
+          ! Initial computation of the nodal timestep 
+          DTNOD = EP20
+          DO K = 1,NDNOD
+            DO I = 1,NEL
+              DTN(I,K) = DTFAC1(11)*CDAMP*SQRT(TWO*MASSTH(I,K)/MAX(STIFNLTH(I,K),EM20)) 
+              DTNOD    = MIN(DTN(I,K),DTNOD)
+            ENDDO
+          ENDDO
+C
+          ! /DT/NODA/CSTX - Constant timestep with added mass
+          IF ((IDTMIN(11)==3).OR.(IDTMIN(11)==4).OR.(IDTMIN(11)==8)) THEN  
+            ! Added mass computation if necessary
+            IF (DTNOD < DTMIN1(11)*(SQRT(CSTA))) THEN          
+              DO K = 1,NDNOD
+                DO I = 1,NEL
+                  IF (DTN(I,K) < DTMIN1(11)) THEN
+                    DT2P        = DTMIN1(11)/(DTFAC1(11)*CDAMP)
+                    MASSTH(I,K) = MAX(MASSTH(I,K),CSTA*HALF*STIFNLTH(I,K)*DT2P*DT2P*ONEP00001)
+                  ENDIF
+                ENDDO
+              ENDDO
+              DTNOD = DTMIN1(11)*(SQRT(CSTA))
+            ENDIF
+          ENDIF
+C
+          ! Classical nodal timestep check
+          IF (DTNOD < DT2T) THEN
+            DT2T = MIN(DT2T,DTNOD)
+          ENDIF
+        ENDIF
+c       
+        DO K = 1,NDNOD
+          DO I = 1,NEL
+            ! Updating the non-local in-thickness velocities   
+            VNLTH(I,K) = VNLTH(I,K) - (FNLTH(I,K)/MASSTH(I,K))*DT12
+          ENDDO
+        ENDDO
+c          
+        DO K = 1,NDNOD
+          DO I = 1,NEL
+            ! Computing the non-local in-thickness cumulated values
+            ! Guard: broken elements (OFF=0) have FNLTH=0, so VNLTH is frozen.
+            ! Skip the UNLTH update to prevent phantom linear drift in dead elements.
+            IF (OFF(I) /= ZERO) THEN
+              UNLTH(I,K) = UNLTH(I,K) + VNLTH(I,K)*DT1
+            ENDIF
+          ENDDO
+        ENDDO
+c
+        ! Transfert at the integration point
+        DO K = 1, NDDL
+          !Computation of shape functions value
+          IF ((NDDL==2).AND.(K==2)) THEN
+            NTH1 = (Z0(K,NDDL) - ZTH(K,NDDL))/(ZTH(K-1,NDDL)   - ZTH(K,NDDL))
+            NTH2 = (Z0(K,NDDL) - ZTH(K-1,NDDL)) /(ZTH(K,NDDL) - ZTH(K-1,NDDL))
+          ELSE
+            NTH1 = (Z0(K,NDDL) - ZTH(K+1,NDDL))/(ZTH(K,NDDL)   - ZTH(K+1,NDDL))
+            NTH2 = (Z0(K,NDDL) - ZTH(K,NDDL))  /(ZTH(K+1,NDDL) - ZTH(K,NDDL))
+          ENDIF
+          ! Loop over elements
+          DO I = 1,NEL
+            !Integration points non-local variables
+            IF ((NDDL==2).AND.(K==2)) THEN
+              VAR_REG(I,K) = NTH1*UNLTH(I,K-1) + NTH2*UNLTH(I,K)
+            ELSE
+              VAR_REG(I,K) = NTH1*UNLTH(I,K)   + NTH2*UNLTH(I,K+1)
+            ENDIF
+          ENDDO  
+        ENDDO          
+      ENDIF
+c
+      !-----------------------------------------------------------------------
+      ! Computation of the elementary non-local forces
+      !-----------------------------------------------------------------------
+      ! Loop over the non-local d.o.fs
+      DO K = 1, NDDL
+c
+        ! Loop over elements
+# include "vectorize.inc"
+        DO I = 1, NEL        
+c        
+          ! If the element is not broken, normal computation
+          IF (OFF(I) /= ZERO) THEN 
+            ! Computation of the product LEN**2 * BtxB
+            B1 = (L2 * VOL(I)) * WF(K,NDDL)*(BTB11(I)*UNL(POS1(I)+K-1) + BTB12(I)*UNL(POS2(I)+K-1) 
+     .                                 + BTB13(I)*UNL(POS3(I)+K-1))
+c        
+            B2 = (L2 * VOL(I)) * WF(K,NDDL)*(BTB12(I)*UNL(POS1(I)+K-1) + BTB22(I)*UNL(POS2(I)+K-1)
+     .                                 + BTB23(I)*UNL(POS3(I)+K-1))
+c        
+            B3 = (L2 * VOL(I)) * WF(K,NDDL)*(BTB13(I)*UNL(POS1(I)+K-1) + BTB23(I)*UNL(POS2(I)+K-1) 
+     .                                 + BTB33(I)*UNL(POS3(I)+K-1))
+c
+            ! Computing the product NtN*UNL
+            NTN_UNL1 = H(1)*H(1)*UNL(POS1(I)+K-1) + H(1)*H(2)*UNL(POS2(I)+K-1) + H(1)*H(3)*UNL(POS3(I)+K-1)
+            NTN_UNL2 = H(2)*H(1)*UNL(POS1(I)+K-1) + H(2)*H(2)*UNL(POS2(I)+K-1) + H(2)*H(3)*UNL(POS3(I)+K-1)
+            NTN_UNL3 = H(3)*H(1)*UNL(POS1(I)+K-1) + H(3)*H(2)*UNL(POS2(I)+K-1) + H(3)*H(3)*UNL(POS3(I)+K-1)
+c
+            ! Computing the product XDAMP*NtN*VNL
+            NTN_VNL1 = H(1)*H(1)*VNL(POS1(I)+K-1) + H(1)*H(2)*VNL(POS2(I)+K-1) + H(1)*H(3)*VNL(POS3(I)+K-1)
+            IF (NODADT > 0) THEN 
+              NTN_VNL1 = MIN(SQRT(MASS(POS1(I)+K-1)/MASS0(POS1(I)+K-1)),
+     .                       SQRT(MASS(POS2(I)+K-1)/MASS0(POS2(I)+K-1)),
+     .                       SQRT(MASS(POS3(I)+K-1)/MASS0(POS3(I)+K-1)))*NTN_VNL1
+            ENDIF
+            NTN_VNL2 = H(2)*H(1)*VNL(POS1(I)+K-1) + H(2)*H(2)*VNL(POS2(I)+K-1) + H(2)*H(3)*VNL(POS3(I)+K-1)
+            IF (NODADT > 0) THEN 
+              NTN_VNL2 = MIN(SQRT(MASS(POS1(I)+K-1)/MASS0(POS1(I)+K-1)),
+     .                       SQRT(MASS(POS2(I)+K-1)/MASS0(POS2(I)+K-1)),
+     .                       SQRT(MASS(POS3(I)+K-1)/MASS0(POS3(I)+K-1)))*NTN_VNL2
+            ENDIF
+            NTN_VNL3 = H(3)*H(1)*VNL(POS1(I)+K-1) + H(3)*H(2)*VNL(POS2(I)+K-1) + H(3)*H(3)*VNL(POS3(I)+K-1)
+            IF (NODADT > 0) THEN 
+              NTN_VNL3 = MIN(SQRT(MASS(POS1(I)+K-1)/MASS0(POS1(I)+K-1)),
+     .                       SQRT(MASS(POS2(I)+K-1)/MASS0(POS2(I)+K-1)),
+     .                       SQRT(MASS(POS3(I)+K-1)/MASS0(POS3(I)+K-1)))*NTN_VNL3
+            ENDIF
+c          
+            ! Multiplication by the volume of the element
+            NTN_UNL1 = NTN_UNL1 * VOL(I) * WF(K,NDDL)
+            NTN_UNL2 = NTN_UNL2 * VOL(I) * WF(K,NDDL)
+            NTN_UNL3 = NTN_UNL3 * VOL(I) * WF(K,NDDL)
+            NTN_VNL1 = NTN_VNL1 * XI  * VOL(I) * WF(K,NDDL)
+            NTN_VNL2 = NTN_VNL2 * XI  * VOL(I) * WF(K,NDDL)
+            NTN_VNL3 = NTN_VNL3 * XI  * VOL(I) * WF(K,NDDL)
+c
+            ! Introducing the internal variable to be regularized
+            NTVAR1  = VAR_REG(I,K)*H(1)*VOL(I)* WF(K,NDDL)
+            NTVAR2  = VAR_REG(I,K)*H(2)*VOL(I)* WF(K,NDDL)
+            NTVAR3  = VAR_REG(I,K)*H(3)*VOL(I)* WF(K,NDDL)
+c
+            ! Computing the elementary non-local forces
+            F1(I,K) = NTN_UNL1 + NTN_VNL1 - NTVAR1 + B1
+            F2(I,K) = NTN_UNL2 + NTN_VNL2 - NTVAR2 + B2
+            F3(I,K) = NTN_UNL3 + NTN_VNL3 - NTVAR3 + B3
+c
+            ! Computing nodal equivalent stiffness
+            IF (NODADT > 0) THEN 
+              STI1(I,K) = (ABS(L2*BTB11(I) + H(1)*H(1)) + ABS(L2*BTB12(I) + H(1)*H(2)) + 
+     .                     ABS(L2*BTB13(I) + H(1)*H(3)))* VOL(I) * WF(K,NDDL)
+              STI2(I,K) = (ABS(L2*BTB12(I) + H(2)*H(1)) + ABS(L2*BTB22(I) + H(2)*H(2)) + 
+     .                     ABS(L2*BTB23(I) + H(2)*H(3)))* VOL(I) * WF(K,NDDL)
+              STI3(I,K) = (ABS(L2*BTB13(I) + H(3)*H(1)) + ABS(L2*BTB23(I) + H(3)*H(2)) + 
+     .                     ABS(L2*BTB33(I) + H(3)*H(3)))* VOL(I) * WF(K,NDDL)
+            ENDIF
+c
+          ! If the element is broken, the non-local wave is absorbed
+          ELSE
+            IF (NODADT > 0) THEN 
+              ! Non-local absorbing forces
+              F1(I,K) = SQRT(MASS(POS1(I)+K-1)/MASS0(POS1(I)+K-1))*H(1)*WF(K,NDDL)*ZETA*SSPNL*
+     .                     HALF*(VNL(POS1(I)+K-1)+VNL0(POS1(I)+K-1))*SQRT((FOUR/SQRT(THREE))*(AREA0(I)))*THK0(I)
+              F2(I,K) = SQRT(MASS(POS2(I)+K-1)/MASS0(POS2(I)+K-1))*H(2)*WF(K,NDDL)*ZETA*SSPNL*
+     .                     HALF*(VNL(POS2(I)+K-1)+VNL0(POS2(I)+K-1))*SQRT((FOUR/SQRT(THREE))*(AREA0(I)))*THK0(I) 
+              F3(I,K) = SQRT(MASS(POS3(I)+K-1)/MASS0(POS3(I)+K-1))*H(3)*WF(K,NDDL)*ZETA*SSPNL*
+     .                     HALF*(VNL(POS3(I)+K-1)+VNL0(POS3(I)+K-1))*SQRT((FOUR/SQRT(THREE))*(AREA0(I)))*THK0(I)
+              ! Computing nodal equivalent stiffness
+              STI1(I,K) = EM20
+              STI2(I,K) = EM20
+              STI3(I,K) = EM20          
+            ELSE
+              ! Non-local absorbing forces
+              F1(I,K) = H(1)*WF(K,NDDL)*ZETA*SSPNL*HALF*(VNL(POS1(I)+K-1)+VNL0(POS1(I)+K-1))*
+     .                                    SQRT((FOUR/SQRT(THREE))*(AREA0(I)))*THK0(I)
+              F2(I,K) = H(2)*WF(K,NDDL)*ZETA*SSPNL*HALF*(VNL(POS2(I)+K-1)+VNL0(POS2(I)+K-1))*
+     .                                    SQRT((FOUR/SQRT(THREE))*(AREA0(I)))*THK0(I) 
+              F3(I,K) = H(3)*WF(K,NDDL)*ZETA*SSPNL*HALF*(VNL(POS3(I)+K-1)+VNL0(POS3(I)+K-1))*
+     .                                    SQRT((FOUR/SQRT(THREE))*(AREA0(I)))*THK0(I)
+            ENDIF
+          ENDIF
+        ENDDO
+      ENDDO
+c      
+      !-----------------------------------------------------------------------
+      ! Assembling of the non-local forces
+      !-----------------------------------------------------------------------
+c
+      ! If PARITH/OFF
+      IF (IPARIT == 0) THEN 
+        ! Recovering non-local internal forces
+        FNL => NLOC_DMG%FNL(1:L_NLOC,ITASK+1)                        ! Non-local forces
+        IF (NODADT > 0) STIFNL => NLOC_DMG%STIFNL(1:L_NLOC,ITASK+1)  ! Non-local equivalent nodal stiffness
+        ! Loop over elements
+        DO I=1,NEL
+          ! Loop over non-local degrees of freedom
+# include "vectorize.inc"
+          DO K = 1,NDDL
+            ! Assembling non-local forces
+            FNL(POS1(I)+K-1) = FNL(POS1(I)+K-1) - F1(I,K)
+            FNL(POS2(I)+K-1) = FNL(POS2(I)+K-1) - F2(I,K)
+            FNL(POS3(I)+K-1) = FNL(POS3(I)+K-1) - F3(I,K)
+            IF (NODADT > 0) THEN
+              ! Spectral radius of stiffness matrix
+              MAXSTIF = MAX(STI1(I,K),STI2(I,K),STI3(I,K))
+              ! Computing nodal stiffness
+              STIFNL(POS1(I)+K-1) = STIFNL(POS1(I)+K-1) + MAXSTIF
+              STIFNL(POS2(I)+K-1) = STIFNL(POS2(I)+K-1) + MAXSTIF
+              STIFNL(POS3(I)+K-1) = STIFNL(POS3(I)+K-1) + MAXSTIF
+            ENDIF
+          ENDDO
+        ENDDO
+c
+      ! If PARITH/ON
+      ELSE
+        ! Loop over additional d.o.fs
+        DO J = 1,NDDL
+c
+          ! Loop over elements
+          DO I=1,NEL
+            II  = I + NFT
+c
+            ! Spectral radius of stiffness matrix
+            IF (NODADT > 0) THEN
+              MAXSTIF = MAX(STI1(I,J),STI2(I,J),STI3(I,J))
+            ENDIF
+c
+            K = NLOC_DMG%IADTG(1,II)
+            IF (NG == 1) THEN 
+              NLOC_DMG%FSKY(K,J) = -F1(I,J)
+              IF (NODADT > 0) NLOC_DMG%STSKY(K,J) = MAXSTIF
+            ELSE
+              NLOC_DMG%FSKY(K,J) = NLOC_DMG%FSKY(K,J) - F1(I,J)
+              IF (NODADT > 0) NLOC_DMG%STSKY(K,J) = NLOC_DMG%STSKY(K,J) + MAXSTIF
+            ENDIF
+c
+            K = NLOC_DMG%IADTG(2,II)
+            IF (NG == 1) THEN 
+              NLOC_DMG%FSKY(K,J) = -F2(I,J)
+              IF (NODADT > 0) NLOC_DMG%STSKY(K,J) = MAXSTIF
+            ELSE
+              NLOC_DMG%FSKY(K,J) = NLOC_DMG%FSKY(K,J) - F2(I,J)
+              IF (NODADT > 0) NLOC_DMG%STSKY(K,J) = NLOC_DMG%STSKY(K,J) + MAXSTIF
+            ENDIF
+c
+            K = NLOC_DMG%IADTG(3,II)
+            IF (NG == 1) THEN 
+              NLOC_DMG%FSKY(K,J) = -F3(I,J)
+              IF (NODADT > 0) NLOC_DMG%STSKY(K,J) = MAXSTIF
+            ELSE
+              NLOC_DMG%FSKY(K,J) = NLOC_DMG%FSKY(K,J) - F3(I,J)
+              IF (NODADT > 0) NLOC_DMG%STSKY(K,J) = NLOC_DMG%STSKY(K,J) + MAXSTIF
+            ENDIF
+c
+          ENDDO
+c
+        ENDDO
+c
+      ENDIF
+      ! Deallocation of tables
+      IF (ALLOCATED(F1)) call my_dealloc(F1)
+      IF (ALLOCATED(F2)) call my_dealloc(F2)
+      IF (ALLOCATED(F3)) call my_dealloc(F3)
+      IF (ALLOCATED(STIFNLTH)) call my_dealloc(STIFNLTH)
+      IF (ALLOCATED(BTB11)) call my_dealloc(BTB11)
+      IF (ALLOCATED(BTB12)) call my_dealloc(BTB12)
+      IF (ALLOCATED(BTB13)) call my_dealloc(BTB13)
+      IF (ALLOCATED(BTB22)) call my_dealloc(BTB22)
+      IF (ALLOCATED(BTB23)) call my_dealloc(BTB23)
+      IF (ALLOCATED(BTB33)) call my_dealloc(BTB33)
+      IF (ALLOCATED(POS1)) call my_dealloc(POS1)
+      IF (ALLOCATED(POS2)) call my_dealloc(POS2)
+      IF (ALLOCATED(POS3)) call my_dealloc(POS3)
+      IF (ALLOCATED(STI1)) call my_dealloc(STI1)
+      IF (ALLOCATED(STI2)) call my_dealloc(STI2)
+      IF (ALLOCATED(STI3)) call my_dealloc(STI3)
+      IF (ALLOCATED(VOL)) call my_dealloc(VOL)
+c
+      END

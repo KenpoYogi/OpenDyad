@@ -1,0 +1,127 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    i25sors         ../starter/source/interfaces/inter3d1/i25sors.F
+!||--- called by ------------------------------------------------------
+!||    inint3          ../starter/source/interfaces/inter3d1/inint3.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg          ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod     ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE I25SORS(NSN  ,NRTS, ITAB, ILEV  ,IPARI, 
+     .                  INTBUF_TAB)
+C
+      USE MESSAGE_MOD
+      USE INTBUFDEF_MOD 
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NSN, NRTS, ITAB(*), ILEV, IPARI(NPARI)
+      TYPE(INTBUF_STRUCT_) INTBUF_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER J, N, M, K, NISUB, NISUBS
+      INTEGER IERROR,WORK(70000)
+      INTEGER, DIMENSION(:),ALLOCATABLE :: ITRI, INDEX, LISUBS, INFLG_SUBS, ADDSUBS
+      INTEGER, DIMENSION(:,:),ALLOCATABLE :: ISAV
+C-----------------------------------------------
+      call my_alloc(ITRI, NSN, "ITRI", stat=IERROR)
+      call my_alloc(ISAV, 3, NSN, "ISAV", stat=IERROR)
+      call my_alloc(INDEX, 2*NSN, "INDEX", stat=IERROR)
+      IF (IERROR /= 0) 
+     .  CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                     MSGTYPE=MSGERROR,
+     .               C1='SORTING SECONDARY NODES IN INTERFACE TYPE25')
+C--------------------------------------------------------------
+C     Tri nds SECONDARYs vs ID
+C--------------------------------------------------------------
+C
+       DO N=1,NSN
+         ITRI(N)  =ITAB(INTBUF_TAB%NSV(N))
+         ISAV(1,N)=INTBUF_TAB%NSV(N)
+         IF(ILEV==2) ISAV(2,N)=INTBUF_TAB%NBINFLG(N)
+       END DO
+C
+       NISUB = IPARI(36)
+       NISUBS =IPARI(37)
+       IF(NISUB > 0)THEN
+         call my_alloc(LISUBS, NISUBS, "LISUBS", stat=IERROR)
+         call my_alloc(INFLG_SUBS, NISUBS, "INFLG_SUBS", stat=IERROR)
+         call my_alloc(ADDSUBS, NSN+1, "ADDSUBS", stat=IERROR)
+         IF (IERROR /= 0) 
+     .     CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                     MSGTYPE=MSGERROR,
+     .                     C1='SORTING SECONDARY NODES IN INTERFACE TYPE25')
+         ADDSUBS(1:NSN+1)    =INTBUF_TAB%ADDSUBS(1:NSN+1)
+         LISUBS(1:NISUBS)    =INTBUF_TAB%LISUBS(1:NISUBS)
+         INFLG_SUBS(1:NISUBS)=INTBUF_TAB%INFLG_SUBS(1:NISUBS)
+       END IF
+C
+       CALL MY_ORDERS(0,WORK,ITRI,INDEX,NSN,1)
+C
+       DO N=1,NSN
+         INTBUF_TAB%NSV(N)    =ISAV(1,INDEX(N))
+         IF(ILEV==2) INTBUF_TAB%NBINFLG(N)=ISAV(2,INDEX(N))
+       END DO
+C
+       IF(NISUB > 0)THEN
+         INTBUF_TAB%ADDSUBS(1)=1         
+         DO N=1,NSN
+           M=INDEX(N)
+           INTBUF_TAB%ADDSUBS(N+1)= INTBUF_TAB%ADDSUBS(N)
+     .                            + ADDSUBS(M+1) - ADDSUBS(M)
+           DO K=ADDSUBS(M),ADDSUBS(M+1)-1
+             INTBUF_TAB%LISUBS(INTBUF_TAB%ADDSUBS(N)+K-ADDSUBS(M))    =LISUBS(K)
+             INTBUF_TAB%INFLG_SUBS(INTBUF_TAB%ADDSUBS(N)+K-ADDSUBS(M))=INFLG_SUBS(K)
+           END DO
+         END DO
+       END IF
+C
+       DO N=1,NRTS
+         DO J=1,4
+           M = INTBUF_TAB%IRECTS(4*(N-1)+J)
+           IF(M/=0) INTBUF_TAB%IRECTS(4*(N-1)+J)=ISAV(1,INDEX(M))
+         END DO
+       END DO
+C
+      CALL MY_DEALLOC(ITRI)
+      CALL MY_DEALLOC(ISAV)
+      CALL MY_DEALLOC(INDEX)
+      IF(NISUB > 0)CALL MY_DEALLOC(LISUBS)
+      IF(NISUB > 0)CALL MY_DEALLOC(INFLG_SUBS)
+      IF(NISUB > 0)CALL MY_DEALLOC(ADDSUBS)
+C--------------------------------------------------------------
+      RETURN
+      END

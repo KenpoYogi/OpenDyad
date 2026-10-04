@@ -1,0 +1,95 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    same_shellori_mod     ../starter/source/elements/shell/shell_offset/same_shellori.F90
+!||--- called by ------------------------------------------------------
+!||    sh_offset_jonct_chk   ../starter/source/elements/shell/shell_offset/sh_offset_jonkt_chk.F90
+!||====================================================================
+      module same_shellori_mod
+
+      implicit none
+
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!
+!=======================================================================================================================
+!!\brief if the same orientation of two shell connected by i1,i2 (i2>i1)
+!=======================================================================================================================
+!||====================================================================
+!||    same_shellori         ../starter/source/elements/shell/shell_offset/same_shellori.F90
+!||--- called by ------------------------------------------------------
+!||    sh_offset_jonct_chk   ../starter/source/elements/shell/shell_offset/sh_offset_jonkt_chk.F90
+!||====================================================================
+        subroutine same_shellori(i1,i2,ixm,ixn,isame)
+! ------------------------------------------------------------------------------
+!
+! ------------------------------------------------------------------------------
+!
+          implicit none
+!
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,  intent(in   )               :: i1 , i2        !< commun seg i1,i2
+          integer,  intent(in   ),dimension(4)  :: ixm, ixn       !< shell connectivity
+          integer,  intent(inout)               :: isame          !< same orientation flag
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,nextk(4),im1,im2,ivm,ivn
+          data nextk/2,3,4,1/
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+          ivm = 0
+          ivn = 0
+          do i = 1,4
+            im1=ixm(i)
+            im2=ixm(nextk(i))
+            if(min(im1,im2)==i1.and.max(im1,im2)==i2) then
+              if(im2 > im1)then
+                ivm = 1
+              else
+                ivm = -1
+              end if
+            end if
+          end do
+          do i=1,4
+            im1=ixn(i)
+            im2=ixn(nextk(i))
+            if(min(im1,im2)==i1.and.max(im1,im2)==i2) then
+              if(im2 > im1)then
+                ivn = 1
+              else
+                ivn = -1
+              end if
+            end if
+          end do
+          isame = -ivm*ivn
+!
+        end subroutine same_shellori
+      end module same_shellori_mod
+

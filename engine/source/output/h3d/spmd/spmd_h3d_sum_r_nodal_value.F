@@ -1,0 +1,91 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_h3d_sum_r_nodal_value   ../engine/source/output/h3d/spmd/spmd_h3d_sum_r_nodal_value.F
+!||--- called by ------------------------------------------------------
+!||    genh3d                       ../engine/source/output/h3d/h3d_results/genh3d.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod                 ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod               ../common_source/tools/memory/my_dealloc.F90
+!||    spmd_comm_world_mod          ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+       SUBROUTINE SPMD_H3D_SUM_R_NODAL_VALUE(NODGLOB,V,LEN,VP0,LENP0)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER  , INTENT(IN) :: LEN,LENP0, NODGLOB(LEN)
+      my_real  , INTENT(INOUT) :: 
+     .   V(LEN),VP0(LENP0)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER K 
+      REAL
+     .       , DIMENSION(:), ALLOCATABLE ::  V_TMP,VP0_TMP
+#ifdef MPI
+      INTEGER IERROR,I
+
+        call my_alloc(V_TMP, LENP0, "V_TMP")
+        call my_alloc(VP0_TMP, LENP0, "VP0_TMP")
+
+        DO I=1,LENP0
+           VP0_TMP(I)=ZERO
+           V_TMP(I) = ZERO
+        ENDDO
+        DO K=1,LEN
+           I=NODGLOB(K)
+           VP0_TMP(I)=V(K)
+        ENDDO
+
+       IF (LENP0 > 0) THEN
+        CALL MPI_REDUCE(VP0_TMP,V_TMP,LENP0,
+     .                  MPI_REAL,MPI_SUM,IT_SPMD(1),
+     .                  SPMD_COMM_WORLD,IERROR)
+       ENDIF
+       IF (ISPMD==0) THEN
+         DO I=1,LENP0
+          VP0(I) = V_TMP(I)
+         END DO
+       ENDIF
+
+       call my_dealloc(V_TMP)
+       call my_dealloc(VP0_TMP)
+#endif
+       RETURN
+       END
+
+

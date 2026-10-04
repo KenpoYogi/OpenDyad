@@ -1,0 +1,127 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!! \brief Reader for option /EOS/EXPONENTIAL
+!! \details  PM(31) = P(MU0,E0) -> will be used to initialize pressure from stress tensor SIG(1:3,*)
+!||====================================================================
+!||    hm_read_eos_exponential_mod   ../starter/source/materials/eos/hm_read_eos_exponential.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_eos                   ../starter/source/materials/eos/hm_read_eos.F
+!||====================================================================
+      module hm_read_eos_exponential_mod
+          contains
+
+!||====================================================================
+!||    hm_read_eos_exponential   ../starter/source/materials/eos/hm_read_eos_exponential.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_eos               ../starter/source/materials/eos/hm_read_eos.F
+!||--- calls      -----------------------------------------------------
+!||    hm_get_floatv             ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_option_is_encrypted    ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||--- uses       -----------------------------------------------------
+!||    submodel_mod              ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      subroutine hm_read_eos_exponential(iout,pm,unitab,lsubmodel,npropm,eos_struct)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+        use unitab_mod
+        use submodel_mod
+        use constant_mod , only : three100, em20, zero
+        use precision_mod, only : WP
+        use eos_param_mod , only : eos_param_
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+        implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+      integer,intent(in) :: npropm                                     !< size for pm array
+      integer,intent(in) :: iout                                       !< file unit of starter listing
+      type (unit_type_),intent(in) :: unitab                           !< data structure for unit systems required by reader subroutines
+      real(kind=WP), intent(inout) :: pm(npropm)                       !< material parameters
+      type(submodel_data), dimension(nsubmod), intent(in) :: lsubmodel !< submodel data structure required for reader subroutines
+      type(eos_param_),intent(inout) :: eos_struct
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+        real(kind=WP) :: p0, alpha, psh,ssp0
+        logical :: is_encrypted, is_available
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+        is_encrypted = .false.
+        is_available = .false.
+
+        call hm_option_is_encrypted(is_encrypted)
+
+        call hm_get_floatv('MAT_C0', p0, is_available,lsubmodel,unitab)
+        call hm_get_floatv('Alpha', alpha, is_available,lsubmodel,unitab)
+        call hm_get_floatv('MAT_PSH', psh, is_available,lsubmodel,unitab)
+
+      pm(104)=p0-psh
+      pm(31)=p0-psh
+      pm(32)=zero !bulk modulus
+      pm(88)=psh
+      if(pm(79)==zero)pm(79)=three100
+      ssp0 = em20
+      pm(27)=ssp0
+
+      !real EoS parameters
+      eos_struct%nuparam = 1
+      eos_struct%niparam = 0
+      eos_struct%nfunc = 0
+      eos_struct%ntable = 0
+      call eos_struct%construct() !allocations
+      eos_struct%psh = psh
+      eos_struct%e0 = zero
+      eos_struct%uparam(1) = alpha
+      eos_struct%p0 = p0
+
+      write(iout,1000)
+      if(is_encrypted)then
+        write(iout,'(5X,A,//)')'CONFIDENTIAL DATA'
+      else
+        write(iout,1500)p0,alpha,psh
+      endif
+
+        return
+1000    format(&
+          5X,'  EXPONENTIAL EOS',/,&
+          5X,'  ---------------')
+1500    format(&
+          5X,'INITIAL PRESSURE (P0) . . . . . . . . . .=',1PG20.13/,&
+          5X,'DECAY PARAMETER (ALPHA) . . . . . . . . .=',1PG20.13/,&
+          5X,'PRESSURE SHIFT (PSH)  . . . . . . . . . .=',1PG20.13/)
+
+        return
+      end subroutine hm_read_eos_exponential
+      end module hm_read_eos_exponential_mod
+

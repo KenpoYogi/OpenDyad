@@ -1,0 +1,117 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    gradient_limitation2             ../engine/source/ale/alemuscl/gradient_limitation2.F
+!||--- called by ------------------------------------------------------
+!||    ale51_gradient_reconstruction2   ../engine/source/ale/alemuscl/ale51_gradient_reconstruction2.F
+!||--- uses       -----------------------------------------------------
+!||    alemuscl_mod                     ../common_source/modules/ale/alemuscl_mod.F
+!||    element_mod                      ../common_source/modules/elements/element_mod.F90
+!||====================================================================
+      SUBROUTINE GRADIENT_LIMITATION2(IXQ, X, TRIMAT)
+C-----------------------------------------------
+C  D e s c r i p t i o n   
+C        limits the amplitude of this gradient in such a way that 
+C        extrapolated values on the nodes of the element lie between
+C        local minimum and maximum values from the neighboring elements
+C        -> maximum principle purpose
+C-----------------------------------------------
+C   M o d u l e s 
+C-----------------------------------------------
+      USE ALEMUSCL_MOD
+      use element_mod , only :nixq
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include "vect01_c.inc"
+#include "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: IXQ(NIXQ, NUMELQ), TRIMAT
+      my_real, INTENT(IN) :: X(3,NUMNOD)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I, II, JJ
+      INTEGER :: NODE_ID
+      my_real :: reduc_factor(TRIMAT), nodal_reduc_factor, YN, ZN, VALNODE
+      INTEGER :: ITRIMAT
+      INTEGER :: NNUM
+      my_real :: YK, ZK
+C-----------------------------------------------
+C   S o u r c e   L i n e s 
+C-----------------------------------------------   
+      !!! Limiting process for the computed gradient -> maximum principle
+      !!! and stability purposes
+      DO I = LFT, LLT
+         II = I + NFT
+         !!!centroid element
+         YK = ALEMUSCL_Buffer%ELCENTER(II,2) ; ZK = ALEMUSCL_Buffer%ELCENTER(II,3)
+         reduc_factor = EP30
+         NNUM = 0
+         DO ITRIMAT = 1, TRIMAT
+            IF(ABS(ALEMUSCL_Buffer%GRAD(II,2,ITRIMAT)) + 
+     .         ABS(ALEMUSCL_Buffer%GRAD(II,3,ITRIMAT)) > ZERO) THEN
+               NNUM = NNUM + 1
+               !!! Check the nodes of the element
+               DO JJ = 1, 4
+                  NODE_ID = IXQ(JJ+1, II)
+                  !!! Get the node coordinates
+                  YN = X(2, NODE_ID) ; ZN = X(3, NODE_ID) 
+                  !!! Interpolate the function at the node
+                  VALNODE = ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT) 
+     .                 + ALEMUSCL_Buffer%GRAD(II,2,ITRIMAT) * (YN - YK)
+     .                 + ALEMUSCL_Buffer%GRAD(II,3,ITRIMAT) * (ZN - ZK)
+                  nodal_reduc_factor = ONE
+                  IF (VALNODE - ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT) > ZERO) THEN
+                     nodal_reduc_factor = 
+     .                    MIN((ALEMUSCL_Buffer%NODE_MAX_VALUE(NODE_ID,ITRIMAT) - ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT))
+     .                    / (VALNODE - ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT)), ALEMUSCL_Param%BETA)
+                  ELSE IF (VALNODE - ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT) < ZERO) THEN
+                     nodal_reduc_factor = 
+     .                    MIN((ALEMUSCL_Buffer%NODE_MIN_VALUE(NODE_ID,ITRIMAT) - ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT)) 
+     .                    / (VALNODE - ALEMUSCL_Buffer%VOLUME_FRACTION(II,ITRIMAT)), ALEMUSCL_Param%BETA)
+                  ENDIF
+                  reduc_factor(ITRIMAT) = MIN(reduc_factor(ITRIMAT), nodal_reduc_factor)
+               ENDDO  ! JJ = 1, 8
+            ELSE
+               reduc_factor(ITRIMAT) = ZERO
+            ENDIF 
+         ENDDO  ! ITRIMAT = 1, TRIMAT
+        
+         DO ITRIMAT = 1, TRIMAT
+            IF(ABS(ALEMUSCL_Buffer%GRAD(II,2,ITRIMAT)) + ABS(ALEMUSCL_Buffer%GRAD(II,3,ITRIMAT)) > ZERO) THEN
+            !!!   Limitation of the gradient
+               ALEMUSCL_Buffer%GRAD(II,2,ITRIMAT) = reduc_factor(ITRIMAT) * ALEMUSCL_Buffer%GRAD(II,2,ITRIMAT)
+               ALEMUSCL_Buffer%GRAD(II,3,ITRIMAT) = reduc_factor(ITRIMAT) * ALEMUSCL_Buffer%GRAD(II,3,ITRIMAT)
+            ENDIF
+         ENDDO
+      ENDDO  ! I = LFT, LLT
+C-----------------------------------------------      
+      END SUBROUTINE GRADIENT_LIMITATION2

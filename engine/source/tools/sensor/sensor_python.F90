@@ -1,0 +1,91 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    sensor_python_mod   ../engine/source/tools/sensor/sensor_python.F90
+!||--- called by ------------------------------------------------------
+!||    sensor_base         ../engine/source/tools/sensor/sensor_base.F
+!||    sensor_init         ../engine/source/tools/sensor/sensor_init.F
+!||====================================================================
+      module sensor_python_mod
+        implicit none
+      contains
+!||====================================================================
+!||    sensor_python                     ../engine/source/tools/sensor/sensor_python.F90
+!||--- called by ------------------------------------------------------
+!||    sensor_base                       ../engine/source/tools/sensor/sensor_base.F
+!||    sensor_init                       ../engine/source/tools/sensor/sensor_init.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    constant_mod                      ../common_source/modules/constant_mod.F
+!||    precision_mod                     ../common_source/modules/precision_mod.F90
+!||    python_funct_mod                  ../common_source/modules/python_mod.F90
+!||    sensor_mod                        ../common_source/modules/sensor_mod.F90
+!||====================================================================
+        subroutine sensor_python(sensor,time)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use python_funct_mod
+          use sensor_mod
+          use constant_mod
+          use precision_mod, only : wp
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                     arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          type (sensor_str_) :: sensor
+          real(wp), intent(in) :: time
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                     local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          double precision :: y
+          integer :: previous_status
+
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                      Body
+! ----------------------------------------------------------------------------------------------------------------------
+          previous_status = sensor%status
+!$OMP CRITICAL
+          call python_call_function_with_state(sensor%python_function%name,y)
+!$OMP END CRITICAL
+          if(y >= half) then
+            sensor%status = 1
+          else if(y < half) then
+            sensor%status = 0
+          end if
+
+          if(time == ZERO .and. sensor%status == 1) then
+            sensor%tstart = time 
+          else if(time == ZERO .and. sensor%status == 0) then 
+            sensor%tstart = HUGE(time)
+          else if(previous_status == 0 .and. sensor%status == 1) then
+            sensor%tstart = time 
+            sensor%tstart = sensor%tstart - tiny(sensor%tstart)
+          else if(previous_status == 1 .and. sensor%status == 0) then
+            sensor%tstart= HUGE(time)
+          end if
+          return
+        end subroutine sensor_python
+      end module sensor_python_mod

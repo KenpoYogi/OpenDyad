@@ -1,0 +1,178 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    sponfro   ../engine/source/elements/sph/sponfro.F
+!||--- called by ------------------------------------------------------
+!||    forintp   ../engine/source/elements/forintp.F
+!||--- uses       -----------------------------------------------------
+!||    sphbox    ../engine/share/modules/sphbox.F
+!||====================================================================
+      SUBROUTINE SPONFRO(X ,V        ,A       ,MS      ,
+     2             SPBUF   ,ITAB    ,KXSP    ,IXSP    ,NOD2SP  ,
+     3             ISPHIO  ,IPART   ,IPARTSP ,WASPACT ,WA_EPSD ,
+     4             VNORMAL, WAR2 )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SPHBOX
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com08_c.inc"
+#include      "sphcom.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER KXSP(NISP,*),IXSP(KVOISPH,*),NOD2SP(*),ITAB(*),
+     .        ISPHIO(NISPHIO,*),IPART(LIPART1,*),IPARTSP(*),WASPACT(*)
+      my_real
+     .   X(3,*) ,V(3,*) ,A(3,*) ,MS(*) ,SPBUF(NSPBUF,*) ,
+     .   WA_EPSD(KWASPH,*),VNORMAL(3,*),WAR2(9,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NS ,N ,IMPOSE ,INOD ,M ,JNOD ,JMPOSE ,
+     .        IPPV ,NP, K, NN, JMPOSE2
+      my_real
+     .       XI,YI,ZI,XJ,YJ,ZJ,DMIN,DD,
+     .       DXX,DXY,DXZ,DYX,DYY,DYZ,DZX,DZY,DZZ,
+     .       DIVV
+      LOGICAL lBOOL
+C-----------------------------------------------
+C     general outlets & silent boundary.
+C-------------------------------------------
+      DO NS=1,NSPHACT
+       N=WASPACT(NS)
+       IMPOSE=KXSP(2,N)/(NGROUP+1)
+       lBOOL=.FALSE.
+       IF(IMPOSE /= 0)THEN
+         IF(ISPHIO(1,IMPOSE)==2.OR.ISPHIO(1,IMPOSE)==3)lBOOL=.TRUE.
+       ENDIF
+       IF(lBOOL)THEN
+          INOD=KXSP(3,N)
+          XI=X(1,INOD)
+          YI=X(2,INOD)
+          ZI=X(3,INOD)
+C-------
+C         closer neighbor upstream of the outlet.
+          IPPV=0
+          DMIN=1.E+20
+
+          DO  K=1,KXSP(4,N)
+
+           JNOD=IXSP(K,N)
+           IF(JNOD>0)THEN          ! particule locale
+             M=NOD2SP(JNOD)
+             IF(M<=0) CYCLE
+             JMPOSE=KXSP(2,M)/(NGROUP+1)
+             lBOOL=.FALSE.
+             IF(JMPOSE == 0)THEN
+               lBOOL=.TRUE.
+             ELSE
+               IF(ISPHIO(1,JMPOSE) == 1)lBOOL=.TRUE.
+             ENDIF
+             IF(lBOOL)THEN
+               XJ  =X(1,JNOD)
+               YJ  =X(2,JNOD)
+               ZJ  =X(3,JNOD)
+               DD  =(XI-XJ)*(XI-XJ)+(YI-YJ)*(YI-YJ)+(ZI-ZJ)*(ZI-ZJ)
+               IF(DD<DMIN)THEN
+                IPPV=JNOD
+                DMIN=DD
+               ENDIF
+             ENDIF
+           ELSEIF(JNOD<0)THEN
+             NN = -JNOD
+             JMPOSE = NINT(XSPHR(12,NN))
+             IF(JMPOSE>0)THEN
+               JMPOSE2=ISPHIO(1,JMPOSE)
+             ELSE
+               JMPOSE2=0
+             ENDIF
+             IF(JMPOSE2==0.OR.JMPOSE2==1)THEN
+               XJ  =XSPHR(3,NN)
+               YJ  =XSPHR(4,NN)
+               ZJ  =XSPHR(5,NN)
+               DD  =(XI-XJ)*(XI-XJ)+(YI-YJ)*(YI-YJ)+(ZI-ZJ)*(ZI-ZJ)
+               IF(DD<DMIN)THEN
+                IPPV=JNOD
+                DMIN=DD
+               ENDIF
+             ENDIF  
+           ELSE
+             CYCLE
+           ENDIF
+          ENDDO
+C-------
+C         d(rho)/dt=- rho * div(V) utilise div(V) calcule en IPPV.
+          IF(IPPV>0)THEN
+            NP=NOD2SP(IPPV)
+            IF(NP<=0) CYCLE
+            DXX =WA_EPSD(1,NP)
+            DYY =WA_EPSD(2,NP)
+            DZZ =WA_EPSD(3,NP)
+            DXY =WA_EPSD(4,NP)
+            DYZ =WA_EPSD(5,NP)
+            DXZ =WA_EPSD(6,NP)
+            DYX =WA_EPSD(7,NP)
+            DZY =WA_EPSD(8,NP)
+            DZX =WA_EPSD(9,NP)
+          ELSEIF(IPPV<0)THEN
+c remote neigbourg, get values from SPMD_SPHGETWA
+            DXX =WAR2(1,-IPPV)
+            DYY =WAR2(2,-IPPV)
+            DZZ =WAR2(3,-IPPV)
+            DXY =WAR2(4,-IPPV)
+            DYZ =WAR2(5,-IPPV)
+            DXZ =WAR2(6,-IPPV)
+            DYX =WAR2(7,-IPPV)
+            DZY =WAR2(8,-IPPV)
+            DZX =WAR2(9,-IPPV)
+          ELSE
+            CYCLE
+          ENDIF
+
+          DIVV=DXX+DYY+DZZ
+          SPBUF(2,N)=WA_EPSD(10,N)*(ONE - DIVV*DT1)
+          WA_EPSD(1,N) =DXX
+          WA_EPSD(2,N) =DYY
+          WA_EPSD(3,N) =DZZ
+          WA_EPSD(4,N) =DXY
+          WA_EPSD(5,N) =DYZ
+          WA_EPSD(6,N) =DXZ
+          WA_EPSD(7,N) =DYX
+          WA_EPSD(8,N) =DZY
+          WA_EPSD(9,N) =DZX
+          WA_EPSD(13,N)=DIVV
+       ENDIF
+      ENDDO
+C-------------------------------------------
+      RETURN
+      END

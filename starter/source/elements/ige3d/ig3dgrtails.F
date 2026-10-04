@@ -1,0 +1,302 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    ig3dgrtails        ../starter/source/elements/ige3d/ig3dgrtails.F
+!||--- called by ------------------------------------------------------
+!||    lectur             ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    zeroin             ../starter/source/system/zeroin.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod        ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE IG3DGRTAILS(
+     1    KXIG3D    ,IPARG  ,GEO     ,EADD,
+     2    ND     ,DD_IAD ,IDX     ,LB_MAX, INUM,
+     3    INDEX  ,CEP    ,IPARTIG3D  ,ITR1,   IGRSURF,
+     4    IXIG3D ,
+     5    IGEO ,PM   ,NIGE,   KNOTLOCEL, MATPARAM_TAB)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE GROUPDEF_MOD
+      USE MATPARAM_DEF_MOD
+      USE ALE_MOD , ONLY : ALE
+C-----------------------------------------------
+C            A R G U M E N T S
+C-----------------------------------------------
+C     KXIG3D(NIXIG3D,NUMELIG3D)  ARRAY: CONECS+PID+NOS RESSORTS    E
+C     IPARG(NPARG,NGROUP)        ARRAY: GROUP PARAMS               E/S
+C     GEO(NPROPG,NUMGEO)         ARRAY: PROPERTY PARAMS            E
+C     EADD(NUMELIG3D)            ARRAY: IDAM INDEXES / checkboard  E 
+C     DD_IAD                     ARRAY: DD IN SUPER GROUP            S
+C     INDEX(NUMELIG3D)           ARRAY: WORKING                    E/S
+C     INUM (9*NUMELIG3D)         ARRAY: WORKING                    E/S
+C     CEP(NUMELIG3D)             ARRAY: WORKING                    E/S
+C     ITR1(NUMELIG3D)            ARRAY: WORKING                    E/S
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "units_c.inc"
+#include      "param_c.inc"
+#include      "vect01_c.inc"
+#include      "tabsiz_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER KXIG3D(NIXIG3D,*),IPARG(NPARG,*),EADD(*),
+     .        ND, DD_IAD(NSPMD+1,*),IDX,IGEO(NPROPGI,NUMGEO),
+     .        LB_MAX, INUM(NIXIG3D+1,*), INDEX(*),CEP(*),
+     .        IPARTIG3D(*), ITR1(*),NIGE(*)
+      my_real GEO(NPROPG,NUMGEO),PM(NPROPM,NUMMAT),KNOTLOCEL(*)
+      TYPE (SURF_)   , DIMENSION(NSURF)   :: IGRSURF
+      TYPE(MATPARAM_STRUCT_) , TARGET, DIMENSION(NUMMAT),INTENT(IN) :: MATPARAM_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NGR1, NG, MTNN, I, NE1, N,
+     .        PID, NEL_PREC, LB_L, P, NEL,NB,
+     .        MODE, WORK(70000),NN, J,MID,IETYP,
+     .        IXIG3D(*),NUVAR,NUVARN,NXVIE,NXVIN,INND,II,
+     .        NGP(NSPMD+1),JALE_FROM_MAT,JALE_FROM_PROP
+      my_real KNOTLOCELINDX(SKNOTLOCEL)
+      TYPE(MATPARAM_STRUCT_) , POINTER :: MATPARAM
+C
+      DATA NXVIE/3/, NXVIN/0/
+C----------------------------------------------------------
+      NPT = 1
+C----------------------------------------------------------
+      NGR1 = NGROUP + 1
+      nullify(MATPARAM)
+C
+C Phase 1: Canonical decomposition
+C
+      IDX=IDX+ND*(NSPMD+1)
+      CALL ZEROIN(1,ND*(NSPMD+1),DD_IAD(1,NSPGROUP+1))
+      NFT = 0
+C initialisation dd_iad
+      DO N=1,ND
+       DO P=1,NSPMD+1
+         DD_IAD(P,NSPGROUP+N) = 0
+       END DO
+      ENDDO
+
+      DO N=1,ND
+        NEL = EADD(N+1)-EADD(N)
+C
+        DO I = 1, NEL 
+          INDEX(I) = I
+          INUM(1,I)=IPARTIG3D(NFT+I)
+          DO J=1,NIXIG3D
+            INUM(J+1,I)=KXIG3D(J,NFT+I)
+          ENDDO
+          DO J=1,6
+            KNOTLOCELINDX((I-1)*6+J)=KNOTLOCEL((NFT+I-1)*6+J)
+          ENDDO
+        ENDDO
+      
+        MODE=0
+        CALL MY_ORDERS( MODE, WORK, CEP(NFT+1), INDEX, NEL , 1)
+        DO I = 1, NEL
+          IPARTIG3D(I+NFT)=INUM(1,INDEX(I))
+          DO J=1,6
+            KNOTLOCEL((I+NFT-1)*6+J)=KNOTLOCELINDX((INDEX(I)-1)*6+J)
+          ENDDO 
+          DO J=1,NIXIG3D
+            KXIG3D(J,I+NFT)=INUM(J+1,INDEX(I))
+          ENDDO
+
+          ITR1(NFT+INDEX(I)) = NFT+I
+        ENDDO
+C dd-iad
+        P = CEP(NFT+INDEX(1))
+        NB = 1
+        DO I = 2, NEL
+          IF (CEP(NFT+INDEX(I))/=P) THEN
+            DD_IAD(P+1,NSPGROUP+N) = NB
+            NB = 1
+            P = CEP(NFT+INDEX(I))
+          ELSE
+            NB = NB + 1
+          ENDIF
+        ENDDO
+        DD_IAD(P+1,NSPGROUP+N) = NB
+        DO P = 2, NSPMD
+          DD_IAD(P,NSPGROUP+N) = DD_IAD(P,NSPGROUP+N)
+     .                         + DD_IAD(P-1,NSPGROUP+N)
+        ENDDO
+        DO P = NSPMD+1,2,-1
+          DD_IAD(P,NSPGROUP+N) = DD_IAD(P-1,NSPGROUP+N)+1
+        ENDDO
+        DD_IAD(1,NSPGROUP+N) = 1
+C          
+C maj CEP
+C
+        DO I = 1, NEL
+          INDEX(I) = CEP(NFT+INDEX(I))          
+        ENDDO
+        DO I = 1, NEL
+          CEP(NFT+I) = INDEX(I)          
+        ENDDO
+        NFT = NFT + NEL
+      ENDDO  
+C Phase 2: MVSIZ Group Bounds
+C ngroup is global, iparg is global but organized according to dd
+C
+      DO 300 N=1,ND
+       NFT = 0
+       LB_L = LBUFEL
+       DO P = 1, NSPMD
+        NGP(P)=0
+        NEL = DD_IAD(P+1,NSPGROUP+N)-DD_IAD(P,NSPGROUP+N)
+        IF (NEL>0) THEN
+         NEL_PREC = DD_IAD(P,NSPGROUP+N)-DD_IAD(1,NSPGROUP+N)
+         NGP(P)=NGROUP
+         NG  = (NEL-1)/NVSIZ + 1
+         DO 220 I=1,NG
+C xgroup global
+          NGROUP=NGROUP+1
+          II = EADD(N)+NFT
+          MID = KXIG3D(1,II)
+          PID =  KXIG3D(2,II)
+          innd = KXIG3D(3,II)
+          MTNN= NINT(PM(19,ABS(KXIG3D(1,II))))
+          IETYP = 101
+          GEO(8,PID)=IETYP + EM01
+          MATPARAM => MATPARAM_TAB(MID)
+          
+          JALE_FROM_MAT = NINT(PM(72,MID))
+          JALE_FROM_PROP = IGEO(62,PID)
+          JALE = MAX(JALE_FROM_MAT, JALE_FROM_PROP) !if inconsistent, error message was displayed in PART reader
+ 
+          JLAG=0
+          IF(JALE == 0.AND.MTNN/=18)JLAG=1
+          JEUL=0
+          IF(JALE == 2)THEN
+            JALE=0
+            JEUL=1
+C foam + air
+          ELSEIF(JALE == 3 .AND. MTNN == 77) THEN
+            JLAG=1          
+          ENDIF
+
+          !ALE REZONING/REMAPING : number of MAT/EOS variables to treat (used by staggered scheme only : arezon.F)
+          !  With ALE framework, since the Mesh is arbitrary, the variable must be updated to map thei expected location and not follow the arbitrary mesh displacement
+          !  this numbering here will be used in arezon.F to loop over variables to rezon/remap
+          IF(JALE == 1)THEN
+            ALE%REZON%NUM_NUVAR_MAT = MAX(ALE%REZON%NUM_NUVAR_MAT, MATPARAM%REZON%NUM_NUVAR_MAT)
+            ALE%REZON%NUM_NUVAR_EOS = MAX(ALE%REZON%NUM_NUVAR_EOS, MATPARAM%REZON%NUM_NUVAR_EOS)
+          ENDIF
+
+          !ALE UVAR REZONING  (81:MAT,  82:EOS)
+          IF(JALE == 1)THEN
+            IPARG(81,NGROUP) = MATPARAM%REZON%NUM_NUVAR_MAT
+            IPARG(82,NGROUP) = MATPARAM%REZON%NUM_NUVAR_EOS
+          ENDIF
+
+          IF(MTNN/=50)JTUR=NINT(PM(70,MID)) 
+          JTHE = NINT(PM(71,MID))
+C
+          CALL ZEROIN(1,NPARG,IPARG(1,NGROUP))
+C
+          NE1 = MIN( NVSIZ, NEL + NEL_PREC - NFT) 
+          NUVAR =NINT( GEO(25,PID))
+          NUVARN=NINT( GEO(35,PID))
+
+          IPARG(1,NGROUP) = MTNN
+          IPARG(2,NGROUP) = NE1
+          IPARG(3,NGROUP) = II-1
+          IPARG(4,NGROUP) = 1
+          IPARG(5,NGROUP) = IETYP
+          IPARG(6,NGROUP) = NPT
+          IPARG(7,NGROUP) = JALE
+          IPARG(11,NGROUP)= JEUL
+          IPARG(12,NGROUP)= JTUR
+          IPARG(13,NGROUP)= JTHE    ! -1 nodal temperature    +1 centroid temperature
+          IF(JALE+JEUL>0)IPARG(13,NGROUP)=-JTHE
+          IPARG(14,NGROUP)= JLAG
+          IPARG(75,NGROUP) = innd
+          IPARG(62,NGROUP) = PID
+          IPARG(38,NGROUP) = IGEO(11,PID)
+          IPARG(56,NGROUP) = IGEO(41,PID)
+          IPARG(57,NGROUP) = IGEO(42,PID)
+          IPARG(58,NGROUP) = IGEO(43,PID) 
+C
+c          LBUFEL= IPARG(4,NGROUP)+NE1*
+c     .            (NXVIE+NUVAR+INND*(NXVIN+NUVARN))-1
+C Group/Processor Splition
+          IPARG(32,NGROUP)= P-1
+          NFT = NFT + NE1
+  220    CONTINUE
+         NGP(P)=NGROUP-NGP(P)
+        ENDIF
+       ENDDO
+       LB_L = LBUFEL - LB_L
+       LB_MAX = MAX(LB_MAX,LB_L)
+C Dd_iad => nb groups by sub -domain
+       NGP(NSPMD+1)=0
+       DO P = 1, NSPMD
+         NGP(NSPMD+1)=NGP(NSPMD+1)+NGP(P)
+         DD_IAD(P,NSPGROUP+N)=NGP(P)
+       END DO
+       DD_IAD(NSPMD+1,NSPGROUP+N)=NGP(NSPMD+1)
+C
+  300 CONTINUE
+C
+      NSPGROUP = NSPGROUP + ND
+C
+C renumbering for surfaces
+C
+      DO I=1,NSURF ! add an if to not change the classic ef faces
+        NN=IGRSURF(I)%NSEG_IGE
+        DO J=1,NN
+          IF(IGRSURF(I)%ELTYP_IGE(J) == 101)
+     .       IGRSURF(I)%ELEM_IGE(J) = ITR1(IGRSURF(I)%ELEM_IGE(J))
+        ENDDO
+      ENDDO
+C
+      DO I=1,NUMFAKENODIGEO
+        NIGE(I)=ITR1(NIGE(I))
+      ENDDO
+C 
+      WRITE(IOUT,1000)
+      WRITE(IOUT,1001)(N,IPARG(1,N),IPARG(2,N),IPARG(3,N)+1,
+     +                IPARG(4,N),IPARG(5,N),
+     +              N=NGR1,NGROUP)
+C
+ 1000 FORMAT(10X,' 3D - ISO-GEOMETRIC ELEMENT GROUPS '/
+     +       10X,' ----------------------------------'/
+     +' GROUP   ELEMENT    ELEMENT   FIRST    BUFFER   ELEMENT  '/
+     +'         MATERIAL   NUMBER    ELEMENT  ADDRESS  TYPE     '/)
+ 1001 FORMAT(6(1X,I7,1X))
+C
+
+      RETURN
+      END

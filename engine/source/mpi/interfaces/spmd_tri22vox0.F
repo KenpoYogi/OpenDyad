@@ -1,0 +1,171 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    spmd_tri22vox0   ../engine/source/mpi/interfaces/spmd_tri22vox0.F
+!||--- called by ------------------------------------------------------
+!||    i22main_tri      ../engine/source/interfaces/intsort/i22main_tri.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod      ../common_source/modules/elements/element_mod.F90
+!||    tri7box          ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE SPMD_TRI22VOX0(
+     1   X      ,BMINMA_FLU_L ,NBRIC  , IXS   , BUFBRIC, 
+     2   ITASK  ,ITAB         ,XMINS  , YMINS , ZMINS  ,
+     3   XMAXS  ,YMAXS        ,ZMAXS  , BMINMA_LAG_R ,IS_CONTACT,
+     4   BMINMA_AND ) 
+C-----------------------------------------------
+C   D e s  c r i p t i o n
+C-----------------------------------------------
+C This subroutine is marking SPMD voxel if brick is inside
+C lagrangian domain (from local domain)
+C X       : Node coordinates
+C BMINMAL : Fluid Bounds for local domain
+C IXS     : Brick node ids
+C BUFBRIC : Brick Group for interface for current domain
+C ITASK   : Current Thread
+C CRVOXEL : SPMD Voxel
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE TRI7BOX
+      use element_mod , only :nixs
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, intent(in) ::   NBRIC, IXS(NIXS,*), ITAB(*)
+      my_real, intent(in) ::
+     .                         X(3,*), 
+     .                         BMINMA_FLU_L(6), BMINMA_LAG_R(6)
+      my_real, intent(inout) ::
+     .                         BMINMA_AND(6)
+      my_real
+     .        XMAXS(NBRIC), YMAXS(NBRIC), ZMAXS(NBRIC),
+     .        XMINS(NBRIC), YMINS(NBRIC), ZMINS(NBRIC)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+      INTEGER LOC_PROC,IB,
+     .        NBX,NBY,NBZ,
+     .        IX1,IY1,IZ1,IX2,IY2,IZ2,IX,IY,IZ,
+     .        BUFBRIC(NBRIC),NBF,NBL,ITASK
+      my_real
+     .        XMAXB,YMAXB,ZMAXB,XMINB,YMINB,ZMINB,
+     .        
+     .           
+     .           
+     .           
+     .        DX,DY,DZ
+      LOGICAL :: IS_CONTACT
+C-----------------------------------------------
+C   S o u r c e  L i n e s
+C-----------------------------------------------
+C
+C=======================================================================
+C     tag of boxes containing facets
+C     and creation of candidates
+C=======================================================================
+
+      LOC_PROC = ISPMD + 1
+
+      NBX = LRVOXEL
+      NBY = LRVOXEL
+      NBZ = LRVOXEL
+
+      ! to search for distant candidate facets,
+      ! we look at the intersection of the local fluid domain with the remote lagrangian domains
+      ! this is the domain that we voxelize to search for the remote facets
+      XMAXB = MIN ( BMINMA_FLU_L(1), BMINMA_LAG_R(1) )
+      YMAXB = MIN ( BMINMA_FLU_L(2), BMINMA_LAG_R(2) )
+      ZMAXB = MIN ( BMINMA_FLU_L(3), BMINMA_LAG_R(3) )
+      XMINB = MAX ( BMINMA_FLU_L(4), BMINMA_LAG_R(4) )
+      YMINB = MAX ( BMINMA_FLU_L(5), BMINMA_LAG_R(5) )
+      ZMINB = MAX ( BMINMA_FLU_L(6), BMINMA_LAG_R(6) )
+
+      DX = XMAXB-XMINB
+      DY = YMAXB-YMINB
+      DZ = ZMAXB-ZMINB
+ 
+      !Test Interaction between domains (local / distant fluid)    
+      IF ( (DX<=ZERO).OR.(DY<=ZERO).OR.(DZ<=ZERO) ) THEN
+        IS_CONTACT = .FALSE.
+        RETURN
+      ELSE
+        IS_CONTACT = .TRUE.
+      END IF
+
+      BMINMA_AND(1)=XMAXB
+      BMINMA_AND(2)=YMAXB
+      BMINMA_AND(3)=ZMAXB
+      BMINMA_AND(4)=XMINB
+      BMINMA_AND(5)=YMINB
+      BMINMA_AND(6)=ZMINB
+
+      NBF = 1+ITASK*NBRIC/NTHREAD
+      NBL = (ITASK+1)*NBRIC/NTHREAD
+
+      DO IB=NBF,NBL
+         !-------------------------------------------!
+         !  VOXEL OCCUPIED BY THE BRICK              !
+         !-------------------------------------------!
+         !Voxel_lower_left_bound for this element---+
+         IX1=INT(NBX*(XMINS(IB)-XMINB)/DX)
+         IY1=INT(NBY*(YMINS(IB)-YMINB)/DY)
+         IZ1=INT(NBZ*(ZMINS(IB)-ZMINB)/DZ)
+         IX1=MAX(IX1,0) !pos for ibset must be correctly defined
+         IY1=MAX(IY1,0) !CRVOXEL (0:LRVOXEL,...
+         IZ1=MAX(IZ1,0) !CRVOXEL (0:LRVOXEL,...
+         !Voxel_upper_right_bound for this element---+
+         IX2=INT(NBX*(XMAXS(IB)-XMINB)/DX)
+         IY2=INT(NBY*(YMAXS(IB)-YMINB)/DY)
+         IZ2=INT(NBZ*(ZMAXS(IB)-ZMINB)/DZ)
+         IX2=MIN(IX2,NBX) !pos for ibset must be correctly defined
+         IY2=MIN(IY2,NBY) !CRVOXEL (0:LRVOXEL,...
+         IZ2=MIN(IZ2,NBZ) !CRVOXEL (0:LRVOXEL,...
+         !------------------------------------------------------!
+         ! VOXEL MARKING TO SPOT BRIC LOCATIONS (LOCAL DOMAIN)  !
+         !------------------------------------------------------!
+#include "lockon.inc"
+         DO IZ = IZ1, IZ2
+           DO IY = IY1, IY2
+             DO IX = IX1, IX2
+               CRVOXEL(IY,IZ,LOC_PROC)=IBSET(CRVOXEL(IY,IZ,LOC_PROC),IX)
+             END DO
+           END DO
+         END DO
+#include "lockoff.inc"     
+      ENDDO !IB=NBF,NBL
+
+C
+      RETURN
+      END

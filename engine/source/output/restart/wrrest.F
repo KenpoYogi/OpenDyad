@@ -1,0 +1,1475 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    fxbwrest          ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp           ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db          ../common_source/tools/input_output/write_db.F
+!||    write_i_c         ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    fxb_mod           ../engine/share/modules/fxb_mod.F
+!||    scratchfile_mod   ../engine/share/modules/scratchfiles_mod.F
+!||====================================================================
+      SUBROUTINE FXBWREST(ICH)
+C-----------------------------------------------
+C   M o d u l e s
+C----------------------------------------------- 
+      USE FXB_MOD
+      USE SCRATCHFILE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "units_c.inc"
+#include      "fxbcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ICH
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER LEN_IPM,LEN_MOD,NRECM, NRECS, IRCM, IRCM0, IRCM1,
+     .        IRCS, IRCS0, IRCS1, LREC, I, J
+      my_real VV(6)
+C--------------------------------------
+C     writing integers
+C--------------------------------------
+      LEN_IPM=NBIPM*NFXBODY
+      CALL WRITE_I_C(FXBIPM,LEN_IPM)
+      IF (LENNOD>0) CALL WRITE_I_C(FXBNOD,LENNOD)
+      IF (LENELM>0) CALL WRITE_I_C(FXBELM,LENELM)
+      IF (LENGRVI>0) CALL WRITE_I_C(FXBGRVI,LENGRVI)
+C--------------------------------------
+C     writing reals
+C--------------------------------------
+      LEN_MOD=LENMOD*6
+      IF (LEN_MOD>0) CALL WRITE_DB(FXBMOD,LEN_MOD)
+      IF (LENGLM>0) CALL WRITE_DB(FXBGLM,LENGLM)
+      IF (LENCP>0) CALL WRITE_DB(FXBCPM,LENCP )
+      IF (LENCP>0) CALL WRITE_DB(FXBCPS,LENCP )
+      IF (LENLM>0) CALL WRITE_DB(FXBLM, LENLM )
+      IF (LENFLS>0) CALL WRITE_DB(FXBFLS,LENFLS)
+      IF (LENDLS>0) CALL WRITE_DB(FXBDLS,LENDLS)
+      CALL WRITE_DB(FXBDEP,LENVAR)
+      CALL WRITE_DB(FXBVIT,LENVAR)
+      CALL WRITE_DB(FXBACC,LENVAR)
+      CALL WRITE_DB(FXBRPM,LENRPM)
+      IF (LENSIG>0) CALL WRITE_DB(FXBSIG,LENSIG)
+      IF (LENGRVR>0) CALL WRITE_DB(FXBGRVR,LENGRVR)
+      
+C Write modes & constraint files in Restart
+C -----------------------------------------
+      NRECM=0
+      NRECS=0
+      DO I=1,NFXBODY
+         IRCM0=FXBIPM(30,I)
+         IRCS0=FXBIPM(31,I)
+         IRCM1=FXBIPM(32,I)
+         IRCS1=FXBIPM(33,I)
+         NRECM=NRECM+IRCM1-IRCM0
+         NRECS=NRECS+IRCS1-IRCS0
+      ENDDO
+      IRCM=0
+      IRCS=0
+      LREC=6
+      DO I=1,NRECM
+         IRCM=IRCM+1
+         READ(IFXM,REC=IRCM) (VV(J),J=1,LREC)
+         CALL WRITE_DB(VV,LREC)
+      ENDDO
+      DO I=1,NRECS
+         IRCS=IRCS+1
+         READ(IFXS,REC=IRCS) (VV(J),J=1,LREC)
+         CALL WRITE_DB(VV,LREC)
+      ENDDO
+C
+      RETURN
+      END
+!||====================================================================
+!||    eigwrest          ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp           ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db          ../common_source/tools/input_output/write_db.F
+!||    write_i_c         ../common_source/tools/input_output/write_routines.c
+!||    wrtsqi            ../engine/source/output/tools/wrtsqi.F
+!||    wrtsqr            ../engine/source/output/tools/wrtsqr.F
+!||--- uses       -----------------------------------------------------
+!||    scratchfile_mod   ../engine/share/modules/scratchfiles_mod.F
+!||====================================================================
+      SUBROUTINE EIGWREST(EIGIPM, EIGIBUF, EIGRPM)      
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SCRATCHFILE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "units_c.inc"
+#include      "com04_c.inc"
+#include      "scr05_c.inc"
+#include      "eigcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER EIGIPM(*), EIGIBUF(*)
+      my_real EIGRPM(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NRECM, IRCM, NBN, NBM, IAD, LREC, I, J
+      my_real
+     .        VV(6)
+C--------------------------------------
+C     writing integers
+C--------------------------------------
+      IF (IRFORM/5<=1) THEN
+        CALL WRTSQI (EIGIPM,NEIG*NEIPM,IRFORM)
+        CALL WRTSQI (EIGIBUF,LEIBUF,IRFORM)
+      ELSE
+        CALL WRITE_I_C(EIGIPM,NEIG*NEIPM)
+        CALL WRITE_I_C(EIGIBUF,LEIBUF)
+      ENDIF
+C--------------------------------------
+C     writing reals
+C--------------------------------------
+      IF (IRFORM/5<=1) THEN
+        CALL WRTSQR (EIGRPM,NEIG*NERPM,IRFORM)
+      ELSE
+        CALL WRITE_DB(EIGRPM,NEIG*NERPM)
+      ENDIF
+C writing the additional modes file
+      NRECM=0
+      IAD=1
+      DO I=1,NEIG
+         NBN=EIGIPM(IAD+9)
+         NBM=EIGIPM(IAD+13)
+         NRECM=NRECM+NBN*NBM
+         IAD=IAD+NEIPM
+      ENDDO
+C
+      IRCM=0
+      LREC=6
+      DO I=1,NRECM
+         IRCM=IRCM+1
+         READ(IEIGM,REC=IRCM) (VV(J),J=1,LREC)
+         CALL WRITE_DB(VV,LREC)
+      ENDDO
+C
+      RETURN
+      END
+C
+!||====================================================================
+!||    dswrest       ../engine/source/output/restart/wrrest.F
+!||--- calls      -----------------------------------------------------
+!||    write_db      ../common_source/tools/input_output/write_db.F
+!||    write_i_c     ../common_source/tools/input_output/write_routines.c
+!||    wrtsqi        ../engine/source/output/tools/wrtsqi.F
+!||    wrtsqr        ../engine/source/output/tools/wrtsqr.F
+!||--- uses       -----------------------------------------------------
+!||    dsgraph_mod   ../engine/share/modules/dsgraph_mod.F
+!||====================================================================
+      SUBROUTINE DSWREST(GRAPHE)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE DSGRAPH_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "scr05_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(PRGRAPH) :: GRAPHE(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, TN(7), N, NDDL, DSNDDL, DSLEN, K, NSDEC
+      my_real CUTFREQ
+      DO I=1,NSPROC
+C--------------------------------------
+C writing integer parameters
+C--------------------------------------
+         DSNDDL=GRAPHE(I)%NDDL_INI
+         DSLEN=GRAPHE(I)%NSUPEL
+         NSDEC=GRAPHE(I)%NSDEC
+         TN(1)=DSNDDL
+         TN(2)=DSLEN
+         TN(3)=GRAPHE(I)%NSLEVEL
+         TN(4)=NSDEC
+         TN(5)=GRAPHE(I)%NSVMAX
+         TN(6)=GRAPHE(I)%IPRI
+         TN(7)=GRAPHE(I)%NDDL_GLOB
+         N=7
+         IF (IRFORM/5<=1) THEN
+            CALL WRTSQI(TN, N, IRFORM)
+         ELSE
+            CALL WRITE_I_C(TN, N)
+         ENDIF
+C--------------------------------------
+C writing real parameters
+C--------------------------------------
+         N=1
+         CUTFREQ=GRAPHE(I)%CUTFREQ
+         IF (IRFORM/5<=1) THEN
+            CALL WRTSQR(CUTFREQ, N, IRFORM)
+         ELSE
+            CALL WRITE_DB(CUTFREQ, N)
+         ENDIF
+C--------------------------------------
+C writing the ddls array
+C--------------------------------------
+         DO J=1,2
+            IF (IRFORM/5<=1) THEN
+              CALL WRTSQI(GRAPHE(I)%LSDDL_INI(J,1:DSNDDL), 
+     .                    DSNDDL, IRFORM)
+            ELSE
+              CALL WRITE_I_C(GRAPHE(I)%LSDDL_INI(J,1:DSNDDL), DSNDDL)
+            ENDIF
+         ENDDO
+         IF (IRFORM/5<=1) THEN
+            CALL WRTSQI(GRAPHE(I)%LSDDL_GLOB_INI, DSNDDL, IRFORM)
+         ELSE
+            CALL WRITE_I_C(GRAPHE(I)%LSDDL_GLOB_INI, DSNDDL)
+         ENDIF
+C--------------------------------------
+C writing superelements
+C--------------------------------------
+         DO J=1,DSLEN
+            TN(1)=GRAPHE(I)%DGRAPH(J)%NDDL_I_INI
+            TN(2)=GRAPHE(I)%DGRAPH(J)%NDDL_F_INI
+            TN(3)=GRAPHE(I)%DGRAPH(J)%NSDMAX
+            NDDL=TN(1)+TN(2)
+            IF (IRFORM/5<=1) THEN
+              N=3
+              CALL WRTSQI(TN, N, IRFORM)
+              CALL WRTSQI(GRAPHE(I)%DGRAPH(J)%CHILD, NSDEC, IRFORM)
+              CALL WRTSQI(GRAPHE(I)%DGRAPH(J)%DDLS_INI, NDDL, IRFORM)
+              N=TN(3)+1
+              DO K=1,TN(2)
+                 CALL WRTSQI(GRAPHE(I)%DGRAPH(J)
+     .                                %IFAC_INI(1:N,K), N, IRFORM)
+              ENDDO
+              CALL WRTSQI(GRAPHE(I)%DGRAPH(J)%IFACM_INI, TN(2), IRFORM)
+            ELSE
+              N=3
+              CALL WRITE_I_C(TN, N)
+              CALL WRITE_I_C(GRAPHE(I)%DGRAPH(J)%CHILD, NSDEC)
+              CALL WRITE_I_C(GRAPHE(I)%DGRAPH(J)%DDLS_INI, NDDL)
+              N=TN(3)+1
+              DO K=1,TN(2)
+                 CALL WRITE_I_C(GRAPHE(I)%DGRAPH(J)
+     .                                   %IFAC_INI(1:N,K), N)
+              ENDDO
+              CALL WRITE_I_C(GRAPHE(I)%DGRAPH(J)%IFACM_INI, TN(2))
+            ENDIF
+         ENDDO
+C
+      ENDDO
+C
+      RETURN
+      END
+C
+!||====================================================================
+!||    nfwrest     ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp     ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db    ../common_source/tools/input_output/write_db.F
+!||    write_i_c   ../common_source/tools/input_output/write_routines.c
+!||====================================================================
+      SUBROUTINE NFWREST(IFLOW, RFLOW)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "flowcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IFLOW(*)
+      my_real
+     .        RFLOW(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        CALL WRITE_I_C(IFLOW,LIFLOW)
+        CALL WRITE_DB(RFLOW,LRFLOW)
+C
+      RETURN
+      END
+C
+!||====================================================================
+!||    impwrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp    ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db   ../common_source/tools/input_output/write_db.F
+!||--- uses       -----------------------------------------------------
+!||    imp_dyna   ../engine/share/modules/impbufdef_mod.F
+!||    imp_rest   ../engine/share/modules/impbufdef_mod.F
+!||====================================================================
+      SUBROUTINE IMPWREST(NIMPR)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE IMP_REST
+      USE IMP_DYNA
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "impl1_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NIMPR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  ND
+C--------------------------------------
+C--------------------------------------
+C     writing reals
+C--------------------------------------
+      ND = NUMNOD*3
+      CALL WRITE_DB(IMP_RR,NIMPR)
+
+      IF (IDYNA>0) THEN
+        CALL WRITE_DB(DY_A,ND)
+        IF (IRODDL/=0) CALL WRITE_DB(DY_AR,ND)
+      ENDIF
+
+C
+      RETURN
+      END
+!||====================================================================
+!||    imp_trans0       ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    imp_sol_init     ../engine/source/implicit/imp_sol_init.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    imp_rest         ../engine/share/modules/impbufdef_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE IMP_TRANS0(R_IMP,NR)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE IMP_REST
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "impl1_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NR
+      my_real
+     .        R_IMP(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+      IF (NR>0) THEN
+       R_IMP(1) = IMP_RR(1)
+       R_IMP(6) = IMP_RR(2)
+      ELSE
+       NR = 2
+       IF(ALLOCATED(IMP_RR)) call my_dealloc(IMP_RR)
+       call my_alloc(IMP_RR, NR, "IMP_RR")
+       NR = NR + IDYNA
+      ENDIF 
+C
+      RETURN
+      END
+!||====================================================================
+!||    imp_trans   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp     ../engine/source/output/restart/wrrestp.F
+!||--- uses       -----------------------------------------------------
+!||    imp_rest    ../engine/share/modules/impbufdef_mod.F
+!||====================================================================
+      SUBROUTINE IMP_TRANS(R_IMP)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE IMP_REST
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real
+     .        R_IMP(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C---------1:R02,2:E_IMP-----------------------------
+       IMP_RR(1) = R_IMP(1)
+       IMP_RR(2) = R_IMP(6)
+C
+      RETURN
+      END
+C
+!||====================================================================
+!||    fvwrest                  ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp                  ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db                 ../common_source/tools/input_output/write_db.F
+!||    write_i_c                ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod                ../engine/share/modules/fvbag_mod.F
+!||    fvmbag_meshcontrol_mod   ../common_source/modules/airbag/fvmbag_meshcontrol_mod.F
+!||====================================================================
+      SUBROUTINE FVWREST()
+C-----------------------------------------------
+C   M o d u l e s 
+C-----------------------------------------------
+      USE FVBAG_MOD
+      USE FVMBAG_MESHCONTROL_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER LEN, I, NNS, NNTR, LENP, NPOLY, LENH, NPOLH, TABI(11),
+     .        LENP_ANIM, NPOLH_ANIM, LENH_ANIM, NNS_ANIM
+C--------------------------------------
+C     writing dimensions
+C--------------------------------------
+      LEN=1
+        CALL WRITE_I_C(NFVBAG,LEN)
+C
+      DO I=1,NFVBAG
+
+         CALL WRITE_I_C(FVDATA(I)%L_TYPE,1)
+         CALL WRITE_I_C(FVDATA(I)%ID_DT_OPTION,1)            
+         CALL WRITE_DB(FVDATA(I)%LAMBDA,1)
+         CALL WRITE_DB(FVDATA(I)%DTOLD,1)
+         CALL WRITE_DB(FVDATA(I)%CFL_COEF,1)
+         CALL WRITE_DB(FVDATA(I)%DTMIN,1)
+      
+         TABI(1)=FVSPMD(I)%NN_L
+         TABI(2)=FVSPMD(I)%NNA_L
+         TABI(3)=FVSPMD(I)%NNSA_L
+         TABI(4)=FVSPMD(I)%NSA
+         TABI(5)=FVSPMD(I)%NNSA
+         TABI(6)=FVSPMD(I)%NELSA
+         TABI(7)=FVSPMD(I)%PMAIN
+         TABI(8)=FVSPMD(I)%NNI_L
+         LEN=8
+         CALL WRITE_I_C(TABI,LEN)
+         LEN=2*(FVSPMD(I)%NN_L+FVSPMD(I)%NNI_L)
+         IF (LEN>0) THEN
+           CALL WRITE_I_C(FVSPMD(I)%IBUF_L,LEN)
+         ENDIF
+         LEN=2*FVSPMD(I)%NNA_L
+         IF (LEN>0) THEN
+           CALL WRITE_I_C(FVSPMD(I)%IBUFA_L,LEN)
+         ENDIF
+         LEN=2*FVSPMD(I)%NNSA_L
+         IF (LEN>0) THEN
+           CALL WRITE_I_C(FVSPMD(I)%IBUFSA_L,LEN)
+         ENDIF
+         LEN = 1
+         CALL WRITE_I_C(KMESH(I), LEN)
+         IF (ISPMD/=FVSPMD(I)%PMAIN-1) CYCLE
+         LEN=8*FVSPMD(I)%NSA
+         IF (LEN>0) THEN
+           CALL WRITE_I_C(FVSPMD(I)%IXSA,LEN)
+         ENDIF
+         LEN=3*FVSPMD(I)%NELSA
+         IF (LEN>0) THEN
+           CALL WRITE_I_C(FVSPMD(I)%ELEMSA,LEN)
+         ENDIF
+         
+         NNS=FVDATA(I)%NNS
+         NNTR=FVDATA(I)%NNTR
+         LENP=FVDATA(I)%LENP
+         NPOLY=FVDATA(I)%NPOLY
+         LENH=FVDATA(I)%LENH
+         NPOLH=FVDATA(I)%NPOLH
+         NPOLH_ANIM=FVDATA(I)%NPOLH_ANIM
+         IF (NPOLH_ANIM>0) THEN
+            LENP_ANIM=FVDATA(I)%IFVTADR_ANIM(NPOLY+1)
+            LENH_ANIM=FVDATA(I)%IFVPADR_ANIM(NPOLH_ANIM+1)
+            NNS_ANIM=FVDATA(I)%NNS_ANIM
+         ELSE
+            LENP_ANIM=0
+            LENH_ANIM=0
+            NNS_ANIM=0
+         ENDIF
+C
+         TABI(1)=NNS
+         TABI(2)=NNTR
+         TABI(3)=LENP
+         TABI(4)=NPOLY
+         TABI(5)=LENH
+         TABI(6)=NPOLH     
+         TABI(7)=LENP_ANIM     
+         TABI(8)=LENH_ANIM 
+         TABI(9)=NPOLH_ANIM 
+         TABI(10)=NNS_ANIM
+         TABI(11)=FVDATA(I)%ID
+         LEN=11
+           CALL WRITE_I_C(TABI,LEN)
+C--------------------------------------
+C     writing integers
+C--------------------------------------
+         LEN=3*NNS
+           CALL WRITE_I_C(FVDATA(I)%IFVNOD,LEN)
+         LEN=6*NNTR
+           CALL WRITE_I_C(FVDATA(I)%IFVTRI,LEN)
+           CALL WRITE_I_C(FVDATA(I)%IFVPOLY,LENP)
+           CALL WRITE_I_C(FVDATA(I)%IFVTADR,NPOLY+1)
+           CALL WRITE_I_C(FVDATA(I)%IFVPOLH,LENH)
+           CALL WRITE_I_C(FVDATA(I)%IFVPADR,NPOLH+1)
+           CALL WRITE_I_C(FVDATA(I)%IDPOLH,NPOLH)
+           CALL WRITE_I_C(FVDATA(I)%IBPOLH,NPOLH)
+         IF (NPOLH_ANIM>0) THEN
+              CALL WRITE_I_C(FVDATA(I)%IFVPOLY_ANIM,LENP_ANIM)
+              CALL WRITE_I_C(FVDATA(I)%IFVTADR_ANIM,NPOLY+1)
+              CALL WRITE_I_C(FVDATA(I)%IFVPOLH_ANIM,LENH_ANIM)
+              CALL WRITE_I_C(FVDATA(I)%IFVPADR_ANIM,NPOLH_ANIM+1)
+            LEN=6*NNTR
+              CALL WRITE_I_C(FVDATA(I)%IFVTRI_ANIM,LEN)
+              CALL WRITE_I_C(FVDATA(I)%REDIR_ANIM,NNS_ANIM)
+         ENDIF
+C--------------------------------------
+C     writing reals
+C--------------------------------------
+         LEN = 1
+         CALL WRITE_DB(FVDATA(I)%PDISP_OLD,LEN)
+         CALL WRITE_DB(FVDATA(I)%PDISP,LEN)
+         LEN=2*NNS
+         CALL WRITE_DB(FVDATA(I)%RFVNOD,LEN)
+         CALL WRITE_DB(FVDATA(I)%MPOLH,NPOLH)
+         LEN=3*NPOLH
+         CALL WRITE_DB(FVDATA(I)%QPOLH,LEN)
+         CALL WRITE_DB(FVDATA(I)%EPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%PPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%RPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%GPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%TPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%CPAPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%CPBPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%CPCPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%CPDPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%CPEPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%CPFPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%RMWPOLH,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%VPOLH_INI,NPOLH)
+         CALL WRITE_DB(FVDATA(I)%DLH,1)
+         CALL WRITE_DB(FVDATA(I)%DTPOLH,NPOLH)
+         IF (NPOLH_ANIM>0) THEN
+           LEN=3*NNS_ANIM
+           CALL WRITE_DB(FVDATA(I)%NOD_ANIM,LEN)
+         ENDIF
+         !FVDATA(I)%SSPPOLH       not written. used for H3D only. Generated if needed
+         !FVDATA(I)%CENTROID_POLH not written. used ofr H3D only. Generated if needed                
+C
+      ENDDO
+      
+      RETURN
+      END
+C
+C --- for shell heat transfer
+!||====================================================================
+!||    thcwrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp    ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db   ../common_source/tools/input_output/write_db.F
+!||    wrtsqr     ../engine/source/output/tools/wrtsqr.F
+!||====================================================================
+      SUBROUTINE THCWREST(MCP,TEMP)      
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr05_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real MCP(*),TEMP(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      IF (IRFORM/5 <= 1) THEN
+        CALL WRTSQR (MCP,NUMNOD,IRFORM)
+        CALL WRTSQR (TEMP,NUMNOD,IRFORM)
+      ELSE
+        CALL WRITE_DB(MCP,NUMNOD)
+        CALL WRITE_DB(TEMP,NUMNOD)
+      ENDIF
+      RETURN
+      END
+C
+C --- for Nitsche Method
+!||====================================================================
+!||    nitschewrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp        ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db       ../common_source/tools/input_output/write_db.F
+!||    wrtsqr         ../engine/source/output/tools/wrtsqr.F
+!||====================================================================
+      SUBROUTINE NITSCHEWREST(FORNEQS)      
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr05_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real FORNEQS(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      IF (IRFORM/5 <= 1) THEN
+        CALL WRTSQR (FORNEQS,3*NUMNOD,IRFORM)
+      ELSE
+        CALL WRITE_DB(FORNEQS,3*NUMNOD)
+      ENDIF
+      RETURN
+      END
+C
+C convection flow 
+!||====================================================================
+!||    convwrest        ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp          ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db         ../common_source/tools/input_output/write_db.F
+!||    write_i_c        ../common_source/tools/input_output/write_routines.c
+!||    wrtsqi           ../engine/source/output/tools/wrtsqi.F
+!||    wrtsqr           ../engine/source/output/tools/wrtsqr.F
+!||--- uses       -----------------------------------------------------
+!||    glob_therm_mod   ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||====================================================================
+      SUBROUTINE CONVWREST(IBCV,FCONV,GLOB_THERM)
+
+      use glob_therm_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr05_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER  IBCV(*)
+      my_real FCONV(*)
+      type (glob_therm_) ,intent(in) :: GLOB_THERM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      IF (IRFORM/5 <= 1) THEN
+        CALL WRTSQR (FCONV,GLOB_THERM%LFACTHER*GLOB_THERM%NUMCONV,IRFORM)
+        CALL WRTSQI (IBCV,GLOB_THERM%NICONV*GLOB_THERM%NUMCONV,IRFORM)
+      ELSE
+        CALL WRITE_DB(FCONV,GLOB_THERM%LFACTHER*GLOB_THERM%NUMCONV)
+        CALL WRITE_I_C(IBCV,GLOB_THERM%NICONV*GLOB_THERM%NUMCONV)
+      ENDIF
+      RETURN
+      END
+C radiative flux 
+!||====================================================================
+!||    radiawrest       ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp          ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db         ../common_source/tools/input_output/write_db.F
+!||    write_i_c        ../common_source/tools/input_output/write_routines.c
+!||    wrtsqi           ../engine/source/output/tools/wrtsqi.F
+!||    wrtsqr           ../engine/source/output/tools/wrtsqr.F
+!||--- uses       -----------------------------------------------------
+!||    glob_therm_mod   ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||====================================================================
+      SUBROUTINE RADIAWREST(IBCR,FRADIA,GLOB_THERM)    
+            
+      use glob_therm_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr05_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER  IBCR(*)
+      my_real FRADIA(*)
+      type (glob_therm_), intent(in) :: GLOB_THERM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      IF (IRFORM/5 <= 1) THEN
+        CALL WRTSQR (FRADIA,GLOB_THERM%LFACTHER*GLOB_THERM%NUMRADIA,IRFORM)
+        CALL WRTSQI (IBCR,GLOB_THERM%NIRADIA*GLOB_THERM%NUMRADIA,IRFORM)
+      ELSE
+        CALL WRITE_DB(FRADIA,GLOB_THERM%LFACTHER*GLOB_THERM%NUMRADIA)
+        CALL WRITE_I_C(IBCR,GLOB_THERM%NIRADIA*GLOB_THERM%NUMRADIA)
+      ENDIF
+      RETURN
+      END
+C convection flow 
+!||====================================================================
+!||    fxtempwrest      ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp          ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db         ../common_source/tools/input_output/write_db.F
+!||    write_i_c        ../common_source/tools/input_output/write_routines.c
+!||    wrtsqi           ../engine/source/output/tools/wrtsqi.F
+!||    wrtsqr           ../engine/source/output/tools/wrtsqr.F
+!||--- uses       -----------------------------------------------------
+!||    glob_therm_mod   ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||====================================================================
+      SUBROUTINE FXTEMPWREST(IBFT,FBFT,GLOB_THERM)
+      
+      use glob_therm_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr05_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER  IBFT(*)
+      my_real FBFT(*)
+      type (glob_therm_) ,intent(in) :: glob_therm
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      IF (IRFORM/5 <= 1) THEN
+        CALL WRTSQR (FBFT,GLOB_THERM%LFACTHER*GLOB_THERM%NFXTEMP,IRFORM)
+        CALL WRTSQI (IBFT,GLOB_THERM%NIFT*GLOB_THERM%NFXTEMP,IRFORM)
+      ELSE
+        CALL WRITE_DB(FBFT,GLOB_THERM%LFACTHER*GLOB_THERM%NFXTEMP)
+        CALL WRITE_I_C(IBFT,GLOB_THERM%NIFT*GLOB_THERM%NFXTEMP)
+      ENDIF
+      RETURN
+      END
+C for rigid_ material
+!||====================================================================
+!||    rigmatwrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp       ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db      ../common_source/tools/input_output/write_db.F
+!||    write_i_c     ../common_source/tools/input_output/write_routines.c
+!||====================================================================
+      SUBROUTINE RIGMATWREST(RBYM  ,IRBYM    ,LCRBYM,WEIGHT_RM)      
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBYM(*)    ,LCRBYM(*),WEIGHT_RM(*)
+      my_real RBYM(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      CALL WRITE_DB(RBYM,NFRBYM*NRBYM)
+      CALL WRITE_I_C(IRBYM,NIRBYM*NRBYM)
+      CALL WRITE_I_C( LCRBYM,NGSLNRBYM)      
+      CALL WRITE_I_C( WEIGHT_RM,NRBYM)
+      
+      RETURN
+      END
+C for shell composite xfem 
+!||====================================================================
+!||    plyxfem_wrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp         ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db        ../common_source/tools/input_output/write_db.F
+!||    write_i_c       ../common_source/tools/input_output/write_routines.c
+!||====================================================================
+      SUBROUTINE PLYXFEM_WREST(MS_PLY,ZI_PLY,INOD,IEL,ICODE,ISKEW,MSZ2)      
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real MS_PLY(*),ZI_PLY(*),MSZ2(*)
+      INTEGER ICODE(*),ISKEW(*),IEL(*),INOD(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------          
+         CALL WRITE_DB(MS_PLY,NPLYXFE*NPLYMAX)          
+         CALL WRITE_DB(ZI_PLY,NPLYXFE*NPLYMAX)          
+         CALL WRITE_DB(MSZ2,NPLYXFE)                    
+         CALL WRITE_I_C(INOD,NUMNOD)                    
+         CALL WRITE_I_C(IEL,NUMELC)                    
+C       
+       IF(IPLYBCS > 0) THEN
+           CALL WRITE_I_C(ICODE,NUMNOD)
+           CALL WRITE_I_C(ISKEW,NUMNOD)
+       ENDIF
+      RETURN
+      END
+C for shell composite xfem
+!||====================================================================
+!||    plyxfem_wrestanim   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp             ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_i_c           ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod         ../engine/share/modules/plyxfem_mod.F
+!||====================================================================
+      SUBROUTINE PLYXFEM_WRESTANIM()
+C-----------------------------------------------
+      USE PLYXFEM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER K,ELSZ,NDSZ
+C-----------------------------------------------
+          CALL WRITE_I_C(NPLYPART,1)
+           CALL WRITE_I_C(INDX_PLY,NPLYPART)
+
+           DO K=1,NPLYMAX
+C Writing shell infos for PLY XFEM
+             ELSZ = PLYSHELL(K)%PLYNUMSHELL
+             CALL WRITE_I_C(ELSZ,1)
+             CALL WRITE_I_C(PLYSHELL(K)%SHID,     ELSZ)
+           CALL WRITE_I_C(PLYSHELL(K)%SHELLIPT, ELSZ)
+             CALL WRITE_I_C(PLYSHELL(K)%SHELLID,  ELSZ)
+
+C Writing nodes infos for PLY XFEM
+           NDSZ=PLYNOD(K)%PLYNUMNODS
+           CALL WRITE_I_C(NDSZ,1)
+           CALL WRITE_I_C(PLYNOD(K)%NODES,    NDSZ)
+           CALL WRITE_I_C(PLYNOD(K)%PLYNODID, NDSZ)
+         ENDDO
+
+         CALL WRITE_I_C(PLYSIZG,NPLYMAX)
+           CALL WRITE_I_C(IDPID_PLY,NPLYPART)
+      RETURN
+      END
+!||====================================================================
+!||    crkxfem_wrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp         ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_i_c       ../common_source/tools/input_output/write_routines.c
+!||====================================================================
+      SUBROUTINE CRKXFEM_WREST(INOD,IEL,NODLEVXF)      
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "com_xfem1.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER INOD(*),IEL(*),NODLEVXF(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C--------------------------------------
+C     writing real values
+C--------------------------------------
+      CALL WRITE_I_C(INOD,NUMNOD)
+      CALL WRITE_I_C(IEL,NUMELC+NUMELTG)
+      CALL WRITE_I_C(NODLEVXF,NCRKXFE)
+C
+      RETURN
+      END
+!||====================================================================
+!||    crkxfem_wrestanim   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp             ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db            ../common_source/tools/input_output/write_db.F
+!||    write_i_c           ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    crackxfem_mod       ../engine/share/modules/crackxfem_mod.F
+!||    restmod             ../engine/share/modules/restart_mod.F
+!||====================================================================
+      SUBROUTINE CRKXFEM_WRESTANIM(CRKEDGE,CRKSKY,INDX_CRK,XEDGE4N,XEDGE3N)
+C-----------------------------------------------
+      USE CRACKXFEM_MOD
+      USE RESTMOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com_xfem1.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, DIMENSION(*)   :: INDX_CRK
+      INTEGER, DIMENSION(4,*) :: XEDGE4N
+      INTEGER, DIMENSION(3,*) :: XEDGE3N
+      TYPE (XFEM_EDGE_) , DIMENSION(NXLAYMAX) :: CRKEDGE
+      TYPE (XFEM_SKY_)  , DIMENSION(*) :: CRKSKY
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER K,NENR,ELSZ,LEN,ELSZC,ELSZTG,LENLAY,CRKNUMNODS
+C=======================================================================
+      CALL WRITE_I_C(NCRKPART,1)
+      CALL WRITE_I_C(NCRKXFE,1)
+      CALL WRITE_I_C(INDX_CRK,NCRKPART)
+c
+C     Writing shell infos for CRACK XFEM
+c
+          DO K=1,NLEVMAX
+            ELSZ  = CRKSHELL(K)%CRKNUMSHELL                           
+        ELSZC = CRKSHELL(K)%CRKNUMSH4                             
+        ELSZTG= CRKSHELL(K)%CRKNUMSH3                             
+c
+            CALL WRITE_I_C(ELSZC,1)                                   
+            CALL WRITE_I_C(ELSZTG,1)                                  
+            CALL WRITE_I_C(ELSZ,1)                                    
+          CALL WRITE_I_C(CRKSHELL(K)%CRKSHELLID  ,ELSZ)             
+        CALL WRITE_I_C(CRKSHELL(K)%ELTYPE      ,ELSZ)   
+c------ CRKNOD
+        LEN  = 4*ELSZ                                
+        CALL WRITE_I_C(CRKNOD(K)%XFECRKNODID ,LEN)  
+        CALL WRITE_I_C(CRKNOD(K)%XFENODES    ,LEN)     
+c------ CRKSHELL
+        LEN = 4*ELSZ                             
+        CALL WRITE_I_C(CRKSHELL(K)%XNODEL  ,LEN)
+c------ CRKLVSET
+        LEN = LCNECRKXFEM                                 
+        CALL WRITE_I_C(CRKLVSET(K)%ENR0(1,1:LEN) ,LEN)   
+        CALL WRITE_I_C(CRKLVSET(K)%ENR0(2,1:LEN) ,LEN)   
+        CALL WRITE_DB (CRKLVSET(K)%AREA(1:ELSZ)  ,ELSZ)  
+c------ CRKAVX
+        LEN = 3*LCNECRKXFEM
+        CALL WRITE_DB(CRKAVX(K)%A  ,  LEN)
+        CALL WRITE_DB(CRKAVX(K)%AR ,  LEN)
+        CALL WRITE_DB(CRKAVX(K)%V  ,  LEN)
+        CALL WRITE_DB(CRKAVX(K)%VR ,  LEN)
+        CALL WRITE_DB(CRKAVX(K)%X  ,  LEN)
+        CALL WRITE_DB(CRKAVX(K)%U  ,  LEN)
+        LEN = 3*4*ELSZ
+        CALL WRITE_DB(CRKAVX(K)%XX ,  LEN)
+c------ CRKSKY
+        LEN = 8*LCNECRKXFEM
+        CALL WRITE_DB(CRKSKY(K)%FSKY,  LEN)
+c------ CRKNOD
+        LEN = 4*ELSZ
+        CALL WRITE_I_C(CRKNOD(K)%NOD2IAD,  LEN)
+        CRKNUMNODS = CRKNOD(K)%CRKNUMNODS
+        CALL WRITE_I_C(CRKNUMNODS, 1)
+      ENDDO
+c
+c---  write XFEM_PHANTOM  ----------------------------
+      NENR = INT(IENRNOD/NLEVMAX)
+      DO K=1,NXLAYMAX
+        CALL WRITE_I_C(XFEM_PHANTOM(K)%ELCUT   ,ELSZ)  
+        CALL WRITE_I_C(XFEM_PHANTOM(K)%IFI     ,LCNECRKXFEM)
+        CALL WRITE_I_C(XFEM_PHANTOM(K)%TAGXP   ,NCRKXFE*IENRNOD*5)
+        CALL WRITE_I_C(XFEM_PHANTOM(K)%ITRI    ,ELSZ*2)  
+      END DO
+c---  write CRKEDGE  ----------------------------
+      LENLAY = CRKSHELL(1)%CRKNUMSHELL
+      LEN    = NUMEDGES
+      DO K=1,NXLAYMAX
+        CALL WRITE_I_C(CRKEDGE(K)%LAYCUT      ,LENLAY) 
+        CALL WRITE_I_C(CRKEDGE(K)%IEDGEC      ,ELSZC*4)
+        CALL WRITE_I_C(CRKEDGE(K)%IEDGETG     ,ELSZTG*3)
+        CALL WRITE_I_C(CRKEDGE(K)%EDGEICRK    ,LEN)  
+        CALL WRITE_I_C(CRKEDGE(K)%EDGEIFI     ,LEN*2)
+        CALL WRITE_I_C(CRKEDGE(K)%EDGEENR     ,LEN*2)
+        CALL WRITE_I_C(CRKEDGE(K)%EDGETIP     ,LEN*2)
+        CALL WRITE_I_C(CRKEDGE(K)%IBORDEDGE   ,LEN) 
+        CALL WRITE_I_C(CRKEDGE(K)%ICUTEDGE    ,LEN) 
+        CALL WRITE_DB (CRKEDGE(K)%RATIO       ,LEN) 
+      END DO
+c-------------------------------------------------
+      CALL WRITE_I_C(XEDGE4N, 4*ELSZC)        
+      CALL WRITE_I_C(XEDGE3N, 3*ELSZTG)     
+      LEN = 2*(NUMELC+NUMELTG)
+      CALL WRITE_I_C(ELCUTC,LEN)
+      CALL WRITE_I_C(NODENR,NCRKXFE)
+      CALL WRITE_I_C(KXFENOD2ELC,NCRKXFE)
+      CALL WRITE_I_C(ENRTAG,NUMNOD*IENRNOD)
+C---
+      RETURN
+      END
+C for shell composite xfem
+!||====================================================================
+!||    plyxfem_wravuply   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp            ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db           ../common_source/tools/input_output/write_db.F
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod        ../engine/share/modules/plyxfem_mod.F
+!||====================================================================
+      SUBROUTINE PLYXFEM_WRAVUPLY()
+C-----------------------------------------------
+      USE PLYXFEM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER K,NDSZ
+C-----------------------------------------------
+           DO K=1,NPLYMAX
+C Writing U, V A
+           NDSZ = 3*NPLYXFE
+             CALL WRITE_DB(PLY(K)%U, NDSZ)
+           CALL WRITE_DB(PLY(K)%V, NDSZ)
+cc            NDSZ = 4*NPLYXFE
+cc            CALL WRITE_DB(PLY(K)%A, NDSZ)
+         ENDDO
+C
+      RETURN
+      END
+C air + faom
+!||====================================================================
+!||    alelag_wrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp        ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db       ../common_source/tools/input_output/write_db.F
+!||--- uses       -----------------------------------------------------
+!||    aleflow_mod    ../engine/share/modules/aleflow_mod.F
+!||====================================================================
+      SUBROUTINE ALELAG_WREST()
+C-----------------------------------------------
+      USE ALEFLOW_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NOSZ
+C-----------------------------------------------
+        NOSZ = 3*NUMNOD
+        CALL WRITE_DB(DFLOW, NOSZ)
+        CALL WRITE_DB(VFLOW ,NOSZ)
+        CALL WRITE_DB(WFLOW ,NOSZ) 
+C       
+      RETURN
+      END
+
+C TH output
+!||====================================================================
+!||    rthbufwrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp       ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db      ../common_source/tools/input_output/write_db.F
+!||--- uses       -----------------------------------------------------
+!||    restmod       ../engine/share/modules/restart_mod.F
+!||====================================================================
+      SUBROUTINE RTHBUFWREST ()
+C-----------------------------------------------
+      USE RESTMOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "tabsiz_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+
+        CALL WRITE_DB(RTHBUF,SRTHBUF)
+C       
+      RETURN
+      END
+
+C STACk PART
+!||====================================================================
+!||    stack_wrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp       ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db      ../common_source/tools/input_output/write_db.F
+!||    write_i_c     ../common_source/tools/input_output/write_routines.c
+!||====================================================================
+      SUBROUTINE STACK_WREST(IGEO,GEO,PM)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IGEO(*)
+      my_real GEO(*),PM(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER LSIZ
+      
+C-----------------------------------------------*   
+        LSIZ =(4*NPT_STACK +2)*NS_STACK 
+        CALL WRITE_I_C(IGEO,     LSIZ) 
+        LSIZ =(6*NPT_STACK + 1)*NS_STACK 
+        CALL WRITE_DB(GEO,     LSIZ)
+        LSIZ =20*NS_STACK 
+        CALL WRITE_DB(PM,     LSIZ)
+       RETURN
+      END
+!||====================================================================
+!||    drape_wrest      ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp          ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db         ../common_source/tools/input_output/write_db.F
+!||    write_i_c        ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    drape_mod        ../engine/share/modules/drape_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE DRAPE_WREST(DRAPE_SH4N,DRAPE_SH3N, DRAPEG)      
+C      
+      USE DRAPE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(DRAPE_),  DIMENSION(:),TARGET:: DRAPE_SH4N(NUMELC_DRAPE),DRAPE_SH3N(NUMELTG_DRAPE)
+      TYPE(DRAPEG_)             , TARGET :: DRAPEG
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,NPT,NDIM,N1,N2,N3,NDIM_INDX_PLY,
+     .  NDIM_SLICE,IS,NSLICE,NPT_DRP
+      my_real, DIMENSION(:,:), ALLOCATABLE :: RTMP
+      my_real, DIMENSION(:)  , ALLOCATABLE :: THK
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: ITMP
+      INTEGER, DIMENSION(:)  , ALLOCATABLE :: NPTDRP_ELT,ISLICE,INDX_PLY,
+     .                                        NPT_ELT
+      INTEGER  , DIMENSION(:), POINTER     :: INDXSH4N,INDXSH3N   
+C--------------------------------------
+C     reading integers
+C--------------------------------------
+      IF(NUMELC_DRAPE > 0) THEN
+          NDIM          = DRAPEG%NDIM_SH4N         
+          NDIM_SLICE    = DRAPEG%NDIM_SLICE_SH4N   
+          NDIM_INDX_PLY = DRAPEG%NDIM_INDX_PLY_SH4N 
+          INDXSH4N => DRAPEG%INDX_SH4N(1:NUMELC)
+          !!                     
+          CALL WRITE_I_C(NDIM,1) 
+          CALL WRITE_I_C(NDIM_SLICE,1)
+          CAll WRITE_I_C(NDIM_INDX_PLY,1)
+          CALL WRITE_I_C(INDXSH4N,NUMELC)  
+          call my_alloc(NPT_ELT, NUMELC_DRAPE, "NPT_ELT")
+          call my_alloc(NPTDRP_ELT, NUMELC_DRAPE, "NPTDRP_ELT")
+          call my_alloc(THK, NUMELC_DRAPE, "THK")
+          call my_alloc(ITMP, NDIM, 2, "ITMP")
+          call my_alloc(RTMP, NDIM, 2, "RTMP")
+          call my_alloc(ISLICE, NDIM_SLICE, "ISLICE")
+          call my_alloc(INDX_PLY, NDIM_INDX_PLY, "INDX_PLY")
+             
+          N1 = 0
+          N2 = 0
+          N3 = 0 
+          THK = ZERO   
+          DO I=1,NUMELC_DRAPE
+            NPT_DRP =  DRAPE_SH4N(I)%NPLY_DRAPE 
+            NPT = DRAPE_SH4N(I)%NPLY   
+            THK(I) = DRAPE_SH4N(I)%THICK                          
+            NPTDRP_ELT(I)   = NPT_DRP             
+            NPT_ELT(I) = NPT
+            DO J = 1,NPT_DRP
+                  NSLICE = DRAPE_SH4N(I)%DRAPE_PLY(J)%NSLICE
+                  ISLICE(N2 + J) =  NSLICE
+                  DO IS = 1,NSLICE
+                      ITMP(N1 + IS,1) = DRAPE_SH4N(I)%DRAPE_PLY(J)%IDRAPE(IS,1) 
+                      ITMP(N1 + IS,2) = DRAPE_SH4N(I)%DRAPE_PLY(J)%IDRAPE(IS,2)
+                      RTMP(N1 + IS,1) = DRAPE_SH4N(I)%DRAPE_PLY(J)%RDRAPE(IS,1)
+                      RTMP(N1 + IS,2) = DRAPE_SH4N(I)%DRAPE_PLY(J)%RDRAPE(IS,2)
+                  ENDDO
+                  N1 = N1 + NSLICE
+             ENDDO
+             N2 = N2 + NPT_DRP
+             DO J = 1,NPT
+               INDX_PLY(N3 + J) = DRAPE_SH4N(I)%INDX_PLY(J)
+             ENDDO
+             N3 = N3 + NPT       
+          ENDDO  
+          CALL WRITE_I_C(NPTDRP_ELT,NUMELC_DRAPE)
+          CALL WRITE_I_C(NPT_ELT,NUMELC_DRAPE)
+          CALL WRITE_I_C(ISLICE,NDIM_SLICE)
+          CALL WRITE_I_C(INDX_PLY,NDIM_INDX_PLY)  
+          CALL WRITE_I_C(ITMP,2*NDIM)            
+          CALL WRITE_DB(RTMP,2*NDIM)  
+          CALL WRITE_DB(THK,NUMELC_DRAPE )
+          call my_dealloc(NPT_ELT)
+          call my_dealloc(NPTDRP_ELT)
+          call my_dealloc(ITMP)
+          call my_dealloc(RTMP)
+          call my_dealloc(ISLICE)
+          call my_dealloc(INDX_PLY)
+          call my_dealloc(THK)
+          
+      ENDIF
+      
+      IF(NUMELTG_DRAPE > 0 ) THEN
+          NDIM             = DRAPEG%NDIM_SH3N   
+          NDIM_SLICE       = DRAPEG%NDIM_SLICE_SH3N
+          NDIM_INDX_PLY    = DRAPEG%NDIM_INDX_PLY_SH3N 
+          INDXSH3N => DRAPEG%INDX_SH3N(1:NUMELTG)
+          !!                     
+          CALL WRITE_I_C(NDIM,1) 
+          CALL WRITE_I_C(NDIM_SLICE,1)
+          CAll WRITE_I_C(NDIM_INDX_PLY,1)
+          CALL WRITE_I_C(INDXSH3N,NUMELTG)  
+          call my_alloc(NPT_ELT, NUMELTG_DRAPE, "NPT_ELT")
+          call my_alloc(NPTDRP_ELT, NUMELTG_DRAPE, "NPTDRP_ELT")
+          call my_alloc(THK, NUMELTG_DRAPE, "THK")
+          call my_alloc(ITMP, NDIM, 2, "ITMP")
+          call my_alloc(RTMP, NDIM, 2, "RTMP")
+          call my_alloc(ISLICE, NDIM_SLICE, "ISLICE")
+          call my_alloc(INDX_PLY, NDIM_INDX_PLY, "INDX_PLY")
+          N1 = 0
+          N2 = 0
+          N3 = 0 
+          THK = ZERO   
+          DO I=1,NUMELTG_DRAPE
+            NPT_DRP =  DRAPE_SH3N(I)%NPLY_DRAPE 
+            NPT = DRAPE_SH3N(I)%NPLY   
+            THK(I) = DRAPE_SH3N(I)%THICK                          
+            NPTDRP_ELT(I)   = NPT_DRP             
+            NPT_ELT(I) = NPT
+            DO J = 1,NPT_DRP
+                  NSLICE = DRAPE_SH3N(I)%DRAPE_PLY(J)%NSLICE
+                  ISLICE(N2 + J) =  NSLICE
+                  DO IS = 1,NSLICE
+                      ITMP(N1 + IS,1) = DRAPE_SH3N(I)%DRAPE_PLY(J)%IDRAPE(IS,1) 
+                      ITMP(N1 + IS,2) = DRAPE_SH3N(I)%DRAPE_PLY(J)%IDRAPE(IS,2)
+                      RTMP(N1 + IS,1) = DRAPE_SH3N(I)%DRAPE_PLY(J)%RDRAPE(IS,1)
+                      RTMP(N1 + IS,2) = DRAPE_SH3N(I)%DRAPE_PLY(J)%RDRAPE(IS,2)
+                  ENDDO
+                  N1 = N1 + NSLICE
+            ENDDO
+            N2 = N2 + NPT_DRP
+            DO J = 1,NPT
+               INDX_PLY(N3 + J) = DRAPE_SH3N(I)%INDX_PLY(J)
+            ENDDO
+            N3 = N3 + NPT       
+          ENDDO  
+          CALL WRITE_I_C(NPTDRP_ELT,NUMELTG_DRAPE)
+          CALL WRITE_I_C(NPT_ELT,NUMELTG_DRAPE)
+          CALL WRITE_I_C(ISLICE,NDIM_SLICE)
+          CALL WRITE_I_C(INDX_PLY,NDIM_INDX_PLY)  
+          CALL WRITE_I_C(ITMP,2*NDIM)            
+          CALL WRITE_DB(RTMP,2*NDIM)  
+          CALL WRITE_DB(THK, NUMELTG_DRAPE ) 
+          call my_dealloc(NPT_ELT)
+          call my_dealloc(NPTDRP_ELT)
+          call my_dealloc(ITMP)
+          call my_dealloc(RTMP)
+          call my_dealloc(ISLICE)
+          call my_dealloc(INDX_PLY)
+          call my_dealloc(THK)
+      ENDIF                    
+      RETURN
+      END
+!||====================================================================
+!||    ply_info_wrest   ../engine/source/output/restart/wrrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp          ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_i_c        ../common_source/tools/input_output/write_routines.c
+!||====================================================================
+      SUBROUTINE PLY_INFO_WREST(PLY_INFO)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER PLY_INFO(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        INTEGER LEN
+C--------------------------------------
+C     writing integers
+C--------------------------------------
+      LEN = 3 * NUMPLY
+      CALL WRITE_I_C(PLY_INFO,LEN)
+C--------------------------------------
+C     reading real values
+C--------------------------------------
+C
+      RETURN
+      END

@@ -1,0 +1,222 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_seg_clause           ../starter/source/model/sets/create_seg_clause.F
+!||--- called by ------------------------------------------------------
+!||    hm_set                      ../starter/source/model/sets/hm_set.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                      ../starter/source/output/message/message.F
+!||    hm_get_int_array_2indexes   ../starter/source/devtools/hm_reader/hm_get_int_array_2indexes.F
+!||    hm_get_int_array_index      ../starter/source/devtools/hm_reader/hm_get_int_array_index.F
+!||    set_usrtos                  ../starter/source/model/sets/ipartm1.F
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod          ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod                 ../starter/share/message_module/message_mod.F
+!||    submodel_mod                ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_SEG_CLAUSE(CLAUSE,  ITABM1  ,JCLAUSE ,IS_AVAILABLE ,LSUBMODEL)
+C-----------------------------------------------
+C   D e s c r i p t i o n
+C-----------------------------------------------
+C   ===================
+C   Create PART Clause from LIST
+C-----------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     CLAUSE        (SET structure) Clause to be treated
+C     IPARTM1       MAP Table UID -> LocalID
+C     JCLAUSE       parameter with HM_READER (current clause read)
+C     IS_AVAILABLE  Bool / Result of HM_interface
+C     LSUBMODEL     SUBMODEL Structure.
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SETDEF_MOD
+      USE SUBMODEL_MOD
+      USE MESSAGE_MOD
+      USE HM_OPTION_READ_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER JCLAUSE
+      LOGICAL :: IS_AVAILABLE
+      INTEGER, INTENT(IN), DIMENSION(NUMNOD,2) :: ITABM1
+      TYPE (SET_) ::  CLAUSE
+      TYPE(SUBMODEL_DATA),INTENT(IN):: LSUBMODEL(NSUBMOD)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, NINDX, SEG_MAX, NOD_1, NOD_2, NOD_3, NOD_4, NODSYS_1, NODSYS_2, NODSYS_3, NODSYS_4, SEG_ID, LINE_SEG
+      INTEGER, ALLOCATABLE, DIMENSION(:,:) :: BUFSURF
+      INTEGER,EXTERNAL :: SET_USRTOS
+C-----------------------------------------------
+C   S o u r c e  L i n e s
+C-----------------------------------------------
+      LINE_SEG = 0
+      CALL HM_GET_INT_ARRAY_INDEX('segmax' ,SEG_MAX ,JCLAUSE,IS_AVAILABLE,LSUBMODEL)
+      call my_alloc(BUFSURF, 4, SEG_MAX, "BUFSURF")
+      NINDX = 0
+!
+      ! Read & convert Segs
+      ! ---------------------
+      DO I=1,SEG_MAX  ! always = 1 for clause 'SEG'
+        CALL HM_GET_INT_ARRAY_2INDEXES('segid',SEG_ID,JCLAUSE ,I,IS_AVAILABLE,LSUBMODEL)
+        CALL HM_GET_INT_ARRAY_2INDEXES('ids1' ,NOD_1 ,JCLAUSE ,I,IS_AVAILABLE,LSUBMODEL)
+        CALL HM_GET_INT_ARRAY_2INDEXES('ids2' ,NOD_2 ,JCLAUSE ,I,IS_AVAILABLE,LSUBMODEL)
+        CALL HM_GET_INT_ARRAY_2INDEXES('ids3' ,NOD_3 ,JCLAUSE ,I,IS_AVAILABLE,LSUBMODEL)
+        CALL HM_GET_INT_ARRAY_2INDEXES('ids4' ,NOD_4 ,JCLAUSE ,I,IS_AVAILABLE,LSUBMODEL)
+        NODSYS_1 = SET_USRTOS(NOD_1,ITABM1,NUMNOD)
+        IF (NODSYS_1 == 0) THEN
+           ! Node was not found. Issue an error.
+           CALL ANCMSG(MSGID=1903,ANMODE=ANINFO,MSGTYPE=MSGERROR,
+     .                             I1 = CLAUSE%SET_ID,
+     .                             I2=SEG_ID,
+     .                             I3=NOD_1,
+     .                             C1=TRIM(CLAUSE%TITLE),
+     .                             C2='NODE')
+        ELSE
+          NODSYS_1 = ITABM1(NODSYS_1,2)
+        ENDIF
+
+        NODSYS_2 = SET_USRTOS(NOD_2,ITABM1,NUMNOD)
+        IF (NODSYS_2 == 0) THEN
+          ! Node was not found. Issue an error.
+           CALL ANCMSG(MSGID=1903,ANMODE=ANINFO,MSGTYPE=MSGERROR,
+     .                             I1 = CLAUSE%SET_ID,
+     .                             I2=SEG_ID,
+     .                             I3=NOD_2,
+     .                             C1=TRIM(CLAUSE%TITLE),
+     .                             C2='NODE')
+        ELSE
+          NODSYS_2 = ITABM1(NODSYS_2,2)
+        ENDIF
+        
+        LINE_SEG = 0
+        IF (NOD_3 == 0 .AND. NOD_4 == 0) THEN
+          LINE_SEG = 1 ! Line SEG
+          NODSYS_3 = 0
+          NODSYS_4 = 0
+        ELSE
+          NODSYS_3 = SET_USRTOS(NOD_3,ITABM1,NUMNOD)
+          NODSYS_4 = SET_USRTOS(NOD_4,ITABM1,NUMNOD)
+        ENDIF
+
+        IF (LINE_SEG == 0) THEN! Surf seg -> continues node check existence
+          IF (NODSYS_3 == 0) THEN
+            ! Node was not found. Issue an error.
+            CALL ANCMSG(MSGID=1903,ANMODE=ANINFO,MSGTYPE=MSGERROR,
+     .                             I1 = CLAUSE%SET_ID,
+     .                             I2=SEG_ID,
+     .                             I3=NOD_3,
+     .                             C1=TRIM(CLAUSE%TITLE),
+     .                             C2='NODE')
+          ELSE
+            ! Node found
+            NODSYS_3 = ITABM1(NODSYS_3,2)
+          ENDIF
+
+          IF (NOD_4 == 0) THEN 
+            ! correction to allow for 3 noded surface (triangle)
+              NODSYS_4 = NODSYS_3
+          ELSE IF (NODSYS_4 == 0) THEN
+            ! Node was not found. Issue an error.
+            CALL ANCMSG(MSGID=1903,ANMODE=ANINFO,MSGTYPE=MSGERROR,
+     .                             I1 = CLAUSE%SET_ID,
+     .                             I2=SEG_ID,
+     .                             I3=NOD_4,
+     .                             C1=TRIM(CLAUSE%TITLE),
+     .                             C2='NODE')
+          ELSE IF (NODSYS_4 /= 0) THEN
+            ! Node found
+              NODSYS_4 =  ITABM1(NODSYS_4,2)
+          ENDIF
+
+        ENDIF ! IF (LINE_SEG == 0)
+
+        NINDX = NINDX+1    !   nb of CLAUSE SEGs
+        BUFSURF(1,NINDX) = NODSYS_1
+        BUFSURF(2,NINDX) = NODSYS_2
+        BUFSURF(3,NINDX) = NODSYS_3
+        BUFSURF(4,NINDX) = NODSYS_4
+
+      ENDDO ! DO I=1,SEG_MAX
+
+      ! Copy in final SET
+      ! ------------------
+
+      !------------------------------------!
+      !  create SURF clause or LINE clause !
+      !------------------------------------!
+
+      IF (LINE_SEG == 0) THEN
+
+        ! SURF seg (4-node SEG)
+        CLAUSE%NB_SURF_SEG = NINDX
+        call my_alloc(CLAUSE%SURF_NODES, NINDX, 4, "CLAUSE%SURF_NODES")
+        call my_alloc(CLAUSE%SURF_ELTYP, NINDX, "CLAUSE%SURF_ELTYP")
+        call my_alloc(CLAUSE%SURF_ELEM, NINDX, "CLAUSE%SURF_ELEM")
+
+        DO I=1,NINDX
+          CLAUSE%SURF_NODES(I,1) = BUFSURF(1,I) ! N1
+          CLAUSE%SURF_NODES(I,2) = BUFSURF(2,I) ! N2
+          CLAUSE%SURF_NODES(I,3) = BUFSURF(3,I) ! N3
+          CLAUSE%SURF_NODES(I,4) = BUFSURF(4,I) ! N4
+          CLAUSE%SURF_ELTYP(I)   = 0  ! ELTYP
+          CLAUSE%SURF_ELEM(I)    = 0  ! ELEM
+        ENDDO
+
+      ELSE
+
+        ! LINE seg (2-node SEG)
+        CLAUSE%NB_LINE_SEG = NINDX
+        call my_alloc(CLAUSE%LINE_NODES, NINDX, 2, "CLAUSE%LINE_NODES")
+        call my_alloc(CLAUSE%LINE_ELTYP, NINDX, "CLAUSE%LINE_ELTYP")
+        call my_alloc(CLAUSE%LINE_ELEM, NINDX, "CLAUSE%LINE_ELEM")
+
+        DO I=1,NINDX
+          CLAUSE%LINE_NODES(I,1) = BUFSURF(1,I) ! N1
+          CLAUSE%LINE_NODES(I,2) = BUFSURF(2,I) ! N2
+          CLAUSE%LINE_ELTYP(I)   = 0  ! ELTYP
+          CLAUSE%LINE_ELEM(I)    = 0  ! ELEM
+        ENDDO
+
+      ENDIF ! IF (LINE_SEG == 0)
+
+C-------------------------
+      CALL MY_DEALLOC(BUFSURF)
+C-------------------------
+      RETURN
+      END

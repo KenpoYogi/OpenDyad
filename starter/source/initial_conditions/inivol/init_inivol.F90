@@ -1,0 +1,498 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    init_inivol_mod   ../starter/source/initial_conditions/inivol/init_inivol.F90
+!||--- called by ------------------------------------------------------
+!||    initia            ../starter/source/elements/initia/initia.F
+!||====================================================================
+      module init_inivol_mod
+        implicit none
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!! \brief Initial volume fraction are here computed.
+!! \details INIVOL option allows to fill a given submaterial inside or outside a given user surface
+!! \details two methods are available : MONTE CARLO (statistical) for 3d surface & 2d/3d super-ellipsoids
+!! \details                             POLYGONAL CLIPPING (exact) for 2d polygonal surfaces (/SURF/SEG)
+!! \details both methods may exist in the same INIVOL option depending on the type of provided surface (surf_id)
+!! \details when all surfaces of INIVOL option are treated then volume fraction are adjested (KVOL) so that remaining space is filled with submaterial #1
+
+!||====================================================================
+!||    init_inivol                    ../starter/source/initial_conditions/inivol/init_inivol.F90
+!||--- called by ------------------------------------------------------
+!||    initia                         ../starter/source/elements/initia/initia.F
+!||--- calls      -----------------------------------------------------
+!||    ale_box_coloration             ../starter/source/initial_conditions/inivol/ale_box_coloration.F
+!||    ale_box_creation               ../starter/source/initial_conditions/inivol/ale_box_creation.F
+!||    ale_element_size_computation   ../starter/source/initial_conditions/inivol/ale_element_size_computation.F
+!||    connesurf                      ../starter/source/initial_conditions/inivol/connesurf.F
+!||    getphase                       ../starter/source/initial_conditions/inivol/getphase.F
+!||    inifill                        ../starter/source/initial_conditions/inivol/inifill.F
+!||    inisoldist                     ../starter/source/initial_conditions/inivol/inisoldist.F
+!||    init_inivol_2d_polygons        ../starter/source/initial_conditions/inivol/init_inivol_2D_polygons.F90
+!||    inivol_set                     ../starter/source/initial_conditions/inivol/inivol_set.F
+!||    surface_min_max_computation    ../starter/source/initial_conditions/inivol/surface_min_max_computation.F
+!||--- uses       -----------------------------------------------------
+!||    init_inivol_2d_polygons_mod    ../starter/source/initial_conditions/inivol/init_inivol_2D_polygons.F90
+!||    inivol_def_mod                 ../starter/share/modules1/inivol_mod.F
+!||====================================================================
+        subroutine init_inivol(   num_inivol,   inivol,   nsurf,    igrsurf,        &
+          nparg     ,   ngroup,   iparg,     numnod,  npart,&
+          numels    ,     nixs,     ixs,     igrnod, ngrnod,&
+          numeltg   ,    nixtg,    ixtg,&
+          numelq    ,     nixq,     ixq,&
+          x         , nbsubmat,    kvol,&
+          elbuf_tab ,  numels8,   xrefs, glob_therm, &
+          n2d       ,multi_fvm,  sipart,      ipart, &
+          i15a      ,     i15b,    i15h,    sbufmat, bufmat,&
+          npropmi   ,   nummat,     ipm,     sbufsf,  bufsf,&
+          npropg    ,   numgeo,     geo,      mvsiz,  skvol,  &
+          itab      ,mat_param)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use constant_mod , only : zero, ep9, ep20
+          use array_mod , only : array_type, alloc_1d_array, dealloc_1d_array, dealloc_3d_array
+          use inivol_def_mod , only : inivol_struct_
+          use groupdef_mod , only : surf_, group_
+          use elbufdef_mod , only : elbuf_struct_, buf_mat_
+          use multi_fvm_mod , only : multi_fvm_struct
+          use matparam_def_mod , only : matparam_struct_
+          use glob_therm_mod
+          use precision_mod, only : WP
+          use MY_ALLOC_MOD, only : my_alloc
+          use MY_DEALLOC_MOD, only : my_dealloc
+          use init_inivol_2d_polygons_mod , only : init_inivol_2d_polygons
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,intent(in) :: nsurf, num_inivol, n2d, sbufmat, npropg, numgeo, mvsiz,skvol          !< array sizes
+          integer, intent(in) :: nixs,nixtg,nixq,numels,numeltg,numelq, numnod, nparg, ngroup, npart  !< array sizes
+          integer,intent(in) :: numels8, nbsubmat, npropmi, nummat, sipart, sbufsf                    !< array sizes
+          integer, intent(in) :: ixs(nixs,numels), ixtg(nixtg,numeltg), ixq(nixq,numelq)              !< elems node-connectivity
+          integer, intent(in) :: iparg(nparg,ngroup)                                                  !< buffer for elem groups
+          integer,intent(in) :: i15a,i15b,i15h                                                        !< indexes for ipart array
+          integer,intent(in) :: ipart(sipart)                                                         !< buffer for parts
+          integer,intent(in) :: ipm(npropmi,nummat)                                                   !< material data (integers)
+          integer,intent(in) :: ngrnod                                                                !< array size igrnod
+          real(kind=WP), intent(in) :: x(3,numnod)                                                          !< coordinates
+          real(kind=WP) :: xrefs(8,3,numels8)                                                               !<
+          real(kind=WP), intent(inout) :: kvol(nbsubmat,skvol/nbsubmat)                                     !< inivol working array
+          real(kind=WP),intent(in) :: bufsf(sbufsf)                                                         !< buffer
+          real(kind=WP),intent(in) :: bufmat(sbufmat)                                                       !< material buffer
+          real(kind=WP),intent(in) :: geo(npropg,numgeo)                                                    !< property buffer (real parameters)
+          type (elbuf_struct_), target, dimension(ngroup), intent(inout) :: elbuf_tab                    !< elem buffer: modified in inivol_set 
+          type (multi_fvm_struct),intent(in) :: multi_fvm                                             !< buffer for colocated scheme (law151)
+          type (inivol_struct_), dimension(NUM_INIVOL), intent(inout) :: inivol                       !< inivol data structure
+          type (surf_), dimension(nsurf), intent(in) :: igrsurf                                       !< surface buffer
+          integer,intent(in) :: itab(numnod)
+          type (matparam_struct_) ,dimension(nummat) ,intent(in) :: mat_param
+          type (glob_therm_) ,intent(in) :: glob_therm
+          type (group_)  , dimension(ngrnod)  :: igrnod                                               !< data structure for group of nodes
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, dimension(:), allocatable :: tagn,iphase,itagnsol,inod2surf,part_fill,ivolsurf,itagsurf,segtosurf,swiftsurf
+          integer :: leading_dimension ! dimension of largest size
+          integer :: ale_element_number ! number of ale element with material 51 or 151
+          integer, parameter :: nb_box_limit=128 ! maximum number of cell
+          integer :: nb_cell_x,nb_cell_y,nb_cell_z ! number of cell in x/y/z direction
+          integer, dimension(:,:), allocatable :: cell_position ! position of node/cell
+          integer :: ale_node_number ! number of ale node
+          integer, dimension(:), allocatable :: list_ale_node ! list of ale node
+          integer, dimension(:,:), allocatable :: nsoltosf,nbip,inphase
+          integer, dimension(:), allocatable :: knod2surf
+          integer :: ntrace0,ntrace,nnod2surf,nsegsurf
+          integer :: stat, ng, nf1, nel, mtn
+          integer :: ifrac,idp,idc,idsurf,ireversed,jmid
+          integer ::nb_container,nseg_swift_surf,nseg_used,nsurf_invol,imat,NUMEL_TOT,ICUMU,I15_,nuvar,nft
+          integer :: ity,isolnod,invol,ii,kk,iad,isize_inivol,sipart_
+          integer :: imid
+          real(kind=WP), dimension(3) :: size_cell ! cell's size in x/y/z direction
+          real(kind=WP), dimension(:,:), allocatable :: dis
+          real(kind=WP) :: element_size ! max element size
+          real(kind=WP), dimension(6) :: min_max_position ! min/max position
+          real(kind=WP), dimension(:), allocatable :: nod_norm
+          real(kind=WP) :: vfrac
+          real(kind=WP) :: GLOBAL_xyz(6)
+          type(buf_mat_) ,pointer :: mbuf
+          type(array_type), dimension(:), allocatable :: cell ! voxcell
+          type(array_type), dimension(:), allocatable :: nodal_phase ! phase of node
+          logical :: bool
+
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+          if (num_inivol > 0) then
+
+            !initialize volume fractions
+            kvol(1:nbsubmat,1:skvol/nbsubmat) = zero
+
+            !init.
+            if(n2d == 0)then
+              ntrace0 = 3
+              ntrace0 = 2*ntrace0+1
+              ntrace  = ntrace0**3
+              call my_alloc(cell_position,3,numnod,"cell_position")
+              call my_alloc(list_ale_node,numnod,"list_ale_node")
+            end if
+
+            !pre-treatment 2D for /SURF/PLANE
+            !  (a box is created to encapsulate the domain related to infinite plane)
+            if(n2d > 0)then
+              GLOBAL_xyz(2:3) = +ep20
+              GLOBAL_xyz(5:6) = -ep20
+              bool = .false.
+              do ii=1,num_inivol
+                do idc=1, inivol(ii)%num_container
+                  idsurf = inivol(ii)%container(idc)%surf_id
+                  if(idsurf > 0)then
+                    if(igrsurf(idsurf)%type == 200)then
+                      bool = .true.
+                      do kk=1,numnod
+                        GLOBAL_xyz(2)=min(GLOBAL_xyz(2),x(2,kk))
+                        GLOBAL_xyz(3)=min(GLOBAL_xyz(3),x(3,kk))
+                        GLOBAL_xyz(5)=max(GLOBAL_xyz(5),x(2,kk))
+                        GLOBAL_xyz(6)=max(GLOBAL_xyz(6),x(3,kk))
+                      end do
+                      exit
+                    end if
+                  end if
+                  if(bool)exit
+                end do
+              end do
+            end if
+            !------------
+
+            ! MAIN LOOP OVER INIVOL OPTIONS
+            do ii=1,num_inivol
+
+              ifrac = inivol(ii)%id
+              nb_container = inivol(ii)%num_container
+              idp = inivol(ii)%part_id
+              numel_tot = max(numeltg,max(numels,numelq))
+              isize_inivol = (nbsubmat+1)*numel_tot
+              inivol(ii)%size = isize_inivol
+
+              !----------------------------------------------------------------------------!
+              ! POLYGON CLIPPING
+              !    /SURF/SEG must define a polygon (checked by reader hm_read_inivol.F)
+              !----------------------------------------------------------------------------!
+              if(n2d > 0)then
+                do idc=1,nb_container
+                  ! 2D LINE OF SEGMENTS (/SURF/SEG)
+                  CALL init_inivol_2d_polygons(   ii        ,      idc,  mat_param  ,  GLOBAL_xyz, &
+                    num_inivol,   inivol,      nsurf  ,     igrsurf, &
+                    nparg     ,   ngroup,      iparg  ,      numnod, &
+                    numeltg   ,    nixtg,       ixtg  ,      igrnod, &
+                    numelq    ,     nixq,        ixq  ,      ngrnod, &
+                    x         , nbsubmat,       kvol  ,      nummat, &
+                    sipart    ,    ipart,      bufsf  ,      sbufsf, &
+                    i15b      ,    i15h ,    itab      )
+                end do
+              end if
+
+              !----------------------------------------------------------------------------!
+              ! MONTE CARLO METHOD (LEGACY METHOD)
+              !   3D surfaces, planes, ellipsoids
+              !----------------------------------------------------------------------------!
+              if(n2d == 0)then
+
+                call my_alloc(iphase,inivol(ii)%size,"iphase",stat=stat) ; iphase(:) = 0
+                call my_alloc(nbip,nbsubmat,numel_tot,"nbip",stat=stat) ; nbip(:,:) = 0
+                call my_alloc(itagnsol,numnod,"itagnsol",stat=stat) ; itagnsol(:) = 0
+                call my_alloc(knod2surf,numnod+1,"knod2surf",stat=stat) ; knod2surf(:) = 0
+                call my_alloc(part_fill,npart,"part_fill",stat=stat) ; part_fill(:) = 0
+                call my_alloc(ivolsurf,nsurf,"ivolsurf",stat=stat); ivolsurf(:) = 0
+                call my_alloc(itagsurf,nsurf,"itagsurf",stat=stat) ; itagsurf(:) = 0
+                call my_alloc(swiftsurf,nsurf,"swiftsurf",stat=stat) ; swiftsurf(:) = 0
+
+                !  fill background ale mesh with phase
+                do ng=1,ngroup
+                  mtn     = iparg(1,ng)
+                  nel     = iparg(2,ng)
+                  nft     = iparg(3,ng)
+                  iad     = iparg(4,ng)
+                  ity     = iparg(5,ng)
+                  isolnod = iparg(28,ng)
+                  invol   = iparg(53,ng)
+                  imat = 0
+                  i15_= 0
+                  if(ity == 1)then
+                    if (isolnod /= 4 .and. isolnod /= 8) cycle
+                    imat = ixs(1,1+nft)
+                    i15_=i15a
+                  else if(n2d > 0)then
+                    if(ity == 7)then
+                      imat = ixtg(1,1+nft)
+                      i15_=i15h
+                    else if(ity == 2)then
+                      imat = ixq(1,1+nft)
+                      i15_=i15b
+                    else
+                      cycle
+                    end if
+                  end if
+                  if (mtn /= 51 .and. mtn /= 151) cycle
+                  sipart_ = sipart - i15_ + 1
+                  call inifill(numels    ,numeltg,numelq      ,numnod     ,npart   , &
+                    npropmi   ,nummat ,n2d         ,ngroup     , &
+                    ixs       ,ipm    ,ipart(i15_) ,iphase     ,sipart_ , &
+                    idp       ,kvol   ,bufmat      ,itagnsol   ,isolnod , &
+                    nbip      ,ntrace ,part_fill   ,nbsubmat   ,mtn     , &
+                    elbuf_tab ,ng     ,multi_fvm   ,ixq        ,ixtg    , &
+                    ity       ,imat   ,isize_inivol,numel_tot  ,nel     , &
+                    nft       ,sbufmat)
+                end do ! next element group ng
+
+                ! surface containers :
+                nnod2surf = 0
+                knod2surf(1:numnod+1) = 0
+                nseg_used = 0
+                do idc=1,nb_container
+                  idsurf   = inivol(ii)%container(idc)%surf_id
+                  nsegsurf = igrsurf(idsurf)%nseg
+                  if (igrsurf(idsurf)%type /= 101 .and. igrsurf(idsurf)%type /= 200 .and. ivolsurf(idsurf) == 0) then
+                    ivolsurf(idsurf) = 1
+                    call connesurf(numnod, nsegsurf,igrsurf(idsurf)%nodes,knod2surf,nnod2surf)
+                    nseg_used = nseg_used + nsegsurf
+                  end if
+                end do ! do idc=1,nb_container
+                knod2surf(1:numnod+1) = 0
+!---
+                nsurf_invol = 0
+                ivolsurf(1:nsurf) = 0
+                do idc=1,nb_container
+                  idsurf = inivol(ii)%container(idc)%surf_id
+                  if (ivolsurf(idsurf) == 0) then
+                    nsurf_invol = nsurf_invol + 1
+                    ivolsurf(idsurf) = nsurf_invol
+                  end if
+                end do
+!---
+                call my_alloc(nsoltosf,nb_container,numnod,"nsoltosf",stat=stat) ; nsoltosf(:,:) = 0
+                call my_alloc(inod2surf,nnod2surf*numnod,"inod2surf",stat=stat) ; inod2surf(:) = 0
+                call my_alloc(dis,nsurf_invol,numnod,"dis",stat=stat) ; dis(:,:) = zero
+                call my_alloc(nod_norm,3*numnod,"nod_norm",stat=stat) ; nod_norm(1:3*numnod) = zero
+                call my_alloc(segtosurf,nseg_used,"segtosurf",stat=stat) ; segtosurf(1:nseg_used) = 0
+!---
+                ! -----------------
+                ! compute the min / max position of ale elements
+                ale_node_number = 0
+                call ale_element_size_computation( &
+                  nparg, ngroup, numels,numeltg,numelq,numnod,n2d,&
+                  iparg,ixs,ixq,ixtg,&
+                  element_size,min_max_position,x,&
+                  ale_element_number,ale_node_number,list_ale_node)
+                ! -----------------
+                ! compute the min/max position of surface elements
+                call surface_min_max_computation( &
+                  nsurf,numnod, &
+                  nb_container,min_max_position,x,igrsurf,inivol(ii))
+                ! -----------------
+                ! creation of the grid
+                call ale_box_creation(nb_box_limit,nb_cell_x,nb_cell_y,nb_cell_z,      &
+                  ale_element_number,element_size,min_max_position,&
+                  leading_dimension,size_cell)
+                ! -----------------
+                ! coloration of cell with nodes of surface
+                allocate(cell(nb_container))
+
+                call ale_box_coloration(nsurf,numnod,&
+                  nb_cell_x,nb_cell_y,nb_cell_z,nb_container,               &
+                  min_max_position,cell,x,igrsurf,inivol(ii),cell_position, &
+                  ale_node_number,list_ale_node)
+                ! -----------------
+
+                allocate(nodal_phase(nb_container))
+                nodal_phase(1:nb_container)%size_int_array_1d = numnod
+                itagsurf(1:nsurf) = 0
+                nseg_swift_surf = 0
+                do idc=1,nb_container
+                  call alloc_1d_array(nodal_phase(idc))
+                  nodal_phase(idc)%int_array_1d(1:numnod) = 0
+                  idsurf    = inivol(ii)%container(idc)%surf_id
+                  jmid      = inivol(ii)%container(idc)%submat_id
+                  ireversed = inivol(ii)%container(idc)%ireversed
+                  icumu     = inivol(ii)%container(idc)%icumu
+                  nsegsurf  = igrsurf(idsurf)%nseg
+                  call my_alloc(tagn,numnod,"tagn",stat=stat)
+                  tagn(1:numnod) = 0
+                  if (itagsurf(idsurf) == 0) then
+                    itagsurf(idsurf) = 1  !distances,node to surf, are now already calculated with idsurf
+                    call getphase(  &
+                      mvsiz                   , numels             ,numeltg      ,numelq         ,numnod, &
+                      nparg                   ,ngroup              ,nsurf        ,n2d            ,&
+                      x                       ,igrsurf(idsurf)%type,itagnsol     ,dis            ,nsoltosf             ,&
+                      igrsurf(idsurf)%eltyp   ,knod2surf           ,nnod2surf    ,inod2surf      ,tagn                 ,&
+                      idsurf                  ,nsegsurf            ,bufsf        ,nod_norm       ,igrsurf(idsurf)%nodes,&
+                      igrsurf(idsurf)%iad_bufr,idc                 ,nb_container ,nseg_swift_surf,swiftsurf            ,&
+                      segtosurf               ,ivolsurf            ,nsurf_invol  ,nseg_used      ,&
+                      leading_dimension       ,nb_cell_x           ,nb_cell_y    ,nb_cell_z      ,&
+                      iparg                   ,ixs                 ,ixq          ,ixtg           ,&
+                      cell(idc)%int_array_3d  ,cell_position       ,nodal_phase(idc)%int_array_1d,nb_box_limit)
+                  end if
+                  call my_dealloc(tagn)
+                  call dealloc_1d_array(nodal_phase(idc))
+                  call dealloc_3d_array(cell(idc))
+                end do ! do idc=1,nb_container
+                deallocate( nodal_phase )
+                deallocate( cell )
+!---------  ----
+                do ng=1,ngroup
+                  mtn     = iparg(1,ng)
+                  nel     = iparg(2,ng)
+                  nft     = iparg(3,ng)
+                  ity     = iparg(5,ng)
+                  isolnod = iparg(28,ng)
+                  invol   = iparg(53,ng)
+                  if (invol <=  0) cycle
+                  if (mtn /= 51 .and. mtn /= 151) cycle
+                  if(n2d == 0 .and. ity /= 1)then
+                    cycle
+                  else if(n2d > 0 .and. ity /= 7 .and. ity /= 2)then
+                    cycle
+                  end if
+                  ! loop over containers
+                  call my_alloc(inphase,ntrace,nel,"inphase",stat=stat)
+                  inphase(1:ntrace,1:nel) = 1
+                  numel_tot= max(numeltg,max(numels,numelq))
+                  do idc=1,nb_container
+                    idsurf    = inivol(ii)%container(idc)%surf_id
+                    jmid      = inivol(ii)%container(idc)%submat_id
+                    ireversed = inivol(ii)%container(idc)%ireversed
+                    vfrac     = inivol(ii)%container(idc)%vfrac
+                    vfrac     = vfrac/ep9
+                    icumu     = inivol(ii)%container(idc)%icumu
+                    nsegsurf  = igrsurf(idsurf)%nseg
+                    i15_ = 0
+                    if(ity == 1)then
+                      i15_=i15a
+                    else if(n2d > 0)then
+                      if(ity == 7)then
+                        i15_=i15h
+                      else if(ity == 2)then
+                        i15_=i15b
+                      else
+                        i15_=0
+                      end if
+                    end if
+                    call inisoldist( &
+                      ireversed               ,ixs         ,x          ,geo                  ,ng                   ,&
+                      iparg                   ,idp         ,ipart(i15_),xrefs                ,glob_therm           ,&
+                      ntrace                  ,ntrace0     ,dis        ,nsoltosf             ,nbip                 ,&
+                      nnod2surf               ,inod2surf   ,knod2surf  ,igrsurf(idsurf)%eltyp,igrsurf(idsurf)%nodes,&
+                      jmid                    ,iphase      ,inphase    ,kvol                 ,igrsurf(idsurf)%type ,&
+                      igrsurf(idsurf)%iad_bufr,bufsf       ,nod_norm   ,isolnod              ,nbsubmat             ,&
+                      vfrac                   ,icumu       ,idc        ,nb_container         ,nsegsurf             ,&
+                      idsurf                  ,swiftsurf   ,segtosurf  ,igrsurf              ,ivolsurf             ,&
+                      nsurf_invol             ,ixq         ,ixtg       ,ity                  ,nel                  ,numel_tot, &
+                      num_inivol              ,inivol      ,ii         )
+                    mbuf  => elbuf_tab(ng)%bufly(1)%mat(1,1,1)
+                    nuvar =  elbuf_tab(ng)%bufly(1)%nvar_mat
+                    nf1   =  nft+1
+                  end do ! do idc=1,nb_container
+                  call my_dealloc(inphase)
+                end do ! next ng=1,ngroup
+!---
+              end if ! (n2d == 0)
+
+
+!--------FINAL CHECK + FILL REMAINING RATIO WITH PREVALENT SUBMATERIAL
+!        SET VOLUME FRACTION IN MATERIAL BUFFERS OF ALE MULTIMATERIAL LAWS
+!         -- 3d : after each inivol loop (legacy method)
+!         -- 2d : after the end of inivol loop (polygon clipping)
+              if(n2d == 0 .or. ii == num_inivol)then
+                do ng=1,ngroup
+                  mtn     = iparg(1,ng)
+                  nel     = iparg(2,ng)
+                  nft     = iparg(3,ng)
+                  ity     = iparg(5,ng)
+                  isolnod = iparg(28,ng)
+                  invol   = iparg(53,ng)
+                  if (invol <=  0) cycle
+                  if (mtn /= 51 .and. mtn /= 151) cycle
+                  if(n2d == 0 .and. ity /= 1)then
+                    cycle
+                  else if(n2d > 0 .and. ity /= 7 .and. ity /= 2)then
+                    cycle
+                  end if
+                  i15_ = 0
+                  imid = 0
+                  if(ity == 1)then
+                    i15_=i15a
+                    imid = ixs(1,1+nft)
+                  else if(n2d > 0)then
+                    if(ity == 7)then
+                      i15_=i15h
+                      imid = ixtg(1,1+nft)
+                    else if(ity == 2)then
+                      i15_=i15b
+                      imid = ixq(1,1+nft)
+                    else
+                      i15_=0
+                    end if
+                  end if
+                  mbuf  => elbuf_tab(ng)%bufly(1)%mat(1,1,1)
+                  nuvar =  elbuf_tab(ng)%bufly(1)%nvar_mat
+                  nf1   =  nft+1
+                  call inivol_set( &
+                    mbuf%var  , nuvar      , nel        , kvol(1,nf1)             , mtn                         , &
+                    elbuf_tab , ng         , nbsubmat   , multi_fvm               , &
+                    idp       , ipart(i15_), nft        , imid                    , &
+                    mat_param    )
+                end do ! next ng=1,ngroup
+              end if
+!-------------
+
+              call my_dealloc(iphase)
+              call my_dealloc(nbip)
+              call my_dealloc(itagnsol)
+              call my_dealloc(knod2surf)
+              call my_dealloc(part_fill)
+              call my_dealloc(ivolsurf)
+              call my_dealloc(swiftsurf)
+              call my_dealloc(nsoltosf)
+              call my_dealloc(inod2surf)
+              call my_dealloc(dis)
+              call my_dealloc(nod_norm)
+              call my_dealloc(segtosurf)
+!---
+            end do ! next ii=1,num_inivol
+            call my_dealloc(cell_position)
+            call my_dealloc(list_ale_node)
+
+          end if ! if (num_inivol > 0)
+
+        end subroutine init_inivol
+
+      end module init_inivol_mod

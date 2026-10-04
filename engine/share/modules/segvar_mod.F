@@ -1,0 +1,176 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    segvar_mod                       ../engine/share/modules/segvar_mod.F
+!||--- called by ------------------------------------------------------
+!||    aconve                           ../engine/source/ale/aconve.F90
+!||    afluxt                           ../engine/source/ale/ale51/afluxt.F
+!||    ale51_antidiff2                  ../engine/source/ale/ale51/ale51_antidiff2.F
+!||    ale51_antidiff3                  ../engine/source/ale/ale51/ale51_antidiff3.F
+!||    ale51_gradient_reconstruction    ../engine/source/ale/alemuscl/ale51_gradient_reconstruction.F
+!||    ale51_gradient_reconstruction2   ../engine/source/ale/alemuscl/ale51_gradient_reconstruction2.F
+!||    alefvm_main                      ../engine/source/ale/alefvm/alefvm_main.F
+!||    alemain                          ../engine/source/ale/alemain.F
+!||    alemuscl_upwind                  ../engine/source/ale/alemuscl/alemuscl_upwind.F
+!||    alemuscl_upwind2                 ../engine/source/ale/alemuscl/alemuscl_upwind2.F
+!||    alethe                           ../engine/source/ale/alethe.F
+!||    ebcs0_gradp0                     ../engine/source/boundary_conditions/ebcs/ebcs0_gradp0.F
+!||    ebcs10_nrf                       ../engine/source/boundary_conditions/ebcs/ebcs10_nrf.F
+!||    ebcs11_propellant                ../engine/source/boundary_conditions/ebcs/ebcs11_propellant.F90
+!||    ebcs123_pres                     ../engine/source/boundary_conditions/ebcs/ebcs123_pres.F
+!||    ebcs12_cyclic                    ../engine/source/boundary_conditions/ebcs/ebcs12_cyclic.F90
+!||    ebcs4_vel                        ../engine/source/boundary_conditions/ebcs/ebcs4_vel.F
+!||    ebcs5_normv                      ../engine/source/boundary_conditions/ebcs/ebcs5_normv.F
+!||    ebcs6_inip                       ../engine/source/boundary_conditions/ebcs/ebcs6_inip.F
+!||    ebcs7_iniv                       ../engine/source/boundary_conditions/ebcs/ebcs7_iniv.F
+!||    ebcs8_inlet                      ../engine/source/boundary_conditions/ebcs/ebcs8_inlet.F90
+!||    ebcs_main                        ../engine/source/boundary_conditions/ebcs/ebcs_main.F
+!||    ebcs_vol2seg                     ../engine/source/boundary_conditions/ebcs/ebcs_vol2seg.F
+!||    gradient_reconstruction2         ../engine/source/ale/alemuscl/gradient_reconstruction2.F
+!||    gradient_reconstruction_new      ../engine/source/ale/alemuscl/gradient_reconstruction.F90
+!||    i12m2s                           ../engine/source/interfaces/interf/i12m2s.F
+!||    i12nod3                          ../engine/source/interfaces/interf/i12nod3.F
+!||    i12s2m                           ../engine/source/interfaces/interf/i12s2m.F
+!||    intti0                           ../engine/source/interfaces/interf/intti0.F
+!||    intti12a                         ../engine/source/interfaces/interf/intti12.F
+!||    radioss2                         ../engine/source/engine/radioss2.F
+!||    resol                            ../engine/source/engine/resol.F
+!||    resol_head                       ../engine/source/engine/resol_head.F
+!||    restalloc                        ../engine/source/output/restart/arralloc.F
+!||    seggetv                          ../engine/source/interfaces/interf/seggetv.F
+!||    spmd_segcom                      ../engine/source/mpi/fluid/spmd_cfd.F
+!||====================================================================
+      MODULE SEGVAR_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include "my_real.inc"
+C-----------------------------------------------
+C     C o m m o n   B l o c k s
+C-----------------------------------------------
+      TYPE T_SEGVAR
+        INTEGER :: NSEG
+        INTEGER :: NBMAT !NUMBER OF PHASES
+        LOGICAL :: HAS_RHO = .FALSE.
+        LOGICAL :: HAS_EINT = .FALSE.        
+        LOGICAL :: HAS_RK = .FALSE.
+        LOGICAL :: HAS_RE = .FALSE.  
+        LOGICAL :: HAS_UVAR = .FALSE.                      
+        LOGICAL :: HAS_PHASE_ALPHA = .FALSE.  
+        LOGICAL :: HAS_PHASE_RHO = .FALSE.    
+        LOGICAL :: HAS_PHASE_EINT = .FALSE.            
+        MY_REAL,ALLOCATABLE,DIMENSION(:) :: RHO
+        MY_REAL,ALLOCATABLE,DIMENSION(:) :: EINT
+        MY_REAL,ALLOCATABLE,DIMENSION(:) :: RK
+        MY_REAL,ALLOCATABLE,DIMENSION(:) :: RE  
+        MY_REAL,ALLOCATABLE,DIMENSION(:) :: UVAR
+        MY_REAL,ALLOCATABLE,DIMENSION(:,:) :: PHASE_ALPHA 
+        MY_REAL,ALLOCATABLE,DIMENSION(:,:) :: PHASE_RHO
+        MY_REAL,ALLOCATABLE,DIMENSION(:,:) :: PHASE_EINT 
+      CONTAINS
+        PROCEDURE, PASS :: DESTROY => SEGVAR_DESTROY      
+        PROCEDURE, PASS :: CREATE => SEGVAR_CREATE  
+      END TYPE T_SEGVAR
+      
+      CONTAINS
+      
+!||====================================================================
+!||    segvar_destroy   ../engine/share/modules/segvar_mod.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE SEGVAR_DESTROY(this)
+      use my_dealloc_mod, only : my_dealloc
+      IMPLICIT NONE
+      CLASS(T_SEGVAR), INTENT(INOUT) :: this
+        IF(ALLOCATED(this%RHO)) call my_dealloc(this%RHO)
+        IF(ALLOCATED(this%EINT)) call my_dealloc(this%EINT)
+        IF(ALLOCATED(this%RK)) call my_dealloc(this%RK)
+        IF(ALLOCATED(this%RE)) call my_dealloc(this%RE)
+        IF(ALLOCATED(this%UVAR)) call my_dealloc(this%UVAR)
+        IF(ALLOCATED(this%PHASE_ALPHA)) call my_dealloc(this%PHASE_ALPHA)
+        IF(ALLOCATED(this%PHASE_ALPHA)) call my_dealloc(this%PHASE_RHO)
+        IF(ALLOCATED(this%PHASE_ALPHA)) call my_dealloc(this%PHASE_EINT)
+      END SUBROUTINE SEGVAR_DESTROY
+      
+!||====================================================================
+!||    segvar_create   ../engine/share/modules/segvar_mod.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    ale_mod         ../common_source/modules/ale/ale_mod.F
+!||    constant_mod    ../common_source/modules/constant_mod.F
+!||    my_alloc_mod    ../common_source/tools/memory/my_alloc.F90
+!||====================================================================
+      SUBROUTINE SEGVAR_CREATE(this,NBMAT)
+      USE ALE_MOD      
+      USE constant_mod, ONLY: ZERO
+      use my_alloc_mod
+      IMPLICIT NONE
+#include "../includes/com04_c.inc" 
+      CLASS(T_SEGVAR), INTENT(INOUT) :: this
+       INTEGER,INTENT(IN) :: NBMAT
+        this%NSEG=NSEGFLU
+        this%NBMAT=NBMAT
+        IF(this%NSEG > 0)THEN
+          IF(ALE%GLOBAL%NVCONV >= 1)this%HAS_RHO=.TRUE.
+          IF(ALE%GLOBAL%NVCONV >= 2)this%HAS_EINT=.TRUE.
+          IF(ALE%GLOBAL%NVCONV >= 3)this%HAS_RK=.TRUE.
+          IF(ALE%GLOBAL%NVCONV >= 4)this%HAS_RE=.TRUE.
+          IF(ALE%GLOBAL%NVCONV >= 5)this%HAS_UVAR=.TRUE.                                
+          IF(this%HAS_RHO)THEN
+            call my_alloc(this%RHO, this%NSEG, "this%RHO")
+            this%RHO(1:this%NSEG)=ZERO
+          ENDIF
+          IF(this%HAS_EINT)THEN
+            call my_alloc(this%EINT, this%NSEG, "this%EINT")
+            this%EINT(1:this%NSEG)=ZERO
+          ENDIF
+          IF(this%HAS_RK)THEN
+            call my_alloc(this%RK, this%NSEG, "this%RK")
+            this%RK(1:this%NSEG)=ZERO            
+          ENDIF
+          IF(this%HAS_RE)THEN
+            call my_alloc(this%RE, this%NSEG, "this%RE")
+            this%RE(1:this%NSEG)=ZERO
+          ENDIF
+          IF(this%HAS_UVAR)THEN
+            call my_alloc(this%UVAR, this%NSEG, "this%UVAR")
+            this%UVAR(1:this%NSEG)=ZERO 
+          ENDIF
+          IF(NBMAT > 0)THEN
+            this%HAS_PHASE_ALPHA = .TRUE.
+            call my_alloc(this%PHASE_ALPHA, this%NBMAT, this%NSEG, "this%PHASE_ALPHA")
+            this%PHASE_ALPHA(1:this%NBMAT,1:this%NSEG) = ZERO
+            this%HAS_PHASE_RHO = .TRUE.
+            call my_alloc(this%PHASE_RHO, this%NBMAT, this%NSEG, "this%PHASE_RHO")
+            this%PHASE_RHO(1:this%NBMAT,1:this%NSEG) = ZERO
+            this%HAS_PHASE_EINT = .TRUE.
+            call my_alloc(this%PHASE_EINT, this%NBMAT, this%NSEG, "this%PHASE_EINT")
+            this%PHASE_EINT(1:this%NBMAT,1:this%NSEG) = ZERO                        
+          ENDIF
+        ENDIF                               
+      END SUBROUTINE SEGVAR_CREATE      
+
+      END MODULE SEGVAR_MOD

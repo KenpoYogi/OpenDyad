@@ -1,0 +1,160 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_fail_lemaitre_mod   ../starter/source/materials/fail/lemaitre/hm_read_fail_lemaitre.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_fail                ../starter/source/materials/fail/hm_read_fail.F
+!||====================================================================
+      module hm_read_fail_lemaitre_mod
+        implicit none
+      contains
+!||====================================================================
+!||    hm_read_fail_lemaitre    ../starter/source/materials/fail/lemaitre/hm_read_fail_lemaitre.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_fail             ../starter/source/materials/fail/hm_read_fail.F
+!||--- calls      -----------------------------------------------------
+!||    hm_get_floatv            ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_get_intv              ../starter/source/devtools/hm_reader/hm_get_intv.F
+!||    hm_option_is_encrypted   ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||--- uses       -----------------------------------------------------
+!||    elbuftag_mod             ../starter/share/modules1/elbuftag_mod.F
+!||    hm_option_read_mod       ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    submodel_mod             ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+        subroutine hm_read_fail_lemaitre(                                       &
+          fail     ,fail_id  ,irupt    ,lsubmodel,unitab   ,iout     )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                        Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use fail_param_mod
+          use unitab_mod
+          use message_mod
+          use submodel_mod
+          use hm_option_read_mod
+          use elbuftag_mod
+          use constant_mod
+          use precision_mod, only : WP
+          use MY_ALLOC_MOD, only : my_alloc
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                 implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer             ,INTENT(IN)    :: fail_id      !< failure model ID
+          integer             ,INTENT(IN)    :: irupt        !< failure model number
+          type (unit_type_)   ,INTENT(IN)    :: unitab       !< table of input units
+          type (submodel_data),INTENT(IN)    :: lsubmodel(*) !< submodel table
+          type (fail_param_)  ,INTENT(INOUT) :: fail         !< failure model data structure
+          integer             ,INTENT(IN)    :: iout         !< output unit number
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: failip
+          real(kind=WP) :: epsd,s,dc,pthk
+          logical :: is_available,is_encrypted
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                 body
+! ----------------------------------------------------------------------------------------------------------------------
+          is_encrypted = .false.
+          is_available = .false.
+! ----------------------------------------------------------------------------------------------------------------------
+          call hm_option_is_encrypted(is_encrypted)
+! ----------------------------------------------------------------------------------------------------------------------
+          !< Lemaitre damage model parameters
+          call hm_get_floatv("FAIL_EPSD"  ,epsd   ,is_available,lsubmodel,unitab)
+          call hm_get_floatv("FAIL_S"     ,s      ,is_available,lsubmodel,unitab)
+          call hm_get_floatv("FAIL_DC"    ,dc     ,is_available,lsubmodel,unitab)
+          call hm_get_intv  ("FAILIP"     ,failip ,is_available,lsubmodel)
+          call hm_get_floatv("P_thickfail",pthk   ,is_available,lsubmodel,unitab)
+! ----------------------------------------------------------------------------------------------------------------------
+          !< Check values and set default values
+          if (epsd == zero) epsd = infinity
+          if (s    == zero) s = infinity
+          dc = max(dc,zero)
+          dc = min(dc, one)
+          if (dc   == zero) dc = one
+          failip = max(failip,1)
+          pthk = max(pthk,-one)
+          pthk = min(pthk, one)
+          if (pthk == zero) pthk = one
+! ----------------------------------------------------------------------------------------------------------------------
+!     Filling buffer tables
+! ----------------------------------------------------------------------------------------------------------------------
+          !< Failure tables size
+          fail%keyword = "LEMAITRE"
+          fail%irupt   = irupt
+          fail%fail_id = fail_id
+          fail%niparam = 1
+          fail%nuparam = 3
+          fail%nuvar   = 0
+          fail%nfunc   = 0
+          fail%ntable  = 0
+          fail%nmod    = 0
+          fail%pthk    = pthk
+!
+          !< Allocation of failure parameters tables
+          call my_alloc(fail%iparam, fail%niparam, "fail%iparam")
+          call my_alloc(fail%uparam, fail%nuparam, "fail%uparam")
+!
+          !< Integer material parameter
+          fail%iparam(1) = failip
+!
+          !< Real material parameters
+          fail%uparam(1) = epsd
+          fail%uparam(2) = s
+          fail%uparam(3) = dc
+!
+! ----------------------------------------------------------------------------------------------------------------------
+!     Parameters printout
+! ----------------------------------------------------------------------------------------------------------------------
+          if (is_encrypted)then
+            write(iout,"(5X,A,//)")"CONFIDENTIAL DATA"
+          else
+            write(iout, 1000) epsd,s,dc
+            write(iout, 1100) pthk,failip
+          end if
+! ----------------------------------------------------------------------------------------------------------------------
+1000      format(/                                                                 &
+          & 5X,"---------------------------------------------------------",/,       &
+          & 5X,"     LEMAITRE CONTINUUM DAMAGE MECHANICS (CDM) MODEL     ",/,       &
+          & 5X,"---------------------------------------------------------",/,       &
+          & 5X,"                                                         ",/,       &
+          & 5X,"DAMAGE SOFTENING PARAMETERS:                             ",/,       &
+          & 5X,"----------------------------                             ",/,       &
+          & 5X,"EFFECTIVE PLASTIC STRAIN THRESHOLD (EPSD). . . . . . . .=",1pg20.13/&
+          & 5X,"SOFTENING PARAMETER (S). . . . . . . . . . . . . . . . .=",1pg20.13/&
+          & 5X,"CRITICAL DAMAGE AT FAILURE (DC). . . . . . . . . . . . .=",1pg20.13/)
+1100      format(/                                                                 &
+          & 5X,"ELEMENT DELETION:                                        ",/,       &
+          & 5X,"-----------------                                        ",/,       &
+          & 5X,"SHELL ELEMENT DELETION PARAMETER PTHICKFAIL. . . . . . .=",1pg20.13/&
+          & 5X,"   > 0.0: FRACTION OF FAILED THICKNESS                   ",/,       &
+          & 5X,"   < 0.0: FRACTION OF FAILED INTG. POINTS                ",/,       &
+          & 5X,"NUMBER OF FAILED INTG. POINTS PRIOR TO ELEM DELETION . .=",i10/)
+!
+        end subroutine hm_read_fail_lemaitre
+      end module hm_read_fail_lemaitre_mod

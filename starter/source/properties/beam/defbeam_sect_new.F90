@@ -1,0 +1,1145 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    defbeam_sect_new_mod   ../starter/source/properties/beam/defbeam_sect_new.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_prop18         ../starter/source/properties/beam/hm_read_prop18.F
+!||====================================================================
+      module defbeam_sect_new_mod
+      implicit none
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!
+!=======================================================================================================================
+!\brief This subroutine computes new predefined sections for integrated beams (position and weight) Isect 10-31
+!=======================================================================================================================
+!
+!||====================================================================
+!||    defbeam_sect_new   ../starter/source/properties/beam/defbeam_sect_new.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_prop18     ../starter/source/properties/beam/hm_read_prop18.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+        subroutine defbeam_sect_new(geo,npropg,isect,intr,intr_max,nip,area,l,nb_dim)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use constant_mod ,only : half,one,zero,two,three,fourth,pi,third,four,twelve
+          use precision_mod, only : WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,                                   intent(in) :: isect                       !< section type
+          integer,                                   intent(in) :: intr                        !< order of integration
+          integer,                                intent(inout) :: intr_max                    !< max allowed order of integration
+          integer,                                intent(inout) :: nip                         !< number of integration points
+          integer,                                intent(inout) :: nb_dim                      !< number of needed dimensions
+          integer,                                   intent(in) :: npropg                      !< size of array geo
+          real(kind=WP),                                intent(inout) :: geo(npropg)                 !< main array for properties
+          real(kind=WP),                                   intent(in) :: l(6)                        !< section dimensions
+          real(kind=WP),                                intent(inout) :: area                        !< section area
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,j,ip,ipy,ipz,ipa
+          real(kind=WP) :: area1_i,area2_i,area3_i,area4_i,dy1,dy2,dz1,dz2,y1_0,z1_0
+          real(kind=WP) :: y2_0,z2_0,fac,fac2,fac3,fac4,dl,dh,l_sup,l_inf
+          real(kind=WP) :: r_sup,r_inf,dr,phi_0,phi,dphi
+          real(kind=WP) :: aac,aad,ixx,iyy,izz
+          real(kind=WP) :: da,db,dc,ycog,zcog
+! ----------------------------------------------------------------------------------------------------------------------
+!
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+!
+          ipy    = 200
+          ipz    = 300
+          ipa    = 400
+!
+! ----------------------------------------------------------------------------------------------------------------------
+          select case (isect)
+! ----------------------------------------------------------------------------------------------------------------------
+!
+! ----------------------------------------------------------------------------------------------------------------------
+           case (10) ! i-shape section (l(1)-l(2)-l(3)-l(4))
+!                     -----
+!                       |
+!                     -----
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 3*(2*intr+3)
+            intr_max = 15
+!           section properties           
+            area = l(1)*l(3)-(l(1)-l(4))*(l(3)-two*l(2))
+            iyy = two*l(1)*l(2)**3/twelve + two*l(1)*l(2)*(half*(l(3)-l(2)))**2                           &
+                + l(4)*(l(3)-two*l(2))**3/twelve
+            izz = two*l(2)*l(1)**3/twelve + (l(3)-two*l(2))*l(4)**3/twelve
+            ixx = iyy + izz
+!           torsion factor            
+            geo(90) = (two*l(1)*l(2)**3 + (l(3)-l(2))*l(4)**3)*third/ixx
+            fac = one/(2*intr+3)
+            area1_i = l(1)*l(2)*fac
+            area2_i = l(4)*(l(3)-two*l(2))*fac
+            dy1 = l(1)*fac
+            y1_0 = -half*l(1)+half*dy1
+            dz2 = -(l(3)-two*l(2))*fac
+            z2_0 = half*l(3)-l(2)+half*dz2
+            ip = 0
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=zero
+              geo(ipz+ip)=z2_0+(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (11) ! channel section (l(1)-l(2)-l(3)-l(4))
+!                      ----
+!                      |
+!                      ----
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 3*(intr+3)
+            intr_max = 30
+!           section properties                
+            area = l(1)*l(3)-(l(1)-l(4))*(l(3)-two*l(2))          
+            ycog = -l(4)*(l(3)-two*l(2))*half*(l(1)-l(4))/area
+            iyy = two*(l(1)*l(2)**3/twelve + l(1)*l(2)*(half*(l(3)-l(2)))**2)                              &
+                  + l(4)*(l(3)-two*l(2))**3/twelve
+            izz = two*(l(2)*l(1)**3/twelve + l(1)*l(2)*(ycog**2)) + l(4)*(l(3)                             &
+                 -two*l(2))*(-half*(l(1)-l(4))-ycog)**2 + (l(3)-two*l(2))*l(4)**3/twelve 
+            ixx = iyy + izz
+!           torsion factor            
+            geo(90) = (two*(l(1)-half*l(4))*l(2)**3 + (l(3)-l(2))*l(4)**3)*third/ixx
+            fac = one/(intr+3)
+            area1_i = l(1)*l(2)*fac
+            area2_i = l(4)*(l(3)-two*l(2))*fac
+            dy1 = l(1)*fac
+            y1_0 = -half*l(1)+half*dy1
+            dz2 = -(l(3)-two*l(2))*fac
+            z2_0 = half*l(3)-l(2)+half*dz2
+            ip = 0
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=-half*(l(1)-l(4))
+              geo(ipz+ip)=z2_0+(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (12) ! l-shape section (l(1)-l(2)-l(3)-l(4))
+!                      |
+!                      |
+!                      ----
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 2*(intr+2)+1
+            intr_max = 47
+!           section properties           
+            area = l(1)*l(3)-(l(1)-l(4))*(l(3)-l(2))
+            da = l(3)-l(2)
+            db = l(1)-l(4)
+            ycog = (l(4)*da*(-half*db) + l(2)*db*(half*l(4)) + l(2)*l(4)*(-half*db))/area
+            zcog = (l(4)*da*(half*l(2)) + l(2)*db*(-half*da) + l(2)*l(4)*(-half*da))/area
+            iyy = l(4)*da**3/twelve + l(4)*da*(half*l(2)-zcog)**2 + db*l(2)**3/twelve                        &
+                + l(2)*db*(-half*da-zcog)**2 + l(4)*l(2)**3/twelve + l(2)*l(4)*(-half*da-zcog)**2
+            izz = da*l(4)**3/twelve + l(4)*da*(-half*db-ycog)**2 + l(2)*db**3/twelve                         &
+                + l(2)*db*(half*l(4)-ycog)**2 + l(2)*l(4)**3/twelve + l(2)*l(4)*(-half*db-ycog)**2
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = ((l(3)-half*l(2))*l(4)**3 + (l(1)-half*l(4))*l(2)**3)*third/ixx            
+            fac = one/(intr+2)
+            area1_i = l(4)*(l(3)-l(2))*fac
+            area2_i = l(2)*(l(1)-l(4))*fac
+            dz1 = -(l(3)-l(2))*fac
+            z1_0 = half*l(3)+half*dz1
+            dy2 = (l(1)-l(4))*fac
+            y2_0 = -half*l(1)+l(4)+half*dy2
+            ip = 0
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=half*(-l(1)+l(4))
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            ip = ip+1
+            geo(ipy+ip)=half*(-l(1)+l(4))
+            geo(ipz+ip)=half*(-l(3)+l(2))
+            geo(ipa+ip)=l(2)*l(4)
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y2_0 +(i-1)*dy2
+              geo(ipz+ip)=half*(-l(3)+l(2))
+              geo(ipa+ip)=area2_i
+            end do
+! -----------------------------------------------------------------------------------------------------------------------
+           case (13) ! t-shape section (l(1)-l(2)-l(3)-l(4))
+!                    -----
+!                      |
+!                      |
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 4*(intr+2)+1
+            intr_max = 22
+!           section properties            
+            area = l(1)*l(3)-(l(1)-l(4))*(l(3)-l(2))
+            zcog = (l(1)*l(2)*half*(l(3)-l(2)) - l(4)*(l(3)-l(2))*half*l(2))/area
+            iyy = l(1)*l(2)**3/twelve + l(1)*l(2)*(half*(l(3)-l(2))-zcog)**2                                 &
+                + l(4)*(l(3)-l(2))**3/twelve + l(4)*(l(3)-l(2))*(-half*l(2)-zcog)**2
+            izz = l(2)*l(1)**3/twelve + (l(3)-l(2))*l(4)**3/twelve
+            ixx = iyy + izz
+!           torsion factor            
+            geo(90) = (l(1)*l(2)**3 + (l(3)-half*l(2))*l(4)**3)*third/ixx            
+            fac = one/(intr+2)
+            fac2 = one/(2*(intr+2))
+            area1_i = half*(l(1)-l(4))*l(2)*fac
+            area2_i = l(4)*(l(3)-l(2))*fac2
+            dy1 = half*(l(1)-l(4))*fac
+            y1_0 = -half*l(1)+half*dy1
+            dz2 = -(l(3)-l(2))*fac2
+            z2_0 = half*l(3)-l(2)+half*dz2
+            ip = 0
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            ip = ip+1
+            geo(ipy+ip)=zero
+            geo(ipz+ip)=half*(l(3)-l(2))
+            geo(ipa+ip)=l(2)*l(4)
+            y1_0 = half*l(4)+half*dy1
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*(intr+2)
+              ip = ip+1
+              geo(ipy+ip)=zero
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (14) ! box-shape section (l(1)-l(2)-l(3)-l(4))
+!                   -------
+!                   ||   ||
+!                   -------
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 2*(intr+3)+2*(intr+1)
+            intr_max = 23
+!           section properties            
+            area = l(1)*l(3)-(l(1)-two*l(4))*(l(3)-two*l(2))
+            iyy = (l(1)*l(3)**3 - (l(1)-two*l(4))*(l(3)-two*l(2))**3)/twelve
+            izz = (l(3)*l(1)**3 - (l(3)-two*l(2))*(l(1)-two*l(4))**3)/twelve
+            ixx = iyy + izz
+!           torsion factor                  
+            geo(90) = two*l(2)*l(4)*((l(1)-l(4))**2)*((l(3)-l(2))**2)                                     &
+                     /(l(1)*l(4)+l(2)*l(3)-l(2)**2-l(4)**2)/ixx     
+            fac = one/(intr+3)
+            fac2 = one/(intr+1)
+            area1_i = l(1)*l(2)*fac
+            area2_i = l(4)*(l(3)-two*l(2))*fac2
+            dy1 = l(1)*fac
+            dz2 = -(l(3)-two*l(2))*fac2
+            ip = 0
+            y1_0 = -half*l(1)+half*dy1
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            z2_0 = half*l(3)-l(2)+half*dz2
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=-half*(l(1)-l(4))
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=half*(l(1)-l(4))
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (15) ! z-shape section (l(1)-l(2)-l(3)-l(4))
+!                   ----
+!                      |
+!                      ----
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 3*(intr+3)
+            intr_max = 30
+            area = l(1)*l(3)-(l(1)-l(4))*(l(3)-l(2))
+            fac = one/(intr+3)
+            area1_i = half*(l(1)+l(4))*l(2)*fac
+            area2_i = l(4)*(l(3)-two*l(2))*fac
+            dy1 = half*(l(1)+l(4))*fac
+            dz2 = -(l(3)-two*l(2))*fac
+!           torsion factor
+            db = fourth*(l(1)-l(4))
+            dc = half*(l(3)-l(2))
+            iyy = two*(half*(l(1)+l(4))*l(2)**3/twelve + half*(l(1)+l(4))*l(2)*dc**2)                  &
+                + l(4)*(l(3)-two*l(2))**3/twelve
+            izz = two*(l(2)*(half*(l(1)+l(4)))**3/twelve + half*(l(1)+l(4))*l(2)*db**2)                &
+                + (l(3)-two*l(2))*l(4)**3/twelve
+            ixx = iyy + izz
+            geo(90) = ((l(3)-two*l(2))*l(4)**3 + (l(1)+l(4))*l(2)**3)*third/ixx
+            ip = 0
+            y1_0 = -half*l(1)+half*dy1
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=-y1_0-(i-1)*dy1
+              geo(ipz+ip)=-half*(l(3)-l(2))
+              geo(ipa+ip)=area1_i
+            end do
+            z2_0 = half*l(3)-l(2)+half*dz2
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=zero
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (16) ! trapezoidal section (l(1)-l(2)-l(3))
+!                      ---
+!                     /   \
+!                     -----
+! ----------------------------------------------------------------------------------------------------------------------
+            nip = (intr+3)*(intr+3)
+            nb_dim = 3
+            intr_max = 7
+            area = half*(l(1)+l(2))*l(3)
+            fac = one/(intr+3)
+            ip = 0
+            dl = (l(1)-l(2))*fac
+            dh = -l(3)*fac
+            z1_0 = half*l(3)+half*dh
+            do j=1,intr+3
+              l_sup = l(2)+(j-1)*dl
+              l_inf = l(2)+j*dl
+              area1_i = fac*half*(l_sup+l_inf)*abs(dh)
+              dy1 = half*(l_sup+l_inf)*fac
+              y1_0 = -half*half*(l_sup+l_inf)+half*dy1
+              do i = 1,intr+3
+                ip = ip+1
+                geo(ipy+ip)=y1_0 +(i-1)*dy1
+                geo(ipz+ip)=z1_0 +(j-1)*dh
+                geo(ipa+ip)=area1_i
+              end do
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (17) ! circal section (l(1))
+!                     /  \
+!                     \  /
+! ----------------------------------------------------------------------------------------------------------------------
+            nip = (intr+3)*(4*intr+12)
+            nb_dim = 1
+            intr_max = 2
+            area = pi*l(1)**2
+            fac = one/(intr+3)
+            fac2 = one/(4*intr+12)
+            ip = 0
+            dr = l(1)*fac
+            dphi = pi*two*fac2
+            do j=1,intr+3
+              r_sup = j*dr
+              r_inf = (j-1)*dr
+              area1_i = pi*(r_sup**2-r_inf**2)*fac2
+              phi_0 = half*dphi
+              do i = 1,4*intr+12
+                ip = ip+1
+                phi = phi_0 + (i-1)*dphi
+                geo(ipy+ip)=half*(r_sup+r_inf)*cos(phi)
+                geo(ipz+ip)=half*(r_sup+r_inf)*sin(phi)
+                geo(ipa+ip)=area1_i
+              end do
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (18) ! tubular section (l(1)-l(2))
+!                     /  \
+!                     \  /
+! ----------------------------------------------------------------------------------------------------------------------
+            nip = (intr+3)*(4*intr+12)
+            nb_dim = 2
+            intr_max = 2
+            area = pi*(l(1)**2-l(2)**2)
+            fac = one/(intr+3)
+            fac2 = one/(4*intr+12)
+            ip = 0
+            dr = (l(1)-l(2))*fac
+            dphi = pi*two*fac2
+            do j=1,intr+3
+              r_sup = l(2)+j*dr
+              r_inf = l(2)+(j-1)*dr
+              area1_i = pi*(r_sup**2-r_inf**2)*fac2
+              phi_0 = half*dphi
+              do i = 1,4*intr+12
+                ip = ip+1
+                phi = phi_0 + (i-1)*dphi
+                geo(ipy+ip)=half*(r_sup+r_inf)*cos(phi)
+                geo(ipz+ip)=half*(r_sup+r_inf)*sin(phi)
+                geo(ipa+ip)=area1_i
+              end do
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (19) ! i-shape section (l(1)-l(2)-l(3)-l(4)-l(5)-l(6))
+!                     -----
+!                       |
+!                      ---
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 6
+            nip = 3*(2*intr+3)
+            intr_max = 15
+            fac = one/(2*intr+3)
+!           section properties
+            area = l(3)*l(6)+l(2)*l(5)+l(4)*(l(1)-l(5)-l(6))
+            zcog = (l(3)*l(6)*half*(l(1)-l(6)) - l(2)*l(5)*half*(l(1)-l(5))                             &
+                  + l(4)*(l(1)-l(5)-l(6))*half*(l(5)-l(6)))/area
+            iyy = l(3)*l(6)**3/twelve + l(3)*l(6)*(half*(l(1)-l(6))-zcog)**2                            &
+                + l(2)*l(5)**3/twelve + l(2)*l(5)*(-half*(l(1)-l(5))-zcog)**2                           &
+                + l(4)*(l(1)-l(5)-l(6))**3/twelve + l(4)*(l(1)-l(5)-l(6))*(half*(l(5)-l(6))-zcog)**2
+            izz = l(6)*l(3)**3/twelve + l(5)*l(2)**3/twelve + (l(1)-l(5)-l(6))*l(4)**3/twelve
+            ixx = iyy + izz
+!           torsion factor            
+            geo(90) = (l(3)*l(6)**3 + l(2)*l(5)**3 + (l(1)-half*(l(5)+l(6)))*l(4)**3)*third/ixx
+            ip = 0
+            area1_i = l(3)*l(6)*fac
+            dy1 = l(3)*fac
+            y1_0 = -half*l(3)+half*dy1
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*(l(1)-l(6))
+              geo(ipa+ip)=area1_i
+            end do
+            area1_i = l(2)*l(5)*fac
+            dy1 = l(2)*fac
+            y1_0 = -half*l(2)+half*dy1
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*(l(1)-l(5))
+              geo(ipa+ip)=area1_i
+            end do
+            area1_i = l(4)*(l(1)-l(5)-l(6))*fac
+            dz1 = -(l(1)-l(5)-l(6))*fac
+            z1_0 = half*(l(1)-l(5)-l(6))+half*dz1
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=zero
+              geo(ipz+ip)=z1_0+(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (20) ! rectangular section (l(1)-l(2))
+!                     -----
+!                     |   |
+!                     -----
+! ----------------------------------------------------------------------------------------------------------------------
+            nip = (intr+3)*(intr+3)
+            nb_dim = 2
+            intr_max = 7
+            area = l(1)*l(2)
+            fac = one/(intr+3)
+!           torsion factor
+            iyy = l(1)*l(2)**3/twelve
+            izz = l(2)*l(1)**3/twelve
+            ixx = ((l(1)*l(2)**3+l(2)*l(1)**3))/twelve
+            if (l(2) >= l(1)) then
+              geo(90) = third*(l(2)*l(1)**3)*(one-0.63*l(1)/l(2) + 0.0525*(l(1)/l(2))**5)/ixx
+            else
+              geo(90) = third*(l(1)*l(2)**3)*(one-0.63*l(2)/l(1) + 0.0525*(l(2)/l(1))**5)/ixx
+            end if
+            ip = 0
+            dy1 = l(1)*fac
+            dz1 = l(2)*fac
+            y1_0 =-half*l(1)+half*dy1
+            z1_0 =-half*l(2)+half*dz1
+            area1_i = fac*l(1)*fac*l(2)
+            do j=1,intr+3
+              do i = 1,intr+3
+                ip = ip+1
+                geo(ipy+ip)=y1_0 +(i-1)*dy1
+                geo(ipz+ip)=z1_0 +(j-1)*dz1
+                geo(ipa+ip)=area1_i
+              end do
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (21) ! cross-shape section (l(1)-l(2)-l(3)-l(4))
+!                       |
+!                      ---
+!                       |
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 2*(2*intr+4)+4*(intr+1)
+            intr_max = 8
+!           section properties            
+            area = l(2)*l(3)+l(4)*l(1)
+            iyy = (l(2)*l(3)**3 + l(1)*l(4)**3)/twelve
+            izz = (l(3)*l(2)**3 + l(4)*((l(1)+l(2))**3 - l(2)**3))/twelve
+            ixx = iyy + izz
+!           torsion factor            
+            geo(90) =(l(3)*l(2)*l(2)*l(2)+l(1)*l(4)*l(4)*l(4))*third/ixx
+            ip = 0
+            fac = one/(2*intr+4)
+            area1_i = half*l(3)*l(2)*fac
+            dz1 = -l(3)*fac
+            z1_0 = half*l(3)+half*dz1
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=-half*half*l(2)
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=half*half*l(2)
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            fac = one/(intr+1)
+            area1_i = half*l(4)*half*l(1)*fac
+            dy1 = half*l(1)*fac
+            y1_0 = -half*(l(1)+l(2))+half*dy1
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(3)-l(4)-half*half*l(4)
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(3)-two*l(4)+half*half*l(4)
+              geo(ipa+ip)=area1_i
+            end do
+            y1_0 = half*(l(1)+l(2))-half*dy1
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=y1_0 -(i-1)*dy1
+              geo(ipz+ip)=half*l(3)-l(4)-half*half*l(4)
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=y1_0 -(i-1)*dy1
+              geo(ipz+ip)=half*l(3)-two*l(4)+half*half*l(4)
+              geo(ipa+ip)=area1_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (22) ! h-shape section (l(1)-l(2)-l(3)-l(4))
+!                     |    |
+!                     |----|
+!                     |    |
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 6*intr+13
+            intr_max = 14
+!           section properties            
+            area = l(3)*l(2)+l(4)*l(1)
+            iyy = (l(2)*l(3)**3 + l(1)*l(4)**3)/twelve
+            izz = (l(3)*(l(1)+l(2))**3 - (l(3)-l(4))*l(1)**3)/twelve
+            ixx = iyy + izz
+!           torsion factor            
+            geo(90) = (half*half*l(3)*l(2)**3+l(1)*l(4)**3)*third/ixx            
+            fac = one/(2*intr+5)
+            fac2 = one/(2*intr+3)
+            area1_i = half*l(3)*l(2)*fac
+            area2_i = l(4)*l(1)*fac2
+            dz1 = -l(3)*fac
+            z1_0 = half*l(3)+half*dz1
+            dy2 = l(1)*fac2
+            y2_0 = -half*l(1)+half*dy2
+            ip = 0
+            do i = 1,2*intr+5
+              ip = ip+1
+              geo(ipy+ip)=-half*(l(1)+half*l(2))
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+5
+              ip = ip+1
+              geo(ipy+ip)=half*(l(1)+half*l(2))
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=y2_0+(i-1)*dy2
+              geo(ipz+ip)=zero
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (23) ! t section (l(1)-l(2)-l(3)-l(4))
+!                      |
+!                      |---
+!                      |
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 4*(2*intr+4)
+            intr_max = 8
+!           section properties
+            area = l(1)*l(3)+l(2)*l(4)
+            ycog = (l(1)*l(3)*half*l(2) - l(2)*l(4)*half*l(3))/area
+            iyy = l(3)*l(1)**3/twelve + l(2)*l(4)**3/twelve
+            izz = l(1)*l(3)**3/twelve + l(1)*l(3)*(half*l(2)-ycog)**2 &
+                + l(4)*l(2)**3/twelve + l(2)*l(4)*(-half*l(3)-ycog)**2
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = (l(1)*l(3)**3 + (l(2)+half*l(3))*l(4)**3)*third/ixx            
+            fac = one/(2*intr+4)
+            area1_i = half*l(1)*l(3)*fac
+            area2_i = half*l(4)*l(2)*fac
+            dz1 = -l(1)*fac
+            z1_0 = half*l(1)+half*dz1
+            dy2 = l(2)*fac
+            y2_0 = -half*(l(3)+l(2))+half*dy2
+            ip = 0
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=half*(l(2)-l(3)+half*l(3))
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=half*(l(2)+l(3)-half*l(3))
+              geo(ipz+ip)=z1_0 +(i-1)*dz1
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y2_0+(i-1)*dy2
+              geo(ipz+ip)=half*half*l(4)
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y2_0+(i-1)*dy2
+              geo(ipz+ip)=-half*half*l(4)
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (24) ! i section (l(1)-l(2)-l(3)-l(4))
+!                      ------
+!                        ||
+!                      ------
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 2*(2*intr+4)+ 2*(2*intr+3)
+            intr_max = 10
+!           section properties            
+            area = l(2)*l(3)+(l(1)+l(2))*(l(4)-l(3))
+            iyy = ((l(1)+l(2))*l(4)**3 - l(1)*l(3)**3)/twelve
+            izz = (l(3)*l(2)**3 + ((l(4)-l(3)))*(l(1)+l(2))**3)/twelve
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = ((l(3)+half*(l(4)-l(3)))*l(2)**3+two*(l(1)+l(2))*(half*(l(4)-l(3)))**3)*third/ixx             
+            fac = one/(2*intr+4)
+            fac2 = one/(2*intr+3)
+            area1_i = half*(l(1)+l(2))*(l(4)-l(3))*fac
+            area2_i = half*l(3)*l(2)*fac2
+            dy1 = (l(1)+l(2))*fac
+            y1_0 = -half*(l(1)+l(2))+half*dy1
+            dz2 = -l(3)*fac2
+            z2_0 = half*l(3)+half*dz2
+            ip = 0
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(4)-half*half*(l(4)-l(3))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(4)+half*half*(l(4)-l(3))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=-half*half*l(2)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=half*half*l(2)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (25) ! Channel section (l(1)-l(2)-l(3)-l(4))
+!                      |----
+!                      ||
+!                      |----
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 4*(intr+3)
+            intr_max = 22
+!           section properties
+            area = l(2)*l(4)+l(1)*(l(4)-l(3))
+            ycog = -half*l(1)*l(2)*l(3)/area
+            iyy = ((l(1)+l(2))*l(4)**3 - l(1)*l(3)**3)/twelve
+            izz = l(4)*(l(1)+l(2))**3/twelve + (l(1)+l(2))*l(4)*(ycog**2)   &
+                - l(3)*l(1)**3/twelve - l(1)*l(3)*(half*l(2)-ycog)**2
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = (two*(l(1)+half*l(2))*(half*(l(4)-l(3)))**3 + half*(l(4)+l(3))*l(2)**3)*third/ixx            
+            fac = one/(intr+3)
+            area1_i = half*(l(1)+l(2))*(l(4)-l(3))*fac
+            area2_i = half*l(3)*l(2)*fac
+            dy1 = (l(1)+l(2))*fac
+            y1_0 = -half*(l(1)+l(2))+half*dy1
+            dz2 = -l(3)*fac
+            z2_0 = half*l(3)+half*dz2
+            ip = 0
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(4)-half*half*(l(4)-l(3))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(4)+half*half*(l(4)-l(3))
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=-half*(l(1)+l(2)) +half*half*l(2)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=-half*(l(1)+l(2))+three*half*half*l(2)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (26) ! u section (l(1)-l(2)-l(3)-l(4))
+!                       |   |
+!                       |   |
+!                       -----
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 6*intr+7
+            intr_max = 15
+!           section properties
+            area = two*l(1)*l(3)+l(2)*(l(4)-two*l(1))
+            zcog = (l(1)*l(3)**2 - l(1)*l(2)*l(3))/area
+            iyy = two*(l(1)*l(3)**3/twelve + l(1)*l(3)*(half*(l(3)-l(2))-zcog)**2)                 &
+                + l(2)*(l(4)-two*l(1))**3/twelve + l(2)*(l(4)-two*l(1))*(zcog**2)
+            izz = two*(l(3)*l(1)**3/twelve + l(1)*l(3)*(half*(l(4)-l(1)))**2)                      &
+                + (l(4)-two*l(1))*l(2)**3/twelve
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = (two*(l(3)-half*l(2))*l(1)**3 + (l(4)-l(1))*l(2)**3)*third/ixx            
+            fac = one/(2*intr+3)
+            fac2 = one/(2*intr+2)
+            area1_i = l(2)*l(4)*fac
+            area2_i = l(1)*(l(3)-l(2))*fac2
+            dy1 = l(4)*fac
+            y1_0 = -half*l(4)+half*dy1
+            dz2 = -(l(3)-l(2))*fac2
+            z2_0 = half*l(3)+half*dz2
+            ip = 0
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(3)+half*l(2)
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+2
+              ip = ip+1
+              geo(ipy+ip)=-half*l(4)+half*l(1)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,2*intr+2
+              ip = ip+1
+              geo(ipy+ip)=half*l(4)-half*l(1)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (27) ! T section (l(1)-l(2)-l(3)-l(4))
+!                        ||
+!                      ------
+!                      ------
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 8*intr+12
+            intr_max = 11
+!           section properties
+            area = l(1)*l(3)+l(4)*(l(2)-l(3))
+            zcog = (l(1)*l(3)*(-half*l(2)+half*l(3)) + l(4)*(l(2)-l(3))*half*l(3))/area
+            iyy = l(1)*l(3)**3/twelve + l(1)*l(3)*(-half*l(2)+half*l(3)-zcog)**2          &
+                + l(4)*(l(2)-l(3))**3/twelve + l(4)*(l(2)-l(3))*(half*l(3)-zcog)**2
+            izz = l(3)*l(1)**3/twelve + (l(2)-l(3))*l(4)**3/twelve
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = (l(1)*l(3)**3 + (l(2)-half*l(3))*l(4)**3)*third/ixx            
+            fac = one/(2*intr+4)
+            fac2 = one/(2*intr+2)
+            area1_i = half*l(1)*l(3)*fac
+            area2_i = half*l(4)*(l(2)-l(3))*fac2
+            dy1 = l(1)*fac
+            y1_0 = -half*l(1)+half*dy1
+            dz2 = -(l(2)-l(3))*fac2
+            z2_0 = half*l(2)+half*dz2
+            ip = 0
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(2)+three*half*half*l(3)
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(2)+half*half*l(3)
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,2*intr+2
+              ip = ip+1
+              geo(ipy+ip)=-half*half*l(4)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,2*intr+2
+              ip = ip+1
+              geo(ipy+ip)=half*half*l(4)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area2_i
+
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (28) ! box section (l(1)-l(2)-l(3)-l(4)-l(5)-l(6))
+!                      ------
+!                      |  | |
+!                      ------
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 6
+            nip = 4*intr+8
+            intr_max = 23
+!           section properties
+            area = l(2)*(l(5)+l(6))+(l(3)+l(4))*(l(1)-l(5)-l(6))
+            da = l(2)-l(3)-l(4)
+            db = l(1)-l(5)-l(6)
+            ycog = (l(5)*da*(half*(l(1)-l(5))) - l(6)*da*(half*(l(1)-l(6))))/area
+            zcog = (l(3)*l(1)*(half*(l(2)-l(3))) - l(4)*l(1)*(half*(l(2)-l(4))))/area
+            iyy = l(3)*l(1)**3/twelve + l(3)*l(1)*(half*(l(2)-l(3))-zcog)**2               &
+                + l(4)*l(1)**3/twelve + l(4)*l(1)*(-half*(l(2)-l(4))-zcog)**2              &
+                + l(6)*da**3/twelve + l(6)*da*(half*(l(4)-l(3))-zcog)**2                   &
+                + l(5)*da**3/twelve + l(5)*da*(half*(l(4)-l(3))-zcog)**2
+            izz = l(1)*l(3)**3/twelve + l(1)*l(3)*(ycog**2)                                &
+                + l(1)*l(4)**3/twelve + l(1)*l(4)*(ycog**2)                                &
+                + da*l(6)**3/twelve + l(6)*da*(-half*(l(1)-l(6))-ycog)**2                  &
+                + da*l(5)**3/twelve + l(5)*da*(half*(l(1)-l(5))-ycog)**2
+            ixx = iyy + izz
+!           torsion factor
+            aac = l(1)-half*(l(5)+l(6))
+            aad = l(2)-half*(l(3)+l(4))
+            geo(90) = four*aac*aac*aad*aad/(aac/l(3)+aac/l(4)+aad/l(5)+aad/l(6))/ixx            
+            fac = one/(intr+3)
+            fac2 = one/(intr+1)
+            area1_i = l(1)*l(3)*fac
+            area2_i = l(1)*l(4)*fac
+            area3_i = l(6)*(l(2)-l(3)-l(4))*fac2
+            area4_i = l(5)*(l(2)-l(3)-l(4))*fac2
+            dy1 = l(1)*fac
+            y1_0 = -half*l(1)+half*dy1
+            dz2 = -(l(2)-l(3)-l(4))*fac2
+            z2_0 = half*l(2)-l(3)+half*dz2
+            ip = 0
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(2)-half*l(3)
+              geo(ipa+ip)=area1_i
+            end do
+            do i = 1,intr+3
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(2)+half*l(4)
+              geo(ipa+ip)=area2_i
+            end do
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=-half*l(1)+half*l(6)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area3_i
+            end do
+            do i = 1,intr+1
+              ip = ip+1
+              geo(ipy+ip)=half*l(1)-half*l(5)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area4_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (29) ! hexagon section (l(1)-l(2)-l(3))
+!                      ---
+!                     /   \
+!                     \   /
+!                      ---
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 3
+            nip = 2*(intr+3)*(intr+3)
+            intr_max = 4
+!           section properties
+            area = (l(2)-l(1))*l(3)
+            ycog = zero
+            zcog = zero
+            iyy = l(3)**3*(two*l(2)-three*l(1))/(two*twelve)
+            izz = l(3)*l(2)**3/twelve - l(3)*l(1)**3/18.0_WP - l(1)*l(3)*(half*l(2)-l(1)/three)**2
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = 0.1154*l(3)**4/ixx            
+            fac = one/(intr+3)
+            ip = 0
+            dl = two*l(1)*fac
+            dh = half*l(3)*fac
+            z1_0 = half*l(3)-half*dh
+            do j=1,intr+3
+              l_sup = l(2)-two*l(1)+(j-1)*dl
+              l_inf = l(2)-two*l(1)+j*dl
+              area1_i = fac*half*(l_sup+l_inf)*dh
+              dy1 = half*(l_sup+l_inf)*fac
+              y1_0 = -half*half*(l_sup+l_inf)+half*dy1
+              do i = 1,intr+3
+                ip = ip+1
+                geo(ipy+ip)=y1_0 +(i-1)*dy1
+                geo(ipz+ip)=z1_0 -(j-1)*dh
+                geo(ipa+ip)=area1_i
+              end do
+            end do
+            z1_0 = -half*l(3)+half*dh
+            do j=1,intr+3
+              l_sup = l(2)-two*l(1)+(j-1)*dl
+              l_inf = l(2)-two*l(1)+j*dl
+              area1_i = fac*half*(l_sup+l_inf)*dh
+              dy1 = half*(l_sup+l_inf)*fac
+              y1_0 = -half*half*(l_sup+l_inf)+half*dy1
+              do i = 1,intr+3
+                ip = ip+1
+                geo(ipy+ip)=y1_0 +(i-1)*dy1
+                geo(ipz+ip)=z1_0 +(j-1)*dh
+                geo(ipa+ip)=area1_i
+              end do
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (30) ! hat section (l(1)-l(2)-l(3)-l(4))
+!                       ----
+!                       |  |
+!                     ---  ---
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 4
+            nip = 8*intr+14
+            intr_max = 8
+!           section properties
+            da = l(4)*l(2)
+            db = l(2)*l(1)
+            dc = (l(3)-two*l(2))*l(2)
+            area = two*da + two*db + dc
+            ycog = zero
+            zcog = (two*da*half*l(2) + two*db*half*l(1) + dc*(l(1)-half*l(2)))/area
+            iyy = two*(l(4)*l(2)**3/twelve + da*(half*l(2) - zcog)**2) + &
+                  two*(l(2)*l(1)**3/twelve + db*(half*l(1) - zcog)**2) + &
+                  (l(3)-two*l(2))*l(2)**3/twelve + dc*(l(1) - half*l(2) - zcog)**2
+            izz = two*(l(2)*l(4)**3/twelve + da*(half*(l(3)+l(4)))**2) + &
+                  two*(l(2)**3*l(1)/twelve + db*(half*(l(3)-l(2)))**2) + &
+                  l(2)*(l(3)-two*l(2))**3/twelve
+            ixx = iyy + izz
+!           torsion factor
+            geo(90) = two*((l(1)+l(4)+half*l(3)-l(2))*l(2)**3)*third/ixx
+            fac = one/(2*intr+4)
+            fac2 = one/(intr+2)
+            fac3 = one/(2*intr+3)
+            area1_i = l(2)*l(3)*fac
+            area2_i = l(2)*l(4)*fac2
+            area3_i = l(2)*(l(1)-l(2))*fac3
+            ip = 0
+            dy1 = l(3)*fac
+            y1_0 = -half*l(3)+half*dy1
+            do i = 1,2*intr+4
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(1)-half*l(2)
+              geo(ipa+ip)=area1_i
+            end do
+            dy1 = l(4)*fac2
+            y1_0 = -half*(l(3)+two*l(4))+half*dy1
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(1)+half*l(2)
+              geo(ipa+ip)=area2_i
+            end do
+            dy1 = -l(4)*fac2
+            y1_0 = half*(l(3)+two*l(4))+half*dy1
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(1)+half*l(2)
+              geo(ipa+ip)=area2_i
+            end do
+            dz2 = -(l(1)-l(2))*fac3
+            z2_0 = half*l(1)-l(2)+half*dz2
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=-half*l(3)+half*l(2)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area3_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=half*l(3)-half*l(2)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area3_i
+            end do
+! ----------------------------------------------------------------------------------------------------------------------
+           case (31) ! hat section (l(1)-l(2)-l(3)-l(4)-l(5)-l(6))
+!                       ----
+!                       |  |
+!                      --  --
+!                    ----------
+! ----------------------------------------------------------------------------------------------------------------------
+            nb_dim = 6
+            nip = 14*intr+22
+            intr_max = 5
+            area = (two*l(6)+l(3))*l(4)+two*(l(2)-l(4)-l(5))*l(4)+l(1)*l(5)
+            fac = one/(2*intr+5)
+            fac2 = one/(intr+2)
+            fac3 = one/(2*intr+3)
+            fac4 = one/(6*intr+7)
+            area1_i = l(4)*l(3)*fac
+            area2_i = l(4)*l(6)*fac2
+            area3_i = l(4)*(l(2)-l(4)-l(5))*fac3
+            area4_i = l(5)*l(1)*fac4
+            ip = 0
+            dy1 = l(3)*fac
+            y1_0 = -half*l(3)+half*dy1
+            do i = 1,2*intr+5
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=half*l(2)-half*l(4)
+              geo(ipa+ip)=area1_i
+            end do
+            dy1 = l(6)*fac2
+            y1_0 = -half*(l(3)+two*l(6))+half*dy1
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(2)+l(5)+half*l(4)
+              geo(ipa+ip)=area2_i
+            end do
+            dy1 = -l(6)*fac2
+            y1_0 = half*(l(3)+two*l(6))+half*dy1
+            do i = 1,intr+2
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(2)+l(5)+half*l(4)
+              geo(ipa+ip)=area2_i
+            end do
+            dz2 = -(l(2)-l(4)-l(5))*fac3
+            z2_0 = half*l(2)-l(4)+half*dz2
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=-half*l(3)+half*l(4)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area3_i
+            end do
+            do i = 1,2*intr+3
+              ip = ip+1
+              geo(ipy+ip)=half*l(3)-half*l(4)
+              geo(ipz+ip)=z2_0 +(i-1)*dz2
+              geo(ipa+ip)=area3_i
+            end do
+            dy1 = l(1)*fac4
+            y1_0 = -half*l(1)+half*dy1
+            do i = 1,6*intr+7
+              ip = ip+1
+              geo(ipy+ip)=y1_0 +(i-1)*dy1
+              geo(ipz+ip)=-half*l(2)+half*l(5)
+              geo(ipa+ip)=area4_i
+            end do
+           case default
+          end select
+!
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine defbeam_sect_new
+      end module defbeam_sect_new_mod

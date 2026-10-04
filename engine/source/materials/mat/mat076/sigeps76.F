@@ -1,0 +1,212 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    sigeps76                ../engine/source/materials/mat/mat076/sigeps76.F
+!||--- called by ------------------------------------------------------
+!||    mulaw                   ../engine/source/materials/mat_share/mulaw.F90
+!||--- calls      -----------------------------------------------------
+!||    asso_plas76             ../engine/source/materials/mat/mat076/asso_plas76.F
+!||    no_asso_plas76          ../engine/source/materials/mat/mat076/no_asso_plas76.F
+!||    table_mat_vinterp       ../engine/source/materials/tools/table_mat_vinterp.F
+!||--- uses       -----------------------------------------------------
+!||    matparam_def_mod        ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||    table_mat_vinterp_mod   ../engine/source/materials/tools/table_mat_vinterp.F
+!||====================================================================
+      SUBROUTINE SIGEPS76(
+     1           NEL     ,NUPARAM ,NUVAR    ,NGL      ,
+     2           TIME    ,TIMESTEP,UPARAM   ,MATPARAM ,
+     3           RHO0    ,DPLA    ,ET       ,SOUNDSP  ,YLD      ,UVAR     ,
+     3           DEPSXX  ,DEPSYY  ,DEPSZZ   ,DEPSXY   ,DEPSYZ   ,DEPSZX   ,
+     4           SIGOXX  ,SIGOYY  ,SIGOZZ   ,SIGOXY   ,SIGOYZ   ,SIGOZX   ,
+     5           SIGNXX  ,SIGNYY  ,SIGNZZ   ,SIGNXY   ,SIGNYZ   ,SIGNZX   ,
+     6           OFF     ,EPSD    ,PLA      ,INLOC    ,L_PLANL  ,PLANL    ,
+     7           DMG     ,NVARTMP ,VARTMP  )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MATPARAM_DEF_MOD
+      USE TABLE_MAT_VINTERP_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+!#include      "tabsiz_c.inc"
+#include      "comlock.inc"
+#include      "units_c.inc"
+C=======================================================================
+      INTEGER, INTENT(IN) :: NEL,NUPARAM,NUVAR,INLOC,L_PLANL
+      INTEGER ,INTENT(IN)    :: NVARTMP
+      INTEGER, DIMENSION(NEL), INTENT(IN) :: NGL
+      INTEGER ,DIMENSION(NEL,NVARTMP) ,INTENT(INOUT) :: VARTMP
+      my_real, INTENT(IN) :: TIME,TIMESTEP
+      my_real, DIMENSION(NUPARAM), INTENT(IN) :: UPARAM
+      my_real, DIMENSION(NEL), INTENT(IN) :: 
+     .   RHO0,DEPSXX,DEPSYY,DEPSZZ,
+     .   DEPSXY,DEPSYZ,DEPSZX,SIGOXX,SIGOYY,SIGOZZ,
+     .   SIGOXY,SIGOYZ,SIGOZX
+      my_real, DIMENSION(L_PLANL*NEL), INTENT(IN) :: PLANL
+      my_real, DIMENSION(NEL), INTENT(INOUT) :: 
+     .   EPSD,DPLA,PLA,SIGNXX,SIGNYY,SIGNZZ,DMG,
+     .   SIGNXY,SIGNYZ,SIGNZX,SOUNDSP,ET,OFF,YLD
+      my_real, DIMENSION(NEL,NUVAR), INTENT(INOUT) :: UVAR
+      TYPE(MATPARAM_STRUCT_), INTENT(IN), TARGET :: MATPARAM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I,IFORM,NUMTABL,NINDX,INDX(NEL)
+      INTEGER ,PARAMETER :: FUNC_DMG = 5
+      my_real :: EPSPF,EPSPR
+      my_real ,DIMENSION(NEL) :: DF,PLA_DAM,SIG0XX,SIG0YY,
+     .   SIG0ZZ,SIG0XY,SIG0YZ,SIG0ZX
+      my_real, DIMENSION(NEL,1) :: XVEC
+      TYPE(TABLE_4D_),DIMENSION(:),CONTIGUOUS,POINTER :: TABLE
+C=======================================================================
+c
+      !====================================================================
+      ! - PARAMETERS INITIALIZATION
+      !====================================================================
+      EPSPF = UPARAM(10)       ! Failure plastic strain           
+      EPSPR = UPARAM(11)       ! Rupture plastic strain        
+      IFORM = NINT(UPARAM(13)) ! Flag for plasticity 
+                               !   = 0 associated (with quadratic yield criterion only)
+                               !   = 1 not associated          
+      DO I = 1,NEL
+        IF (OFF(I) < EM01) OFF(I) = ZERO
+        IF (OFF(I) <  ONE) OFF(I) = OFF(I)*FOUR_OVER_5  
+      ENDDO
+c
+      ! Table parameters
+      NUMTABL =  MATPARAM%NTABLE
+      TABLE   => MATPARAM%TABLE(1:NUMTABL)
+c
+      !====================================================================
+      ! - COMPUTE INITIAL UNDAMAGED STRESSES
+      !====================================================================
+      DO I = 1,NEL 
+        SIG0XX(I) = SIGOXX(I)/MAX(ONE-DMG(I),EM20)
+        SIG0YY(I) = SIGOYY(I)/MAX(ONE-DMG(I),EM20)
+        SIG0ZZ(I) = SIGOZZ(I)/MAX(ONE-DMG(I),EM20)
+        SIG0XY(I) = SIGOXY(I)/MAX(ONE-DMG(I),EM20)
+        SIG0YZ(I) = SIGOYZ(I)/MAX(ONE-DMG(I),EM20)
+        SIG0ZX(I) = SIGOZX(I)/MAX(ONE-DMG(I),EM20)
+      ENDDO
+c
+      !====================================================================
+      ! - ELASTO-PLASTIC BEHAVIOR
+      !====================================================================
+      IF (IFORM == 1) THEN  ! Associated plastic flow, Quadratic yield criterion
+        CALL ASSO_PLAS76(     
+     1      NEL    ,NUPARAM,NUVAR   ,NVARTMP,
+     2      TIME   ,TIMESTEP,UPARAM ,VARTMP ,
+     3      RHO0   ,PLA    ,DPLA    ,ET      ,NUMTABL ,TABLE  ,
+     3      DEPSXX ,DEPSYY ,DEPSZZ  ,DEPSXY  ,DEPSYZ  ,DEPSZX ,
+     4      SIG0XX ,SIG0YY ,SIG0ZZ  ,SIG0XY  ,SIG0YZ  ,SIG0ZX ,
+     5      SIGNXX ,SIGNYY ,SIGNZZ  ,SIGNXY  ,SIGNYZ  ,SIGNZX ,
+     6      SOUNDSP,UVAR   ,OFF     ,EPSD    ,YLD     ,DMG    )
+      ELSE ! Non-associated plastic flow
+        CALL NO_ASSO_PLAS76(
+     1      NEL    ,NUPARAM,NUVAR   ,NVARTMP ,
+     2      TIME   ,TIMESTEP,UPARAM ,VARTMP  ,
+     3      RHO0   ,PLA    ,DPLA    ,ET      ,NUMTABL ,TABLE  ,
+     3      DEPSXX ,DEPSYY ,DEPSZZ  ,DEPSXY  ,DEPSYZ  ,DEPSZX ,
+     4      SIG0XX ,SIG0YY ,SIG0ZZ  ,SIG0XY  ,SIG0YZ  ,SIG0ZX ,
+     5      SIGNXX ,SIGNYY ,SIGNZZ  ,SIGNXY  ,SIGNYZ  ,SIGNZX ,
+     6      SOUNDSP,UVAR   ,OFF     ,EPSD    ,YLD     ,DMG    )    
+      ENDIF
+c
+      !====================================================================
+      ! - UPDATE DAMAGE VARIABLE
+      !====================================================================
+      NINDX = 0
+      IF (INLOC > 0) THEN 
+        PLA_DAM(1:NEL) = PLANL(1:NEL)
+      ELSE
+        PLA_DAM(1:NEL) = PLA(1:NEL)
+      ENDIF
+!
+      IF (TABLE(FUNC_DMG)%NOTABLE > 0) THEN
+        ! Tabulated damage
+!
+        XVEC(1:NEL,1) = PLA_DAM(1:NEL) 
+        CALL TABLE_MAT_VINTERP(TABLE(FUNC_DMG),NEL,NEL,VARTMP(1:NEL,7:7),XVEC,DMG,DF)
+!        
+        DO I=1,NEL
+          IF (DMG(I) >= ONE) THEN 
+            DMG(I) = ONE
+            IF (OFF(I) == ONE) THEN 
+              OFF(I)      = FOUR_OVER_5
+              NINDX       = NINDX+1
+              INDX(NINDX) = I
+            ENDIF
+          ENDIF 
+        ENDDO
+!     
+      ELSE  ! Analytical damage
+!           
+        DO I = 1,NEL
+          IF (PLA_DAM(I) >= EPSPF) THEN 
+            DMG(I) = (PLA_DAM(I) - EPSPF)/ (EPSPR - EPSPF)
+            DMG(I) = MIN(DMG(I),ONE)
+          ENDIF
+          IF (DMG(I) >= ONE) THEN 
+            IF (OFF(I) == ONE) THEN 
+              OFF(I)      = FOUR_OVER_5
+              NINDX       = NINDX+1
+              INDX(NINDX) = I
+            ENDIF
+          ENDIF 
+        ENDDO
+      ENDIF
+c
+      !====================================================================
+      ! - COMPUTE DAMAGED STRESSES
+      !====================================================================
+      DO I = 1,NEL 
+        SIGNXX(I) = SIGNXX(I)*(ONE-DMG(I))
+        SIGNYY(I) = SIGNYY(I)*(ONE-DMG(I))
+        SIGNZZ(I) = SIGNZZ(I)*(ONE-DMG(I))
+        SIGNXY(I) = SIGNXY(I)*(ONE-DMG(I))
+        SIGNYZ(I) = SIGNYZ(I)*(ONE-DMG(I))
+        SIGNZX(I) = SIGNZX(I)*(ONE-DMG(I))
+      ENDDO
+c  
+      !====================================================================
+      ! - PRINTOUT ELEMENT DELETION
+      !====================================================================  
+      IF (NINDX > 0) THEN
+        DO I=1,NINDX
+#include "lockon.inc"
+          WRITE(IOUT ,1000) NGL(INDX(I))
+          WRITE(ISTDO,1100) NGL(INDX(I)),TIME
+#include "lockoff.inc"
+        ENDDO
+      ENDIF
+c------------------------------------------------------      
+ 1000 FORMAT(1X,'RUPTURE (SAMP) OF SOLID ELEMENT NUMBER ',I10)
+ 1100 FORMAT(1X,'RUPTURE (SAMP) OF SOLID ELEMENT NUMBER ',I10,'AT TIME :',G11.4)  
+c------------------------------------------------------      
+      END

@@ -1,0 +1,111 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    arezo2_mod   ../engine/source/ale/ale2d/arezo2.F
+!||--- called by ------------------------------------------------------
+!||    aconve       ../engine/source/ale/aconve.F90
+!||    arezon       ../engine/source/ale/arezon.F90
+!||====================================================================
+      MODULE AREZO2_MOD
+      CONTAINS
+!||====================================================================
+!||    arezo2                 ../engine/source/ale/ale2d/arezo2.F
+!||--- called by ------------------------------------------------------
+!||    arezon                 ../engine/source/ale/arezon.F90
+!||--- uses       -----------------------------------------------------
+!||    ale_connectivity_mod   ../common_source/modules/ale/ale_connectivity_mod.F
+!||====================================================================
+      SUBROUTINE AREZO2(ALE_CONNECT,VAR,PHI,FLUX,VOL,s_flux,offset,nft,llt,jmult)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+       USE ALE_CONNECTIVITY_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com08_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      integer, intent(in) :: s_flux !< first dimension of FLUX array
+      integer, intent(in) :: offset !< offset for FLUX array
+      integer, intent(in) :: nft !< address of the first element of the group
+      integer, intent(in) :: llt !< number of element in the group
+      integer, intent(in) :: jmult !< multimaterial flag
+      my_real VAR(*), PHI(*), FLUX(s_flux,4), VOL(*)
+      TYPE(t_ale_connectivity), INTENT(IN) :: ALE_CONNECT
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, IE, IV1, IV2, IV3, IV4, IAD2
+      integer :: ie_2
+      my_real VOLN
+C-----------------------------------------------
+      IF (JMULT == 0) THEN
+        DO I=1,LLT
+         IE =NFT+I
+         IE_2 = offset + nft + i
+         IAD2 = ALE_CONNECT%ee_connect%iad_connect(IE)
+         IV1=ALE_CONNECT%ee_connect%connected(IAD2 + 1 - 1)
+         IV2=ALE_CONNECT%ee_connect%connected(IAD2 + 2 - 1)
+         IV3=ALE_CONNECT%ee_connect%connected(IAD2 + 3 - 1)
+         IV4=ALE_CONNECT%ee_connect%connected(IAD2 + 4 - 1)
+         IF (IV1 <= 0)IV1=IE
+         IF (IV2 <= 0)IV2=IE
+         IF (IV3 <= 0)IV3=IE
+         IF (IV4 <= 0)IV4=IE
+         IF (VOL(I) > ZERO) THEN
+           VAR(I)=VAR(I) + HALF*DT1*(PHI(IE)* (FLUX(IE_2,1)+FLUX(IE_2,2)+FLUX(IE_2,3)+FLUX(IE_2,4))
+     .                -PHI(IV1)*FLUX(IE_2,1)-PHI(IV2)*FLUX(IE_2,2)-PHI(IV3)*FLUX(IE_2,3)-PHI(IV4)*FLUX(IE_2,4)) / VOL(I)
+         ENDIF
+        ENDDO    
+      ELSE
+        DO I=1,LLT
+        IE =NFT+I
+        IE_2 = offset + nft + i        
+        IAD2 = ALE_CONNECT%ee_connect%iad_connect(IE)
+        IV1=ALE_CONNECT%ee_connect%connected(IAD2 + 1 - 1)
+        IV2=ALE_CONNECT%ee_connect%connected(IAD2 + 2 - 1)
+        IV3=ALE_CONNECT%ee_connect%connected(IAD2 + 3 - 1)
+        IV4=ALE_CONNECT%ee_connect%connected(IAD2 + 4 - 1)
+       
+        IF(IV1 <= 0)IV1=IE
+        IF(IV2 <= 0)IV2=IE
+        IF(IV3 <= 0)IV3=IE
+        IF(IV4 <= 0)IV4=IE
+        VOLN=VOL(I)-DT1 * (FLUX(IE_2,1)+FLUX(IE_2,2)+FLUX(IE_2,3)+FLUX(IE_2,4))
+        IF (VOLN > EM15) THEN
+          VAR(I) = VAR(I) + HALF * DT1 * (PHI(IE)*(FLUX(IE_2,1)+FLUX(IE_2,2)+FLUX(IE_2,3)+FLUX(IE_2,4))
+     3                 -PHI(IV1)*FLUX(IE_2,1)-PHI(IV2)*FLUX(IE_2,2)-PHI(IV3)*FLUX(IE_2,3)-PHI(IV4)*FLUX(IE_2,4)) / MAX(EM15,VOLN)
+         ENDIF
+        ENDDO
+      ENDIF
+C-----------
+      RETURN
+      END SUBROUTINE AREZO2
+      END MODULE AREZO2_MOD

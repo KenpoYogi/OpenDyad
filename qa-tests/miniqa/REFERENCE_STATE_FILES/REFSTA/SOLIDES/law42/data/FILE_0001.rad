@@ -1,0 +1,25 @@
+# Copyright (C) 2026 SISW Siemens Industry Software Inc. ("Holder")
+# Model is licensed by Holder under CC BY-NC 4.0
+# (https://creativecommons.org/licenses/by-nc/4.0/legalcode).
+#RADIOSS ENGINE
+/RUN/FILE/1
+ 1.01
+/TFILE
+ .00001
+/PRINT/-1
+/ANIM/DT
+0. .1
+/KEREL
+/ANIM/ELEM/SIGX
+/ANIM/ELEM/SIGY
+/ANIM/ELEM/SIGZ
+/ANIM/ELEM/SIGXY
+/ANIM/ELEM/SIGYZ
+/ANIM/ELEM/SIGZX
+/ANIM/VECT/VEL
+/ANIM/BRICK/TENS/STRESS
+/ANIM/BRICK/TENS/STRAIN
+/DT
+ 0.67 0.
+/MON/ON
+/ANIM/GZIP

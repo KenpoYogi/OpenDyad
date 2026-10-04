@@ -1,0 +1,117 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    fcont_max_output          ../engine/source/output/h3d/h3d_results/fcont_max_output.F
+!||--- called by ------------------------------------------------------
+!||    sortie_main               ../engine/source/output/sortie_main.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_h3d_sum_r_nodal_21   ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_node.F
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod              ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod            ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE FCONT_MAX_OUTPUT(CONT,FCONTG,NODGLOB,FCONT_MAX,WEIGHT)
+C-----------------------------s------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "spmd_c.inc"
+#include      "intstamp_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NODGLOB(*),WEIGHT(*)
+      my_real
+     .   CONT(3,*),FCONTG(3,*),FCONT_MAX(3,*)
+      my_real  FOLD, FNEW, FMAX
+      INTEGER I,K,N  
+      my_real
+     .       , DIMENSION(:,:), ALLOCATABLE :: FCONT_TMP,FCONT_TMP_P
+C-----------------------------------------------
+
+      IF(NINTSTAMP == 0) THEN
+         DO N=1,NUMNOD
+            IF(WEIGHT(N) == 1) THEN
+             FNEW = CONT(1,N)**2 + CONT(2,N)**2 +CONT(3,N)**2
+             FOLD = FCONT_MAX(1,N)**2 + FCONT_MAX(2,N)**2 +FCONT_MAX(3,N)**2
+             FMAX = MAX(FNEW,FOLD)
+             IF(FNEW > FOLD) THEN
+                FCONT_MAX(1:3,N) = CONT(1:3,N)   
+             ENDIF
+            ELSE
+             CONT(1:3,N) =  ZERO
+            ENDIF
+         ENDDO
+      ELSE
+
+         call my_alloc(FCONT_TMP, 3, NUMNOD, "FCONT_TMP")
+         call my_alloc(FCONT_TMP_P, 3, NUMNODG, "FCONT_TMP_P")
+
+         DO I=1,NUMNOD
+           K=NODGLOB(I)
+           FCONT_TMP(1,I) = CONT(1,I) + FCONTG(1,K)
+           FCONT_TMP(2,I) = CONT(2,I) + FCONTG(2,K)
+           FCONT_TMP(3,I) = CONT(3,I) + FCONTG(3,K)
+         ENDDO
+       
+         IF(NSPMD > 1 ) THEN
+             CALL SPMD_H3D_SUM_R_NODAL_21(NODGLOB,FCONT_TMP,3*NUMNOD,FCONT_TMP_P,3*NUMNODG,FCONTG)
+         ENDIF
+
+         IF(NSPMD > 1) THEN
+            IF(ISPMD == 0 ) THEN
+               DO N=1,NUMNODG
+                  FNEW = FCONT_TMP_P(1,N)**2 + FCONT_TMP_P(2,N)**2 +FCONT_TMP_P(3,N)**2
+                  FOLD = FCONT_MAX(1,N)**2 + FCONT_MAX(2,N)**2 +FCONT_MAX(3,N)**2
+                  FMAX = MAX(FNEW,FOLD)
+                  IF(FNEW > FOLD) THEN
+                     FCONT_MAX(1:3,N) = FCONT_TMP_P(1:3,N)   
+                  ENDIF
+               ENDDO
+             ENDIF
+         ELSE
+           DO N=1,NUMNOD
+             IF(WEIGHT(N) /= 1) CYCLE
+             FNEW = FCONT_TMP(1,N)**2 + FCONT_TMP(2,N)**2 +FCONT_TMP(3,N)**2
+             FOLD = FCONT_MAX(1,N)**2 + FCONT_MAX(2,N)**2 +FCONT_MAX(3,N)**2
+             FMAX = MAX(FNEW,FOLD)
+             IF(FNEW > FOLD) THEN
+                FCONT_MAX(1:3,N) = FCONT_TMP(1:3,N)   
+             ENDIF
+           ENDDO
+         ENDIF
+         call my_dealloc(FCONT_TMP_P)
+         call my_dealloc(FCONT_TMP)
+       ENDIF
+ 
+       RETURN
+       END 

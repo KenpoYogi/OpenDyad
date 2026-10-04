@@ -1,0 +1,93 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+#ifndef DNC
+!||====================================================================
+!||    ini_inimap2d       ../starter/stub/ini_inimap2d.F
+!||--- called by ------------------------------------------------------
+!||    initia             ../starter/source/elements/initia/initia.F
+!||--- uses       -----------------------------------------------------
+!||    func2d_mod         ../starter/share/modules1/func2d_mod.F
+!||    inimap2d_mod       ../starter/share/modules1/inimap2d_mod.F
+!||    message_mod        ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE INI_INIMAP2D(INIMAP2D ,ELBUF_TAB ,IPART   ,IPARG   ,IPARTS   , 
+     .                        IPARTQ   ,XGRID     ,VEL     ,IXS     ,IXQ      ,
+     .                        IXTG     ,PM        ,IPM     ,BUFMAT  ,MULTI_FVM, 
+     .                        FUNC2D   ,IGRBRIC   ,IGRQUAD ,IGRSH3N,NPC,
+     .                        PLD, MAT_PARAM)
+C-----------------------------------------------
+C     M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD            
+      USE INIMAP2D_MOD  
+      USE FUNC2D_MOD
+      USE MULTI_FVM_MOD
+      USE GROUPDEF_MOD
+      USE MESSAGE_MOD
+      USE MATPARAM_DEF_MOD
+      use element_mod , only : nixs,nixq,nixtg
+C-----------------------------------------------
+C     I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc" 
+C-----------------------------------------------
+C     C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "scr17_c.inc"
+!     NGROUP
+#include      "com01_c.inc"
+!     NFUNCT
+#include      "com04_c.inc"
+!     MVSIZ
+#include      "mvsiz_p.inc"
+!     IOUT
+#include      "units_c.inc"
+C-----------------------------------------------
+C     D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(INIMAP2D_STRUCT), DIMENSION(NINIMAP2D), INTENT(INOUT) :: INIMAP2D
+      TYPE(ELBUF_STRUCT_), DIMENSION(NGROUP), INTENT(INOUT), TARGET :: ELBUF_TAB
+      TYPE (MATPARAM_STRUCT_) ,DIMENSION(NUMMAT) ,INTENT(INOUT) :: MAT_PARAM
+
+      INTEGER, INTENT(IN) :: IPART(LIPART1, *),NPC(*)
+      INTEGER, INTENT(IN) :: IPARTS(*), IPARTQ(*),IPM(NPROPMI, *), 
+     .     IPARG(NPARG, NGROUP), IXS(NIXS, *), IXQ(NIXQ, *), IXTG(NIXTG, *)
+      my_real, INTENT(IN) :: XGRID(3, *), PM(NPROPM, *), BUFMAT(*)
+      my_real, INTENT(INOUT) :: VEL(3, *), PLD(*)
+      TYPE(MULTI_FVM_STRUCT), INTENT(INOUT) :: MULTI_FVM
+      TYPE(FUNC2D_STRUCT), DIMENSION(NFUNC2D), INTENT(IN) :: FUNC2D
+      my_real, POINTER, DIMENSION(:) :: THETA
+      CHARACTER*2 :: Str1, Str2
+C-----------------------------------------------
+      TYPE (GROUP_)  , DIMENSION(NGRBRIC) :: IGRBRIC
+      TYPE (GROUP_)  , DIMENSION(NGRQUAD) :: IGRQUAD
+      TYPE (GROUP_)  , DIMENSION(NGRSH3N) :: IGRSH3N
+C-----------------------------------------------
+C     L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      
+      END SUBROUTINE INI_INIMAP2D
+
+#endif

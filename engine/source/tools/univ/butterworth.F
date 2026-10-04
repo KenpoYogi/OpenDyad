@@ -1,0 +1,74 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    butterworth      ../engine/source/tools/univ/butterworth.F
+!||--- called by ------------------------------------------------------
+!||    e_period         ../engine/source/general_controls/damping/static.F
+!||    sensor_contact   ../engine/source/tools/sensor/sensor_contact.F
+!||    sensor_vel       ../engine/source/tools/sensor/sensor_vel.F
+!||====================================================================
+      SUBROUTINE BUTTERWORTH (DT,FREQ,X2,X1,X,FX2,FX1,FX)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real, INTENT (IN) :: 
+     .   DT,FREQ,X2,X1,X,FX2,FX1
+      my_real, INTENT (OUT) ::
+     .   FX
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      my_real
+     .   DT2,WD,WA,WA2,A0,A1,A2,B1,B2,C1
+C=======================================================================
+C    INPUT variables:
+C    DT   - actual timestep
+C    FREQ - filtering frequency
+C    X    - current unfiltered variable
+C    X1   - unfiltered variable (timestep -1)
+C    X2   - unfiltered variable (timestep -2)
+C    FX1  - filtered variable (timestep -1)
+C    FX2  - filtered variable (timestep -2)
+C-----------------------------------------------------------------------
+C    OUTPUT variables:
+C    FX - current filtered variable
+C=======================================================================
+      DT2  = DT / TWO                           
+      WD = SQR2*PI*FREQ*5.0/3.0  
+      WA = SIN(WD*DT2) / COS(WD*DT2)                     
+      WA2 = WA*WA                                      
+      C1 = ONE + SQR2*WA + WA2                           
+      A0 = WA2 / C1                                    
+      A1 = TWO * A0                                   
+      A2 = A0                                          
+      B1 = -TWO*(WA2 - ONE) / C1                       
+      B2 = (-ONE + SQR2*WA - WA2) / C1                   
+      FX = A0*X + A1*X1 + A2*X2 + B1*FX1 + B2*FX2           
+C---
+      RETURN
+      END SUBROUTINE BUTTERWORTH

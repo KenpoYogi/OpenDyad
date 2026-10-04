@@ -1,0 +1,176 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_surface_from_element   ../starter/source/model/sets/create_surface_from_element.F
+!||--- called by ------------------------------------------------------
+!||    create_box_clause             ../starter/source/model/sets/create_box_clause.F
+!||    hm_set                        ../starter/source/model/sets/hm_set.F
+!||    insert_clause_in_set          ../starter/source/model/sets/insert_clause_in_set.F
+!||--- calls      -----------------------------------------------------
+!||    surface_buffer                ../starter/source/model/sets/surface_buffer.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod                   ../starter/share/message_module/message_mod.F
+!||    surf_mod                      ../starter/share/modules1/surf_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_SURFACE_FROM_ELEMENT(
+     .                       IXS       ,IXS10    ,SH4TREE   ,SH3TREE   ,IXC       ,
+     .                       IXTG      ,KNOD2ELS ,NOD2ELS   ,KNOD2ELC  ,NOD2ELC   ,
+     .                       KNOD2ELTG ,NOD2ELTG ,IPARTC    ,IPARTG    ,IPARTS    ,
+     .                       IPART     ,CLAUSE   ,OPT_A     ,OPT_O     ,IXQ       ,
+     .                       KNOD2ELQ  ,NOD2ELQ  ,X         ,KEYSET    ,DELBUF    ,
+     .                       GO_IN_ARRAY,IPARTQ  ,OPT_E     )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE SETDEF_MOD
+      USE MESSAGE_MOD
+      USE SET_SCRATCH_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARFIELD
+      USE SURF_MOD , ONLY : EXT_SURF,ALL_SURF
+      use element_mod , only : nixs,nixq,nixc,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "com04_c.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: OPT_A,OPT_O,OPT_E
+      INTEGER, INTENT(IN) :: IXS(NIXS,*),IXS10(6,*),IXC(NIXC,*),IXTG(NIXTG,*),
+     .  KNOD2ELS(*),KNOD2ELC(*),KNOD2ELTG(*),NOD2ELS(*),NOD2ELC(*),
+     .  NOD2ELTG(*),IPARTS(*),IPARTC(*),IPARTG(*),SH4TREE(*),SH3TREE(*),
+     .  IPART(LIPART1,*),KNOD2ELQ(*),NOD2ELQ(*),IXQ(NIXQ,*),IPARTQ(NUMELQ)
+      my_real X(3,*)
+      CHARACTER(LEN=NCHARFIELD) :: KEYSET
+!
+      TYPE (SET_) :: CLAUSE
+      TYPE (SET_SCRATCH) ::  DELBUF
+      LOGICAL GO_IN_ARRAY
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IEXT, L, NIX, SZELMAX, IAD_SURF, NSEG, NFACES
+      INTEGER IWORK(70000)
+!
+      INTEGER, ALLOCATABLE, DIMENSION(:,:) :: ITRI
+      INTEGER, ALLOCATABLE, DIMENSION(:) :: INDEX, BUFTMPSURF
+C=======================================================================
+      DELBUF%SZ_SURF = 0
+      DELBUF%SZ_LINE = 0
+!
+!!      SZELMAX = MAX(CLAUSE%NB_SOLID,CLAUSE%NB_QUAD,CLAUSE%NB_SH4N,CLAUSE%NB_SH3N)
+      SZELMAX = CLAUSE%NB_SOLID + CLAUSE%NB_QUAD + CLAUSE%NB_SH4N + CLAUSE%NB_SH3N
+      IF (SZELMAX == 0) RETURN
+!
+      NFACES = 6  ! HEXA_8
+      IF (NUMELS > NUMELS8) NFACES = 16 ! TETRA_10
+!
+      call my_alloc(BUFTMPSURF, SZELMAX*NFACES*6, "BUFTMPSURF")
+      call my_alloc(ITRI, 5, SZELMAX*NFACES, "ITRI")
+      call my_alloc(INDEX, 2*SZELMAX*NFACES, "INDEX")
+!
+      IAD_SURF = 1
+!------------------
+      ! IEXT = 1 --> (OPT_E = 0 and OPT_A = 0) ! by default
+      ! IEXT = 2 --> (OPT_E = 1)  --> external surfaces only + only edges from shell external surfaces
+      ! IEXT = 3 --> (OPT_A = 1)  --> ALL (external + internal surfaces)
+      IEXT = EXT_SURF  ! by default ( = 1)
+      IF ( OPT_E == 1 ) IEXT = 2 ! external surfaces only + only edges from shell external surfaces
+      IF ( OPT_A == 1 ) IEXT = 3 ! all surfaces (internal + external)
+      CLAUSE%EXT_ALL = IEXT
+!------------------
+!----
+!     ! temporary surface segments got from elements
+      NSEG = 0
+      CALL SURFACE_BUFFER(
+     .             IXS       ,IXS10    ,IXC       ,SH4TREE   ,SH3TREE   ,
+     .             IXTG      ,KNOD2ELS ,NOD2ELS   ,KNOD2ELC  ,NOD2ELC   ,
+     .             KNOD2ELTG ,NOD2ELTG ,NSEG      ,IEXT      ,IPARTC    ,
+     .             IPARTS    ,IPARTG   ,CLAUSE    ,BUFTMPSURF,IAD_SURF  ,
+     .             OPT_O     ,IPART    ,KNOD2ELQ  ,NOD2ELQ   ,X         ,
+     .             IXQ       ,KEYSET   ,IPARTQ)
+!----
+!
+      NIX = 6
+!
+      DO  L=1,NSEG
+        INDEX(L)=L
+        ITRI(1,L) = BUFTMPSURF((L-1)*NIX+1)
+        ITRI(2,L) = BUFTMPSURF((L-1)*NIX+2)
+        ITRI(3,L) = BUFTMPSURF((L-1)*NIX+3)
+        ITRI(4,L) = BUFTMPSURF((L-1)*NIX+4)
+        ITRI(5,L) = BUFTMPSURF((L-1)*NIX+6)
+      ENDDO
+      IWORK(1:70000) = 0
+      CALL MY_ORDERS(0,IWORK,ITRI,INDEX,NSEG,5)
+!---
+!     clause surf allocation
+!---
+!------------------
+!
+! Decide whether the result is stored in an array or in the clause.
+! In certain cases it is useful to store in ARRAY.
+! Example : Clause with delete clause. Surfaces must be recreated & merged...
+! ----------------------------------------------------------------------------
+      IF (GO_IN_ARRAY .EQV. .TRUE.) THEN
+        DELBUF%SZ_SURF = NSEG
+        call my_alloc(DELBUF%SURF, NSEG, 6, "DELBUF%SURF")
+        DO L=1,NSEG
+          DELBUF%SURF(L,1) = BUFTMPSURF((INDEX(L)-1)*NIX+1)
+          DELBUF%SURF(L,2) = BUFTMPSURF((INDEX(L)-1)*NIX+2)
+          DELBUF%SURF(L,3) = BUFTMPSURF((INDEX(L)-1)*NIX+3)
+          DELBUF%SURF(L,4) = BUFTMPSURF((INDEX(L)-1)*NIX+4)
+          DELBUF%SURF(L,5) = BUFTMPSURF((INDEX(L)-1)*NIX+5)
+          DELBUF%SURF(L,6) = BUFTMPSURF((INDEX(L)-1)*NIX+6)
+        ENDDO
+      ELSE
+        IF (ALLOCATED(CLAUSE%SURF_NODES)) CALL MY_DEALLOC(CLAUSE%SURF_NODES)
+        IF (ALLOCATED(CLAUSE%SURF_ELTYP)) CALL MY_DEALLOC(CLAUSE%SURF_ELTYP)
+        IF (ALLOCATED(CLAUSE%SURF_ELEM))  CALL MY_DEALLOC(CLAUSE%SURF_ELEM)
+!
+        CLAUSE%NB_SURF_SEG = NSEG
+        CALL MY_ALLOC(CLAUSE%SURF_NODES,NSEG,4,"CLAUSE%SURF_NODES")
+        CALL MY_ALLOC(CLAUSE%SURF_ELTYP,NSEG,"CLAUSE%SURF_ELTYP")
+        CALL MY_ALLOC(CLAUSE%SURF_ELEM,NSEG,"CLAUSE%SURF_ELEM")
+!
+        DO L=1,NSEG
+          CLAUSE%SURF_NODES(L,1) = BUFTMPSURF((INDEX(L)-1)*NIX+1)
+          CLAUSE%SURF_NODES(L,2) = BUFTMPSURF((INDEX(L)-1)*NIX+2)
+          CLAUSE%SURF_NODES(L,3) = BUFTMPSURF((INDEX(L)-1)*NIX+3)
+          CLAUSE%SURF_NODES(L,4) = BUFTMPSURF((INDEX(L)-1)*NIX+4)
+          CLAUSE%SURF_ELTYP(L)   = BUFTMPSURF((INDEX(L)-1)*NIX+5)
+          CLAUSE%SURF_ELEM(L)    = BUFTMPSURF((INDEX(L)-1)*NIX+6)
+        ENDDO
+      ENDIF ! IF (GO_IN_ARRAY .EQV. .TRUE.)
+!------------------
+      IF(ALLOCATED(ITRI))       CALL MY_DEALLOC(ITRI)
+      IF(ALLOCATED(INDEX))      CALL MY_DEALLOC(INDEX)
+      IF(ALLOCATED(BUFTMPSURF)) CALL MY_DEALLOC(BUFTMPSURF)
+C-----------
+!-----------
+      RETURN
+      END

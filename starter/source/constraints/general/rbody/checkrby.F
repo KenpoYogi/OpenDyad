@@ -1,0 +1,237 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    checkrby               ../starter/source/constraints/general/rbody/checkrby.F
+!||--- called by ------------------------------------------------------
+!||    lectur                 ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                 ../starter/source/output/message/message.F
+!||    anodset                ../starter/source/output/analyse/analyse_node.c
+!||    fretitl2               ../starter/source/starter/freform.F
+!||    ifrbody_off            ../starter/source/constraints/general/rbody/ifrbody_off.F90
+!||    kinset                 ../starter/source/constraints/general/kinset.F
+!||--- uses       -----------------------------------------------------
+!||    ifrbody_off_mod        ../starter/source/constraints/general/rbody/ifrbody_off.F90
+!||    message_mod            ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE CHECKRBY(RBY     ,NPBY    ,LPBY    ,ITAB    ,
+     2                    IKINE   ,IDDLEVEL,NOM_OPT ,NUMSL   ,
+     3                    ROOTNAM ,ROOTLEN )
+C-------------------------------------
+C     LECTURE STRUCTURE RIGIDES IFORM8=2
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+      USE ifrbody_off_mod , ONLY : ifrbody_off
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   A n a l y s e   M o d u l e
+C-----------------------------------------------
+#include      "analyse_name.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr17_c.inc"
+#include      "scr03_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NPBY(NNPBY,*), LPBY(*), ITAB(*)
+      INTEGER IKINE(*), IDDLEVEL, NUMSL
+      my_real RBY(NRBY,*)
+      INTEGER NOM_OPT(LNOPT1,*)
+      INTEGER, INTENT(IN) :: ROOTLEN
+      CHARACTER(LEN=ROOTLEN) :: ROOTNAM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,K,KK,N,NSL,
+     .   ISPHER,IDIR,ID,ICDG,NSL_XTRA,
+     .   NRB,NUMSL_TMP,IFOUND,IM_ID(NRBYKIN),NM,IM,IACTI,NUMSL1
+      CHARACTER(LEN=NCHARTITLE)::TITR
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: TABSL
+      INTEGER, DIMENSION(:), ALLOCATABLE :: INDEX,IKINE1
+      INTEGER IWORK(70000),IOLD
+      INTEGER IFLAGI1,IFLAGDBL,IRB
+C-----------------------------------
+C   NPBY( 1,N) = main NODE
+C   NPBY( 2,N) = NUMBER OF SECND NODES
+C   NPBY( 3,N) = ICDG
+C   NPBY( 4,N) = ISENS gw117
+C   NPBY( 5,N) = FLAG SPHERICAL INERTIA
+C   NPBY( 6,N) = IDENTIFICATEUR
+C   NPBY( 7,N) = 1 ON(1) OFF(0)
+C   NPBY( 8,N) = ISU
+C   NPBY( 9,N) = NSKEW
+C   NPBY(10,N) = IEXPAMS (AMS - Hidden)
+C                 = 1 (default) : AMS expansion ; = 2 (Hidden) : No expansion
+C   NPBY(11,N) = IAD => secnd nodes LPBY(IAD+1:IAD+NSN)
+C   NPBY(12,N) = RBODY LEVEL
+C   NPBY(13,N) = RBODY IFLAG
+C   NPBY(14,N) = NUMBER OF XTRA_NODE with Iflag=1
+C   NPBY(15,N) = NUMBER OF XTRA_NODE with Iflag=2
+C   NPBY(16,N) = NUMBER OF XTRA_NODE with Iflag=3
+C=======================================================================
+      NUMSL1 = NPBY(2,NRBYKIN) + NPBY(11,NRBYKIN) ! effective number<allocated size due to reductions
+      IF (NUMSL1 > 0) THEN
+        call my_alloc(TABSL, 2, NUMSL1, "TABSL")
+        call my_alloc(INDEX, 3*NUMSL1, "INDEX")
+        TABSL=0
+        INDEX=0
+      END IF
+      N=0
+      K=0
+      KK=0
+      NRB = 0
+C
+      call my_alloc(IKINE1, 3*NUMNOD, "IKINE1")
+      DO I=1,3*NUMNOD
+        IKINE1(I) = 0
+      ENDDO
+C
+      DO N=1,NRBYKIN
+        NSL=NPBY(2,N)
+        NSL_XTRA=NPBY(14,N)+NPBY(15,N)+NPBY(16,N)
+        ISPHER = NPBY(5,N)
+        ICDG = NPBY(3,N)
+        ID=NOM_OPT(1,N)
+c
+        DO J=1,NSL-NSL_XTRA
+          CALL ANODSET(LPBY(J+K), CHECK_RB_S)
+          TABSL(1,J+KK)=ITAB(LPBY(J+K))
+          TABSL(2,J+KK)=N
+        ENDDO
+C
+        IF(IDDLEVEL==0.AND.NPBY(21,N)==0)THEN ! check for rbody by part later
+         IF(IKREM == 0)THEN
+          DO J=1,NSL
+           DO IDIR=1,6
+             CALL KINSET(8,ITAB(LPBY(J+K)),IKINE(LPBY(J+K)),IDIR,0,
+     .                   IKINE1(LPBY(J+K)))
+           ENDDO
+          ENDDO
+         ELSE
+          DO J=1,NSL
+           DO IDIR=1,6
+             CALL KINSET(128,ITAB(LPBY(J+K)),IKINE(LPBY(J+K)),IDIR,0,
+     .                   IKINE1(LPBY(J+K)))
+           ENDDO
+          ENDDO
+         ENDIF
+        ENDIF
+C
+        K=K+NSL
+        KK=KK+NSL-NSL_XTRA
+      ENDDO
+      NUMSL_TMP=KK
+C-------------------------------------
+C Report of secondary double nodes (excluding XTRA_NODES which are tested beforemain)
+C-------------------------------------
+      IF (NRBYKIN > 1) THEN
+      IWORK=0
+      IFLAGDBL=0
+      DO I=1,NUMSL_TMP
+        INDEX(I)=I
+      END DO
+      CALL MY_ORDERS(0,IWORK,TABSL,INDEX,NUMSL_TMP,2)
+      IF (NUMSL_TMP > 0) THEN
+        IOLD=-1
+        DO I=1,NUMSL_TMP
+        IF (TABSL(1,INDEX(I))==IOLD) THEN
+          IF (IFLAGDBL==0) THEN
+            IFLAGI1=I-1
+          END IF
+          IFLAGDBL=1
+        ELSE
+          IF (IFLAGDBL/=0) THEN
+            NM =0 
+            IACTI = 1
+            DO J=IFLAGI1,I-1
+              IRB=TABSL(2,INDEX(J))
+              IM = ITAB(NPBY(1,IRB))
+              NM = NM + 1
+              IM_ID(NM) = IM
+              IF (NPBY(7,IRB)==0) IACTI = 0 
+            END DO
+            call ifrbody_off(NM,IM_ID,ROOTNAM,ROOTLEN,NRBYKIN,IFOUND)
+            IF (IFOUND==0.AND.IACTI>0) THEN ! error out
+              DO J=IFLAGI1,I-1
+                IRB=TABSL(2,INDEX(J))
+                ID=NOM_OPT(1,IRB)
+                CALL FRETITL2(TITR,NOM_OPT(LNOPT1-LTITR+1,IRB),LTITR)
+                CALL ANCMSG(MSGID=3121,
+     .                      MSGTYPE=MSGERROR,
+     .                      ANMODE=ANINFO_BLIND_2,
+     .                      I1=ID,
+     .                      C1=TITR,
+     .                      PRMOD=MSG_CUMU)
+              END DO
+              CALL ANCMSG(MSGID=3121,
+     .                    MSGTYPE=MSGERROR,
+     .                    ANMODE=ANINFO_BLIND_1,
+     .                    I1=TABSL(1,INDEX(IFLAGI1)),
+     .                    PRMOD=MSG_PRINT)
+            ELSEIF (IFOUND==0.AND.IACTI==0) THEN ! warning out sensor effect will be treated later
+              DO J=IFLAGI1,I-1
+                IRB=TABSL(2,INDEX(J))
+                ID=NOM_OPT(1,IRB)
+                CALL FRETITL2(TITR,NOM_OPT(LNOPT1-LTITR+1,IRB),LTITR)
+                CALL ANCMSG(MSGID=1026,
+     .                      MSGTYPE=MSGWARNING,
+     .                      ANMODE=ANINFO_BLIND_2,
+     .                      I1=ID,
+     .                      C1=TITR,
+     .                      PRMOD=MSG_CUMU)
+              END DO
+              CALL ANCMSG(MSGID=1026,
+     .                    MSGTYPE=MSGWARNING,
+     .                    ANMODE=ANINFO_BLIND_1,
+     .                    I1=TABSL(1,INDEX(IFLAGI1)),
+     .                    PRMOD=MSG_PRINT)
+            END IF ! (IFOUND==0.AND.IACTI>0)
+            IFLAGDBL=0
+          END IF
+        END IF
+        IOLD=TABSL(1,INDEX(I))     
+        END DO
+      END IF
+      END IF
+C
+C------------------------------------
+      IF(ALLOCATED(TABSL))CALL MY_DEALLOC(TABSL)
+      IF(ALLOCATED(INDEX))CALL MY_DEALLOC(INDEX)
+      IF(ALLOCATED(IKINE1)) CALL MY_DEALLOC(IKINE1)
+C------------------------------------
+      RETURN
+C
+      END SUBROUTINE CHECKRBY
+C

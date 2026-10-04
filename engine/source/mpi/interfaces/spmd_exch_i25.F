@@ -1,0 +1,822 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+
+!||====================================================================
+!||    spmd_exch_i25   ../engine/source/mpi/interfaces/spmd_exch_i25.F
+!||--- called by ------------------------------------------------------
+!||    resol           ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg          ../engine/source/output/message/message.F
+!||    arret           ../engine/source/system/arret.F
+!||--- uses       -----------------------------------------------------
+!||    intbufdef_mod   ../common_source/modules/interfaces/intbufdef_mod.F90
+!||    message_mod     ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod    ../common_source/tools/memory/my_alloc.F90
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||    tri7box         ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE SPMD_EXCH_I25(IPARI    ,INTBUF_TAB     ,ITAB,
+     *                         IAD_ELEM ,FR_ELEM,INTLIST,NBINTC,
+     *                         IAD_I25  ,FR_I25  ,SFR_I25,FLAG)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE TRI7BOX
+      USE MESSAGE_MOD
+      USE INTBUFDEF_MOD 
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD, ONLY : spmd_irecv, spmd_isend, spmd_wait
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "assert.inc"
+#include      "param_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPARI(NPARI,*),IAD_ELEM(2,*),FR_ELEM(*),
+     *        ITAB(*),INTLIST(*),NBINTC,FLAG
+      INTEGER
+     *        IAD_I25(NBINTC+1,NSPMD), SFR_I25,FR_I25(SFR_I25)
+C    
+      TYPE(INTBUF_STRUCT_) INTBUF_TAB(*)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE)
+      INTEGER P,LENSD,LENRV,IERROR,
+     * SIZ,LOC_PROC,MSGTYP,IDEB(NINTER),IDB,
+     *        MSGOFF,MSGOFF2,MSGOFF3,MSGOFF4,MSGOFF5
+      INTEGER I, L, NB, NN, K, NOD, LEN, ALEN, ND, NIN, NTY, 
+     * NSN,SN,
+     * SURF,SURFR,SUBTRIAR,KLEAVE,KLEAVE_R,PROC_R,
+     *        NI,ILEN,RLEN,LI,LR
+
+      my_real
+     *    TIME_S_1, TIME_S_2, TIME_SR_1, TIME_SR_2
+      my_real ,
+     *   DIMENSION(:), ALLOCATABLE :: BBUFS, BBUFR,RRECBUF
+      my_real ,
+     *   DIMENSION(:,:), ALLOCATABLE :: RSENDBUF
+
+     
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: ISENDBUF
+      INTEGER, DIMENSION(:), ALLOCATABLE :: IRECBUF
+ 
+ 
+      INTEGER, DIMENSION(:), ALLOCATABLE:: REQ_SI,REQ_RI,REQ_S,IADS
+      INTEGER, DIMENSION(:), ALLOCATABLE:: REQ_S2,REQ_R,REQ_R2,IADR
+
+      DATA MSGOFF/156/
+      DATA MSGOFF2/157/
+      DATA MSGOFF3/158/
+      DATA MSGOFF4/159/
+      DATA MSGOFF5/160/
+C-----------------------------------------------
+      SAVE IADS,IADR,BBUFS,BBUFR,REQ_S,REQ_S2,
+     *                    REQ_SI,REQ_R,REQ_R2,
+     *                    RRECBUF,IRECBUF,RSENDBUF,ISENDBUF,
+     *                    ILEN,RLEN,LEN,LENSD,LENRV 
+C-----------------------------------------------
+      LOC_PROC = ISPMD+1
+C ----------------------------------      
+C Iflag = 1 part 1 - Send   
+C ----------------------------------      
+      IF(FLAG==1)THEN
+C      WRITE(6,*) __FILE__,__LINE__ ; CALL FLUSH(6)
+       ASSERT(.NOT.(ALLOCATED(REQ_SI)))
+       ASSERT(.NOT.(ALLOCATED(REQ_RI)))
+       ASSERT(.NOT.(ALLOCATED(REQ_S)))
+       ASSERT(.NOT.(ALLOCATED(REQ_S2)))
+       ASSERT(.NOT.(ALLOCATED(REQ_R)))
+       ASSERT(.NOT.(ALLOCATED(REQ_R2)))
+       ASSERT(.NOT.(ALLOCATED(IADR)))
+       ASSERT(.NOT.(ALLOCATED(IADS)))
+
+       call my_alloc(REQ_SI, NSPMD, "REQ_SI")
+       call my_alloc(REQ_RI, NSPMD, "REQ_RI")
+       call my_alloc(REQ_S, NSPMD, "REQ_S")
+       call my_alloc(REQ_S2, NSPMD, "REQ_S2")
+       call my_alloc(REQ_R, NSPMD, "REQ_R")
+       call my_alloc(REQ_R2, NSPMD, "REQ_R2")
+       call my_alloc(IADR, NSPMD+1, "IADR")
+       call my_alloc(IADS, NSPMD+1, "IADS")
+
+C--------------------------------------------------------
+
+C Comm on the type 25 interface
+C First part, we bring back to the proc that has the secondary nodes the values of IRTLM_FI + TIME_SFI & treatments
+C Second part, we process them on the proc that has the secondary nodes the values
+C Third part, we send back to the remote procs the globalized values
+
+C--------------------------------------------------------
+C First part, we bring back to the proc that has the secondary nodes the values of IRTLM_FI + TIME_SFI
+C--------------------------------------------------------
+
+      LOC_PROC = ISPMD+1
+      IADS(1:NSPMD+1) = 0
+      IADR(1:NSPMD+1) = 0
+      LENSD = 0
+      LENRV = 0
+
+      ALEN=6
+
+
+C counting buffer sizes for reception and sending
+      DO P=1,NSPMD
+         IADR(P)=LENRV+1
+         DO NI=1,NBINTC
+           NIN = INTLIST(NI)
+           NTY=IPARI(7,NIN)
+           IF(NTY==25)THEN
+              LENSD = LENSD + NSNFI(NIN)%P(P)*ALEN
+              LENRV = LENRV + NSNSI(NIN)%P(P)*ALEN
+           ENDIF
+         ENDDO
+      ENDDO
+      IADR(NSPMD+1)=LENRV+1
+
+C preparation of send
+      IF(LENSD>0)THEN
+          call my_alloc(BBUFS, LENSD, "BBUFS", stat=IERROR)
+          IF(IERROR/=0) THEN
+            CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+            CALL ARRET(2)
+          ENDIF
+      ENDIF
+
+C ---------------------------------------------
+C preparation of receive
+      IF(LENRV>0)THEN
+          call my_alloc(BBUFR, LENRV, "BBUFR", stat=IERROR)
+          IF(IERROR/=0) THEN
+            CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+            CALL ARRET(2)
+          ENDIF
+      ENDIF
+
+      DO P=1, NSPMD
+          SIZ=IADR(P+1)-IADR(P)
+          IF (SIZ > 0) THEN
+            MSGTYP = MSGOFF2
+            CALL spmd_irecv(BBUFR(IADR(P):IADR(P)+SIZ-1),SIZ,
+     *                      IT_SPMD(P),MSGTYP,REQ_R(P))
+          ENDIF
+      ENDDO
+
+C ---------------------------------------------
+C Send
+      L=1
+      IDEB=0
+      DO P=1, NSPMD
+       IADS(P)=L
+       IF (P/= LOC_PROC) THEN
+         DO NI=1,NBINTC
+           NIN = INTLIST(NI)
+           NTY   =IPARI(7,NIN)
+           IF(NTY==25) THEN
+             NB = NSNFI(NIN)%P(P)
+             DO NN=1,NB
+               BBUFS(L)   =IRTLM_FI(NIN)%P(1,NN+IDEB(NIN))
+               BBUFS(L+1) =IRTLM_FI(NIN)%P(2,NN+IDEB(NIN))
+               BBUFS(L+2) =IRTLM_FI(NIN)%P(3,NN+IDEB(NIN))
+               BBUFS(L+3) =IRTLM_FI(NIN)%P(4,NN+IDEB(NIN))
+               BBUFS(L+4) =TIME_SFI(NIN)%P(2*(NN+IDEB(NIN)-1)+1)
+               BBUFS(L+5) =TIME_SFI(NIN)%P(2*(NN+IDEB(NIN)-1)+2)
+               L=L+ALEN
+             ENDDO
+             IDEB(NIN)=IDEB(NIN)+NB
+           ENDIF
+         ENDDO  ! DO NIN=1,NINTER
+         SIZ = L-IADS(P)
+         IF(SIZ>0)THEN
+              MSGTYP = MSGOFF2
+              CALL spmd_isend(
+     .          BBUFS(IADS(P):IADS(P)+SIZ-1),SIZ,IT_SPMD(P),MSGTYP,
+     .          REQ_SI(P))
+         ENDIF
+       ENDIF ! ENDIF P/= LOC_PROC
+      ENDDO  ! DO P=1, NSPMD
+
+
+      RETURN
+      ENDIF
+     
+C----------------------------------      
+C IFLAG=2 partie2 - Recieve      
+C ----------------------------------      
+      IF(FLAG==2)THEN
+    
+      ALEN=6
+
+C Recieve
+      L=0
+      IDEB = 0
+
+      DO P=1, NSPMD
+          L=0
+          SIZ=IADR(P+1)-IADR(P)
+          IF (SIZ > 0) THEN
+            MSGTYP = MSGOFF2
+
+C WAIT
+           CALL spmd_wait(REQ_R(P),STATUS)
+
+           DO NI=1,NBINTC
+             NIN = INTLIST(NI)
+             NTY   =IPARI(7,NIN)
+
+             IF(NTY==25)THEN
+
+               NB = NSNSI(NIN)%P(P)
+               IF (NB > 0)THEN
+C
+                 DO K=1,NB
+                   ND = NSVSI(NIN)%P(IDEB(NIN)+K)
+
+C Merge IRTLM & TIME_S
+                   SN = INTBUF_TAB(NIN)%NSV(ND)
+                   TIME_S_1  = INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1)
+                   TIME_S_2  = INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2)
+                   SURF      = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)
+                   KLEAVE    = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)
+                   SURFR     = NINT(BBUFR(IADR(P)+L))
+                   SUBTRIAR  = NINT(BBUFR(IADR(P)+L+1))
+                   KLEAVE_R  = NINT(BBUFR(IADR(P)+L+2))
+                   PROC_R    = NINT(BBUFR(IADR(P)+L+3))
+                   TIME_SR_1 = BBUFR(IADR(P)+L+4)
+                   TIME_SR_2 = BBUFR(IADR(P)+L+5)
+
+                   IF(KLEAVE == -1)THEN
+
+                   ELSEIF(KLEAVE_R == -1)THEN
+C
+C                    IRTLM has been reset after main segment deletion (Idel)
+                     INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = 0
+                     INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = 0
+                     INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = -1
+                     INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+
+                   ELSEIF (SURF > 0)THEN
+
+                     IF(TIME_S_1 == EP20)THEN
+
+                        IF(SURFR > 0 .AND. TIME_SR_1 /= EP20)THEN
+
+c                         IF( TIME_SR_2 == EP20 .OR. 
+c     .                      (TIME_SR_2 /= EP20 .AND. TIME_S_2 == TIME_SR_2 .AND. SURFR > SURF))THEN
+c                              INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+c                              INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+c                              INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+c                              INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+c                              INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+c                              INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+c                          ELSEIF(ABS(TIME_S_2) > ABS(TIME_SR_2))THEN
+                            INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                            INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                            INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                            INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+                            INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+                            INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+c                          END IF 
+
+c useless
+c                       elseif(SURFR > 0 .AND. TIME_SR_1 == EP20 .AND. KLEAVE_R > 0)THEN
+c
+c                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+c                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+c                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+c                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+c                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+c                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+c
+                        END IF
+
+                     ELSE ! TIME_S_1 /= EP20
+
+                       IF(SURFR > 0 .AND. TIME_SR_1 /= EP20 .AND. TIME_SR_2 /= EP20)THEN
+
+                        IF(TIME_S_2 == TIME_SR_2)THEN
+                           IF(SURFR > SURF)THEN
+                             INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                             INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                             INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                             INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+C                            INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1 == TIME_S_1
+C                            INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2 == TIME_S_2
+                           END IF
+                         ELSEIF(TIME_S_2 > TIME_SR_2)THEN
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+C                          INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1 == TIME_S_1
+                           INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+                         END IF 
+
+                       END IF
+                     END IF
+                   ELSE ! SURF <= 0
+                     IF(SURFR < 0)THEN
+                       IF(TIME_S_1 == TIME_SR_1)THEN
+                         IF(-SURFR > -SURF)THEN
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+C                          INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1 == TIME_S_1
+                         END IF
+                       ELSEIF(TIME_SR_1 > TIME_S_1)THEN
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+                       END IF
+                     END IF
+                   END IF
+C
+                   L=L+ALEN
+c         if(itab(sn)==29376)print *,'recoit nsnsi apr',loc_proc,p,INTBUF_TAB(NIN)%IRTLM(4*ND-3:4*ND)
+
+                  ENDDO
+               ENDIF
+               IDEB(NIN)=IDEB(NIN)+NB
+             ENDIF ! ity==25
+           ENDDO
+          ENDIF !  IF (NB > 0)
+          L=L+SIZ
+      ENDDO        ! DO P=1, NSPMD
+
+C end of send
+      DO P = 1, NSPMD
+          IF (P==NSPMD)THEN
+             SIZ=LENSD-IADS(P)
+          ELSE
+             SIZ=IADS(P+1)-IADS(P)
+          ENDIF
+          IF(SIZ>0) THEN
+            CALL spmd_wait(REQ_SI(P),STATUS)
+          ENDIF
+      ENDDO
+
+      IF (ALLOCATED(BBUFS)) call my_dealloc(BBUFS)
+      IF (ALLOCATED(BBUFR)) call my_dealloc(BBUFR)
+C-----------------------------------------------------------
+C Second part - exchanges on the secondary boundary nodes
+C               for all interface type 25.
+C-----------------------------------------------------------
+      IADS(1:NSPMD+1)=0
+
+      DO I=1,NSPMD
+        ASSERT(IAD_I25(1,I) >= 0)
+        IADS(I)=IAD_I25(1,I)
+      ENDDO
+      IADS(NSPMD+1)=SFR_I25+1
+
+c     print *,'iads',ispmd+1,iads(1),iads(2),iads(3)
+C preparation of send
+      ILEN=5
+      RLEN=2
+      ASSERT(SFR_I25 >= 0) 
+      call my_alloc(ISENDBUF, ILEN, SFR_I25, "ISENDBUF")
+      call my_alloc(IRECBUF, ILEN*SFR_I25, "IRECBUF")
+      call my_alloc(RSENDBUF, RLEN, SFR_I25, "RSENDBUF")
+      call my_alloc(RRECBUF, RLEN*SFR_I25, "RRECBUF")
+
+C implementation of the IRECIEVE
+      DO P=1,NSPMD
+        SIZ = IADS(P+1)-IADS(P)
+        ASSERT(SIZ >= 0)
+        IF(SIZ/=0)THEN
+          LI = (IADS(P)-1)*ILEN+1
+          LR = (IADS(P)-1)*RLEN+1
+          MSGTYP = MSGOFF3
+          LEN = SIZ*ILEN
+c           print *,'recept attend entier',ispmd+1,p,len
+          CALL spmd_irecv(
+     S      IRECBUF(LI:LI+LEN-1),LEN,IT_SPMD(P),MSGTYP,
+     G      REQ_R(P))
+
+          MSGTYP = MSGOFF4 
+          LEN = SIZ*RLEN
+c           print *,'recept attend reel',ispmd+1,p,len
+          CALL spmd_irecv(
+     S      RRECBUF(LR:LR+LEN-1),LEN,IT_SPMD(P),MSGTYP,
+     G      REQ_R2(P))
+
+        ENDIF
+       ENDDO
+
+       NB = 1
+       DO P = 1, NSPMD
+          DO NI=1,NBINTC
+             NIN=INTLIST(NI)
+             NTY   = IPARI(7,NIN)
+             NSN   = IPARI(5,NIN)
+             IF(NTY==25) THEN
+
+               DO I=IAD_I25(NI,P),IAD_I25(NI+1,P)-1
+                
+                 ND = FR_I25(I)
+                 ASSERT(ND > 0)
+                 ASSERT(ND <= NSN)
+                 SN = INTBUF_TAB(NIN)%NSV(ND)
+
+                 ISENDBUF(1,NB) = ITAB(SN)
+                 ISENDBUF(2,NB) = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)
+                 ISENDBUF(3,NB) = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)
+                 ISENDBUF(4,NB) = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)
+                 ISENDBUF(5,NB) = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)
+                 RSENDBUF(1,NB) = INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1)
+                 RSENDBUF(2,NB) = INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2)
+                 NB=NB+1
+               ENDDO
+             ENDIF
+          ENDDO  ! DO NI=1,NBINTC
+       ENDDO     ! DO P=1,NSPMD
+
+C--------------------------------------------------------------------
+C   echange messages
+C
+      DO P=1,NSPMD
+         SIZ = IADS(P+1) - IADS(P)
+         IF (SIZ >0)THEN
+           MSGTYP = MSGOFF3
+           L = IADS(P)
+           CALL spmd_isend(
+     S        ISENDBUF(1:ILEN,L:L+SIZ-1),SIZ*ILEN,IT_SPMD(P),MSGTYP,
+     G        REQ_S(P))
+c           print *,'envoi entier',ispmd+1,p,siz*2
+     
+           MSGTYP = MSGOFF4
+           CALL spmd_isend(
+     S        RSENDBUF(1:RLEN,L:L+SIZ-1),SIZ*RLEN,IT_SPMD(P),MSGTYP,
+     G        REQ_S2(P))
+c           print *,'envoi reel',ispmd+1,p,siz*8
+         ENDIF   ! IF (SIZ >0)
+      ENDDO      ! DO P=1,NSPMD
+C--------------------------------------------------------------------
+
+      RETURN
+      ENDIF
+      
+C ----------------------------------      
+C IFLAG=3 partie3 - Recieve 
+C ----------------------------------      
+      IF(FLAG==3)THEN
+      
+      ILEN = 5
+      RLEN = 2
+C Reception
+      DO P=1,NSPMD
+        SIZ = IADS(P+1)-IADS(P)
+        IF(SIZ/=0)THEN
+          IDB = IADS(P)
+          CALL spmd_wait(REQ_R (P),STATUS)
+c           print *,'recept recu entiers',ispmd+1,p
+
+          CALL spmd_wait(REQ_R2(P),STATUS)
+c           print *,'recept recu reels',ispmd+1,p
+
+C Treatments
+        
+         DO NI=1,NBINTC
+           NIN = INTLIST(NI)
+            
+           NTY   = IPARI(7,NIN)
+           NSN   = IPARI(5,NIN)
+           IF (NTY == 25)THEN
+
+             DO K=IAD_I25(NI,P),IAD_I25(NI+1,P)-1 
+                ND = FR_I25(K)
+                SN = INTBUF_TAB(NIN)%NSV(ND)
+
+                TIME_S_1  = INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1)
+                TIME_S_2  = INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2)
+                SURF      = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)
+                KLEAVE    = INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)
+                SURFR     = IRECBUF((IDB-1)*ILEN+2)
+                SUBTRIAR  = IRECBUF((IDB-1)*ILEN+3)
+                KLEAVE_R  = IRECBUF((IDB-1)*ILEN+4)
+                PROC_R    = IRECBUF((IDB-1)*ILEN+5)
+                TIME_SR_1 = RRECBUF((IDB-1)*RLEN+1)
+                TIME_SR_2 = RRECBUF((IDB-1)*RLEN+2)
+c        if(itab(sn)==29376)print *,'recoit avant',loc_proc,p,INTBUF_TAB(NIN)%IRTLM(4*ND-3:4*ND)
+
+                IF(KLEAVE == -1)THEN
+
+                ELSEIF(KLEAVE_R == -1)THEN
+C
+C                 IRTLM has been reset after main segment deletion (Idel)
+                  INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = 0
+                  INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = 0
+                  INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = -1
+                  INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+
+                ELSEIF (SURF > 0)THEN
+
+                  IF(TIME_S_1 == EP20)THEN
+
+                     IF(SURFR > 0 .AND. TIME_SR_1 /= EP20)THEN
+
+c                      IF( TIME_SR_2 == EP20 .OR. 
+c     .                   (TIME_SR_2 /= EP20 .AND. TIME_S_2 == TIME_SR_2 .AND. SURFR > SURF))THEN
+c                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+c                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+c                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+c                           INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+c                           INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+c                           INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+c                       ELSEIF(ABS(TIME_S_2) > ABS(TIME_SR_2))THEN
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                         INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+c                       END IF 
+
+
+c useless
+c                     elseif(SURFR > 0 .AND. TIME_SR_1 == EP20 .AND. KLEAVE_R > 0)THEN
+cC
+cC the node has exited the contact where it was previously on the remote proc
+cC                                                                             ------------------
+c                       INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+c                       INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+c                       INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+c                       INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+c                       INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+c                       INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+c
+                     END IF
+
+                  ELSE ! TIME_S_1 /= EP20
+
+                    IF(SURFR > 0 .AND. TIME_SR_1 /= EP20 .AND. TIME_SR_2 /= EP20)THEN
+
+                      IF(TIME_S_2 == TIME_SR_2)THEN
+                        IF(SURFR > SURF)THEN
+                          INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                          INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                          INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                          INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+C                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1 == TIME_S_1
+C                         INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2 == TIME_S_2
+                        END IF
+                      ELSEIF(ABS(TIME_S_2) > ABS(TIME_SR_2))THEN
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+C                       INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1 == TIME_S_1
+                        INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2) = TIME_SR_2
+                      END IF 
+                    END IF
+
+                  END IF
+
+                ELSE ! SURF <= 0
+
+                  IF(SURFR < 0)THEN
+                    IF(TIME_S_1 == TIME_SR_1)THEN
+                      IF(-SURFR > -SURF)THEN
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                        INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+C                       INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1 == TIME_S_1
+                      END IF
+                    ELSEIF(TIME_SR_1 > TIME_S_1)THEN
+                      INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)  = SURFR
+                      INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)  = SUBTRIAR
+                      INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)  = KLEAVE_R
+                      INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)  = PROC_R
+                      INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1) = TIME_SR_1
+                    END IF
+                  END IF
+
+                END IF
+C
+c        if(itab(sn)==29376)print *,'recoit apres',loc_proc,p,INTBUF_TAB(NIN)%IRTLM(4*ND-3:4*ND)
+     
+               IDB=IDB+1
+             ENDDO        ! K=,IAD_I25(NI,P),IAD_I25(NI+1,P)-1 
+           ENDIF          ! IF (NTY == 25)THEN
+         ENDDO            ! DO NI=1,NBINTC
+        ENDIF             ! IF(SIZ/=0)THEN
+      ENDDO               ! DO P=1,NSPMD
+
+C Fin send
+      DO P=1,NSPMD
+        SIZ = IADS(P+1)-IADS(P)
+        IF(SIZ/=0)THEN
+          CALL spmd_wait(REQ_S(P),STATUS)
+          CALL spmd_wait(REQ_S2(P),STATUS)
+        ENDIF
+      ENDDO
+
+      IF(ALLOCATED(ISENDBUF)) call my_dealloc(ISENDBUF)
+      IF(ALLOCATED(IRECBUF)) call my_dealloc(IRECBUF)
+      IF(ALLOCATED(RSENDBUF)) call my_dealloc(RSENDBUF)
+      IF(ALLOCATED(RRECBUF)) call my_dealloc(RRECBUF)
+
+C ------------------------------------------------------------------
+C Third part we send back the globalized values to the remote procs
+C ------------------------------------------------------------------
+      LOC_PROC = ISPMD+1
+      IADS = 0
+      IADR = 0
+      LENSD = 0
+      LENRV = 0
+
+      ALEN=6
+C counting buffer sizes for reception and sending
+      DO P=1,NSPMD
+         IADR(P)=LENRV+1
+         DO NI=1,NBINTC
+           NIN = INTLIST(NI)
+           NTY=IPARI(7,NIN)
+           IF(NTY==25) THEN
+              LENSD = LENSD + NSNSI(NIN)%P(P)*ALEN
+              LENRV = LENRV + NSNFI(NIN)%P(P)*ALEN
+           ENDIF
+         ENDDO
+      ENDDO
+      IADR(NSPMD+1)=LENRV+1
+
+      IF(LENSD>0)THEN
+          call my_alloc(BBUFS, LENSD, "BBUFS", stat=IERROR)
+          IF(IERROR/=0) THEN
+            CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+            CALL ARRET(2)
+          ENDIF
+      ENDIF
+
+C preparation of receive
+      IF(LENRV>0)THEN
+          call my_alloc(BBUFR, LENRV, "BBUFR", stat=IERROR)
+          IF(IERROR/=0) THEN
+            CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+            CALL ARRET(2)
+          ENDIF
+      ENDIF
+      
+      
+      DO P=1, NSPMD
+          SIZ=IADR(P+1)-IADR(P)
+          IF (SIZ > 0) THEN
+            MSGTYP = MSGOFF5
+            CALL spmd_irecv(BBUFR(IADR(P):IADR(P)+SIZ-1),SIZ,
+     *                      IT_SPMD(P),MSGTYP,REQ_R(P))
+         ENDIF
+      ENDDO
+      
+C Send
+      L=1
+      IDEB = 0
+      DO P=1, NSPMD
+       IADS(P)=L
+       IF (P/= LOC_PROC) THEN
+         DO NI=1,NBINTC
+           NIN = INTLIST(NI)
+           NTY   =IPARI(7,NIN)
+           IF(NTY==25)THEN
+               NB = NSNSI(NIN)%P(P)
+C preparation of send
+               DO NN=1,NB
+                 ND = NSVSI(NIN)%P(IDEB(NIN)+NN)
+                 NOD=INTBUF_TAB(NIN)%NSV(ND)
+c        if(itab(sn)==29376)print *,'broadcast nsnsi',loc_proc,p,INTBUF_TAB(NIN)%IRTLM(4*ND-3:4*ND)
+                 BBUFS(L  )=INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+1)
+                 BBUFS(L+1)=INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+2)
+                 BBUFS(L+2)=INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+3)
+                 BBUFS(L+3)=INTBUF_TAB(NIN)%IRTLM(4*(ND-1)+4)
+                 BBUFS(L+4)=INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+1)
+                 BBUFS(L+5)=INTBUF_TAB(NIN)%TIME_S(2*(ND-1)+2)
+                 L = L + ALEN
+               ENDDO
+               IDEB(NIN)=IDEB(NIN)+NB
+           ENDIF
+         ENDDO
+
+         SIZ = L-IADS(P)
+         IF(SIZ>0)THEN
+              MSGTYP = MSGOFF5
+C Send
+              CALL spmd_isend(
+     .          BBUFS(IADS(P):IADS(P)+SIZ-1),SIZ,IT_SPMD(P),MSGTYP,
+     .          REQ_SI(P))
+         ENDIF
+       ENDIF
+      ENDDO
+      IADS(NSPMD+1)=L
+
+      RETURN
+      ENDIF
+      
+C ----------------------------------      
+C IFLAG=4 partie4 - Recieve 
+C ----------------------------------      
+      IF(FLAG==4)THEN
+     
+      ALEN=6
+C Recieve
+      L=0
+      IDEB = 0
+
+      DO P=1, NSPMD
+          L=0
+          SIZ=IADR(P+1)-IADR(P)
+          IF (SIZ > 0) THEN
+           
+           CALL spmd_wait(REQ_R(P),STATUS)
+           DO NI=1,NBINTC
+             NIN=INTLIST(NI)
+             NTY   =IPARI(7,NIN)
+
+             IF(NTY==25) THEN
+               NB = NSNFI(NIN)%P(P)
+
+               IF (NB > 0)THEN
+                 DO K=1,NB
+c        if(itafi(nin)%p(ideb(nin)+k)==29376)print *,'recoit nsnfi',loc_proc,p,
+c     .                       BBUFR(IADR(P)+L:IADR(P)+L+3)
+                   IRTLM_FI(NIN)%P(1,IDEB(NIN)+K)=BBUFR(IADR(P)+L)
+                   IRTLM_FI(NIN)%P(2,IDEB(NIN)+K)=BBUFR(IADR(P)+L+1)
+                   IRTLM_FI(NIN)%P(3,IDEB(NIN)+K)=BBUFR(IADR(P)+L+2)
+                   IRTLM_FI(NIN)%P(4,IDEB(NIN)+K)=BBUFR(IADR(P)+L+3)
+                   TIME_SFI(NIN)%P(2*(IDEB(NIN)+K-1)+1) =BBUFR(IADR(P)+L+4)
+                   TIME_SFI(NIN)%P(2*(IDEB(NIN)+K-1)+2) =BBUFR(IADR(P)+L+5)
+                   L=L+ALEN
+                 ENDDO
+               ENDIF
+               IDEB(NIN)=IDEB(NIN)+NB
+             ENDIF
+           ENDDO
+          ENDIF
+      ENDDO
+
+C end of send
+      DO P = 1, NSPMD
+          IF (P==NSPMD)THEN
+             SIZ=LENSD-IADS(P)
+          ELSE
+             SIZ=IADS(P+1)-IADS(P)
+          ENDIF
+          IF(SIZ>0) THEN
+            CALL spmd_wait(REQ_SI(P),STATUS)
+          ENDIF
+      ENDDO
+
+
+C     WRITE(6,*) __FILE__,__LINE__
+      IF(ALLOCATED(BBUFS)) call my_dealloc(BBUFS)
+      IF(ALLOCATED(BBUFR)) call my_dealloc(BBUFR)
+      IF(ALLOCATED( REQ_SI )) call my_dealloc(REQ_SI)
+      IF(ALLOCATED( REQ_RI )) call my_dealloc(REQ_RI)
+      IF(ALLOCATED( REQ_S  )) call my_dealloc(REQ_S)
+      IF(ALLOCATED( REQ_S2 )) call my_dealloc(REQ_S2)
+      IF(ALLOCATED( REQ_R  )) call my_dealloc(REQ_R)
+      IF(ALLOCATED( REQ_R2 )) call my_dealloc(REQ_R2)
+      IF(ALLOCATED( IADR   )) call my_dealloc(IADR)
+      IF(ALLOCATED( IADS   )) call my_dealloc(IADS)
+
+      ENDIF    ! fi iflag=4
+#endif
+      RETURN
+      END

@@ -1,0 +1,1843 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    wrrestp                      ../engine/source/output/restart/wrrestp.F
+!||--- called by ------------------------------------------------------
+!||    resol                        ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    alelag_wrest                 ../engine/source/output/restart/wrrest.F
+!||    checksum_restart_write       ../common_source/modules/output/checksum_mod.F90
+!||    close_c                      ../common_source/tools/input_output/write_routines.c
+!||    compress_i_nnz               ../common_source/comm/compress_nnz.F
+!||    compress_r_nnz               ../common_source/comm/compress_nnz.F
+!||    convwrest                    ../engine/source/output/restart/wrrest.F
+!||    crkxfem_wrest                ../engine/source/output/restart/wrrest.F
+!||    crkxfem_wrestanim            ../engine/source/output/restart/wrrest.F
+!||    cur_fil_c                    ../common_source/tools/input_output/write_routines.c
+!||    drape_wrest                  ../engine/source/output/restart/wrrest.F
+!||    eigwrest                     ../engine/source/output/restart/wrrest.F
+!||    file_size                    ../common_source/tools/input_output/write_routines.c
+!||    fvwrest                      ../engine/source/output/restart/wrrest.F
+!||    fxbwrest                     ../engine/source/output/restart/wrrest.F
+!||    fxfluxwrest                  ../engine/source/constraints/thermic/fxfluxwrest.F
+!||    fxtempwrest                  ../engine/source/output/restart/wrrest.F
+!||    imp_trans                    ../engine/source/output/restart/wrrest.F
+!||    impwrest                     ../engine/source/output/restart/wrrest.F
+!||    intfric_wresti               ../common_source/modules/interfaces/intbuf_fric_mod.F90
+!||    intfric_wrestr               ../common_source/modules/interfaces/intbuf_fric_mod.F90
+!||    intstamp_wresti              ../engine/share/modules/intstamp_mod.F
+!||    intstamp_wrestr              ../engine/share/modules/intstamp_mod.F
+!||    nfwrest                      ../engine/source/output/restart/wrrest.F
+!||    nitschewrest                 ../engine/source/output/restart/wrrest.F
+!||    open_c                       ../common_source/tools/input_output/write_routines.c
+!||    pblast_write_engine          ../common_source/modules/loads/pblast_mod.F90
+!||    ply_info_wrest               ../engine/source/output/restart/wrrest.F
+!||    plyxfem_wravuply             ../engine/source/output/restart/wrrest.F
+!||    plyxfem_wrest                ../engine/source/output/restart/wrrest.F
+!||    plyxfem_wrestanim            ../engine/source/output/restart/wrrest.F
+!||    python_serialize             ../common_source/modules/python_mod.F90
+!||    radiawrest                   ../engine/source/output/restart/wrrest.F
+!||    rigmatwrest                  ../engine/source/output/restart/wrrest.F
+!||    rthbufwrest                  ../engine/source/output/restart/wrrest.F
+!||    spmd_glob_dmin9              ../engine/source/mpi/fluid/spmd_cfd.F
+!||    spmd_glob_dsum9              ../engine/source/mpi/interfaces/spmd_th.F
+!||    spmd_savefi                  ../engine/source/mpi/interfaces/spmd_i7tool.F
+!||    spmd_savesph                 ../engine/source/mpi/sph/spmd_sptool.F
+!||    stack_wrest                  ../engine/source/output/restart/wrrest.F
+!||    table_wresti                 ../engine/source/tools/curve/table_tools.F
+!||    table_wrestr                 ../engine/source/tools/curve/table_tools.F
+!||    thcwrest                     ../engine/source/output/restart/wrrest.F
+!||    thsurf_write_restart         ../common_source/modules/interfaces/th_surf_mod.F
+!||    userwi_write                 ../engine/source/user_interface/userwindow_interface_routines.F
+!||    w_bufbric_22                 ../engine/source/interfaces/int22/w_bufbric_22.F
+!||    w_cluster                    ../engine/source/output/cluster/w_cluster.F
+!||    w_elbuf_str                  ../engine/source/elements/elbuf/w_elbuf_str.F
+!||    w_failwave                   ../engine/source/output/restart/w_failwave.F
+!||    w_group_str                  ../engine/source/output/restart/w_group_str.F
+!||    w_line_str                   ../engine/source/output/restart/w_line_str.F
+!||    w_subset_str                 ../engine/source/output/restart/w_subset_str.F
+!||    w_surf_str                   ../engine/source/output/restart/w_surf_str.F
+!||    wrcomi                       ../engine/source/output/restart/wrcomm.F
+!||    wrcomr                       ../engine/source/output/restart/wrcomm.F
+!||    write_ale_grid               ../common_source/output/restart/write_ale_grid.F90
+!||    write_bcs_nrf                ../common_source/output/restart/write_bcs_nrf.F90
+!||    write_bcs_nrf_cfl            ../common_source/output/restart/write_bcs_nrf_cfl.F90
+!||    write_bcs_wall               ../common_source/output/restart/write_bcs_wall.F90
+!||    write_c_c                    ../common_source/tools/input_output/write_routines.c
+!||    write_db                     ../common_source/tools/input_output/write_db.F
+!||    write_dpdb                   ../common_source/tools/input_output/write_db.F
+!||    write_elgroup_param          ../engine/source/output/restart/write_elgroup_param.F
+!||    write_i_c                    ../common_source/tools/input_output/write_routines.c
+!||    write_inivel                 ../engine/source/output/restart/write_inivel.F90
+!||    write_intbuf                 ../engine/source/output/restart/write_intbuf.F
+!||    write_joint                  ../engine/source/output/restart/write_joint.F
+!||    write_matparam               ../engine/source/output/restart/write_matparam.F
+!||    write_nloc_struct            ../engine/source/output/restart/write_nloc_struct.F
+!||    write_pcyl                   ../engine/source/output/restart/write_pcyl.F
+!||    write_rrbe3pen               ../engine/source/output/restart/restart_rbe3pen.F90
+!||    write_rrwallpen              ../engine/source/output/restart/restart_rwallpen.F90
+!||    write_sensors                ../engine/source/output/restart/write_sensors.F
+!||    write_th_restart             ../engine/source/output/th/write_th_restart.F
+!||    write_units                  ../common_source/comm/write_units.F
+!||--- uses       -----------------------------------------------------
+!||    ale_connectivity_mod         ../common_source/modules/ale/ale_connectivity_mod.F
+!||    ale_mod                      ../common_source/modules/ale/ale_mod.F
+!||    alefvm_mod                   ../common_source/modules/ale/alefvm_mod.F
+!||    bcs_mod                      ../common_source/modules/boundary_conditions/bcs_mod.F90
+!||    checksum_output_option_mod   ../common_source/modules/output/checksum_mod.F90
+!||    cluster_mod                  ../engine/share/modules/cluster_mod.F
+!||    connectivity_mod             ../common_source/modules/connectivity.F90
+!||    damp_mod                     ../engine/share/modules/damp_mod.F
+!||    drape_mod                    ../engine/share/modules/drape_mod.F
+!||    ebcs_mod                     ../common_source/modules/boundary_conditions/ebcs_mod.F90
+!||    ecnd_mod                     ../engine/share/modules/ecdn_mod.F
+!||    elbufdef_mod                 ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    glob_therm_mod               ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||    group_mod                    ../engine/share/modules/group_mod.F
+!||    groupdef_mod                 ../common_source/modules/groupdef_mod.F
+!||    h3d_mod                      ../engine/share/modules/h3d_mod.F
+!||    impbufdef_mod                ../engine/share/modules/impbufdef_mod.F
+!||    inoutfile_mod                ../common_source/modules/inoutfile_mod.F
+!||    int8_mod                     ../common_source/modules/interfaces/int8_mod.F90
+!||    intbuf_fric_mod              ../common_source/modules/interfaces/intbuf_fric_mod.F90
+!||    intbufdef_mod                ../common_source/modules/interfaces/intbufdef_mod.F90
+!||    interfaces_mod               ../common_source/modules/interfaces/interfaces_mod.F90
+!||    intstamp_glob_mod            ../engine/share/modules/intstamp_glob_mod.F
+!||    loads_mod                    ../common_source/modules/loads/loads_mod.F90
+!||    mat_elem_mod                 ../common_source/modules/mat_elem/mat_elem_mod.F90
+!||    monvol_struct_mod            ../engine/share/modules/monvol_struct_mod.F
+!||    multi_fvm_mod                ../common_source/modules/ale/multi_fvm_mod.F90
+!||    names_and_titles_mod         ../common_source/modules/names_and_titles_mod.F
+!||    nodal_arrays_mod             ../common_source/modules/nodal_arrays.F90
+!||    outmax_mod                   ../common_source/modules/outmax_mod.F
+!||    output_mod                   ../common_source/modules/output/output_mod.F90
+!||    pblast_mod                   ../common_source/modules/loads/pblast_mod.F90
+!||    pinchtype_mod                ../common_source/modules/pinchtype_mod.F
+!||    python_funct_mod             ../common_source/modules/python_mod.F90
+!||    q1np_restart_mod             ../common_source/modules/q1np_restart_mod.F90
+!||    rbe3_mod                     ../common_source/modules/constraints/rbe3_mod.F90
+!||    restart_rbe3pen_mod          ../engine/source/output/restart/restart_rbe3pen.F90
+!||    restart_rwallpen_mod         ../engine/source/output/restart/restart_rwallpen.F90
+!||    restmod                      ../engine/share/modules/restart_mod.F
+!||    rwall_mod                    ../common_source/modules/constraints/rwall_mod.F90
+!||    seatbelt_mod                 ../common_source/modules/seatbelt_mod.F
+!||    sensor_mod                   ../common_source/modules/sensor_mod.F90
+!||    sfem_mod                     ../common_source/modules/elements/sfem_mod.F90
+!||    skew_mod                     ../common_source/modules/skew_mod.F90
+!||    sms_mod                      ../engine/share/modules/sms_mod.F
+!||    sph_mod                      ../engine/share/modules/sph_mod.F
+!||    stack_mod                    ../engine/share/modules/stack_mod.F
+!||    state_mod                    ../common_source/modules/state_mod.F
+!||    table_glob_mod               ../engine/share/modules/table_glob_mod.F
+!||    time_mod                     ../engine/share/modules/time_mod.F
+!||    unitab_mod                   ../common_source/modules/unitab_mod.F
+!||    user_windows_mod             ../common_source/modules/user_windows_mod.F
+!||    write_ale_grid_mod           ../common_source/output/restart/write_ale_grid.F90
+!||    write_bcs_nrf_cfl_mod        ../common_source/output/restart/write_bcs_nrf_cfl.F90
+!||    write_bcs_nrf_mod            ../common_source/output/restart/write_bcs_nrf.F90
+!||    write_bcs_wall_mod           ../common_source/output/restart/write_bcs_wall.F90
+!||    write_inivel_mod             ../engine/source/output/restart/write_inivel.F90
+!||    xfem2vars_mod                ../engine/share/modules/xfem2vars_mod.F
+!||====================================================================
+      SUBROUTINE WRRESTP(ELEMENTS, NODES, AF         ,IAF      ,ICH       ,ADDCNE,
+     .                   ELBUF_TAB  ,XFEM_TAB        ,INTBUF_TAB ,MULTI_FVM   ,MAT_ELEM         ,
+     .                   H3D_DATA   ,INTBUF_FRIC_TAB ,SUBSET     ,PINCH_DATA  ,ALE_CONNECTIVITY ,
+     .                   T_MONVOL   ,SENSORS         ,EBCS_TAB   ,DYNAIN_DATA ,USER_WINDOWS     ,
+     .                   OUTPUT     ,INTERFACES      ,LOADS      ,PYTHON      ,NAMES_AND_TITLES ,
+     .                   EIGIPM     ,EIGIBUF         ,EIGRPM     ,NEIPM       ,LEIBUF           ,
+     .                   NERPM      ,IFLOW           ,RFLOW      ,LIFLOW      ,LRFLOW           ,
+     .                   IMPBUF_TAB ,IMPL_S          ,IMPL_S0    ,MCP         ,TEMP             ,
+     .                   FORNEQS    ,UNITAB          ,STACK      ,NDRAPE      ,DRAPE_SH3N       ,
+     .                   DRAPE_SH4N ,DRAPEG          ,RESTSIZE   ,SKEWS       ,GLOB_THERM       ,
+     .                   PBLAST     ,RBE3            ,RWALL      ,SFEM )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE RESTMOD
+      USE nodal_arrays_mod
+      USE connectivity_mod
+      USE INTSTAMP_GLOB_MOD
+      USE SMS_MOD
+      USE TABLE_GLOB_MOD
+      USE MAT_ELEM_MOD
+      USE SPH_MOD
+      USE INTBUFDEF_MOD
+      USE INT8_MOD
+      USE CLUSTER_MOD
+      USE ECND_MOD
+      USE MULTI_FVM_MOD
+      USE H3D_MOD
+      USE INTBUF_FRIC_MOD
+      USE GROUPDEF_MOD
+      USE GROUP_MOD
+      USE PINCHTYPE_MOD
+      USE INOUTFILE_MOD
+      USE ALE_CONNECTIVITY_MOD
+      USE MONVOL_STRUCT_MOD
+      USE SENSOR_MOD
+      USE EBCS_MOD
+      USE SEATBELT_MOD
+      USE PBLAST_MOD
+      USE OUTMAX_MOD
+      USE LOADS_MOD
+      USE STATE_MOD
+      USE USER_WINDOWS_MOD
+      USE ALE_MOD
+      USE OUTPUT_MOD
+      USE INTERFACES_MOD
+      USE PYTHON_FUNCT_MOD
+      USE DAMP_MOD
+      USE XFEM2VARS_MOD
+      USE ALEFVM_MOD
+      USE NAMES_AND_TITLES_MOD
+      USE BCS_MOD , only : BCS
+      USE SKEW_MOD
+      USE IMPBUFDEF_MOD, only: IMPBUF_STRUCT_
+      USE UNITAB_MOD, ONLY : UNIT_TYPE_
+      USE STACK_MOD
+      USE DRAPE_MOD
+      USE TIME_MOD
+      USE ELBUFDEF_MOD
+      use write_inivel_mod , only : write_inivel
+      use glob_therm_mod
+      use write_ale_grid_mod , only : write_ale_grid
+      use write_bcs_wall_mod , only : write_bcs_wall
+      use write_bcs_nrf_mod , only : write_bcs_nrf
+      use write_bcs_nrf_cfl_mod , only : write_bcs_nrf_cfl
+      use rbe3_mod
+      use restart_rbe3pen_mod, only : write_rrbe3pen
+      use checksum_output_option_mod, only : checksum_restart_write
+      use rwall_mod
+      use restart_rwallpen_mod, only : write_rrwallpen
+      use sfem_mod
+      USE Q1NP_RESTART_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(nodal_arrays_) :: NODES
+      TYPE(connectivity_) :: ELEMENTS
+      INTEGER, INTENT(IN) :: NDRAPE
+      INTEGER, INTENT(IN) :: IMPL_S
+      INTEGER, INTENT(IN) :: IMPL_S0
+      my_real, INTENT(INOUT) :: MCP(NUMNOD)
+      my_real, INTENT(INOUT) :: TEMP(NUMNOD)      
+      INTEGER, INTENT(INOUT) :: NEIPM, LEIBUF, NERPM
+      INTEGER, INTENT(INOUT) :: EIGIPM(NEIPM,NEIG),EIGIBUF(LEIBUF)
+      my_real, INTENT(INOUT) :: EIGRPM(NERPM,NEIG)
+      INTEGER, INTENT(IN) :: FORNEQS(3,NUMNOD)
+      INTEGER IAF(*),ICH,ADDCNE(*)
+      my_real  AF(*)
+      TYPE(ELBUF_STRUCT_), TARGET, DIMENSION(NGROUP)      :: ELBUF_TAB
+      TYPE(ELBUF_STRUCT_), TARGET, DIMENSION(NGROUP,NXEL) :: XFEM_TAB
+      TYPE(INTBUF_STRUCT_) INTBUF_TAB(*)
+      TYPE(MULTI_FVM_STRUCT), INTENT(INOUT)               :: MULTI_FVM
+c     TYPE (CLUSTER_) ,DIMENSION(NCLUSTER) :: CLUSTER
+      TYPE(H3D_DATABASE), INTENT(IN)                      :: H3D_DATA
+      TYPE(INTBUF_FRIC_STRUCT_) INTBUF_FRIC_TAB(*)
+      TYPE(SUBSET_), TARGET, DIMENSION(NSUBS)             :: SUBSET
+      TYPE(PINCH)                                         :: PINCH_DATA
+      TYPE(t_ale_connectivity), INTENT(IN)                :: ALE_CONNECTIVITY
+      TYPE(MONVOL_STRUCT_), DIMENSION(NVOLU), INTENT(IN)  :: T_MONVOL
+      TYPE(t_ebcs_tab), INTENT(INOUT)                     :: EBCS_TAB
+      TYPE(DYNAIN_DATABASE) ,INTENT(IN)                   :: DYNAIN_DATA
+      TYPE(USER_WINDOWS_)   ,INTENT(IN)                   :: USER_WINDOWS
+      TYPE(OUTPUT_)         ,INTENT(INOUT)                :: OUTPUT !< output structure
+      TYPE(INTERFACES_)     ,INTENT(IN)                   :: INTERFACES
+      TYPE(SENSORS_)        ,INTENT(IN)                   :: SENSORS
+      TYPE(LOADS_)          ,INTENT(IN)                   :: LOADS
+      TYPE(MAT_ELEM_)       ,INTENT(IN)                   :: MAT_ELEM
+      TYPE(PYTHON_)         ,INTENT(INOUT)                :: PYTHON
+      TYPE(NAMES_AND_TITLES_),INTENT(IN)                  :: NAMES_AND_TITLES !< NAMES_AND_TITLES host the input deck names and titles for outputs
+      TYPE(SKEW_),INTENT(IN)                              :: SKEWS
+      TYPE(IMPBUF_STRUCT_), TARGET :: IMPBUF_TAB
+      TYPE(UNIT_TYPE_) :: UNITAB !< structure containing units conversion ratios
+      TYPE (STACK_PLY) :: STACK
+      TYPE(DRAPE_)     :: DRAPE_SH3N(NUMELTG_DRAPE),DRAPE_SH4N(NUMELC_DRAPE)
+      TYPE(DRAPEG_)    :: DRAPEG
+      type (glob_therm_) ,intent(inout) :: GLOB_THERM
+      TYPE(PBLAST_)    ,INTENT(INOUT) :: PBLAST
+      TYPE(RBE3_)      ,INTENT(INOUT) :: RBE3
+      TYPE(RWALL_)     ,INTENT(INOUT) :: RWALL
+      TYPE(global_sfem_),INTENT(IN  ) :: SFEM
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "chara_c.inc"
+#include      "couple_c.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com06_c.inc"
+#include      "com_xfem1.inc"
+#include      "intstamp_c.inc"
+#include      "param_c.inc"
+#include      "parit_c.inc"
+#include      "scr03_c.inc"
+#include      "scr05_c.inc"
+#include      "scr07_c.inc"
+#include      "scr14_c.inc"
+#include      "scr16_c.inc"
+#include      "scr19_c.inc"
+#include      "scrcut_c.inc"
+#include      "scrfs_c.inc"
+#include      "scrnoi_c.inc"
+#include      "scr_fac_c.inc"
+#include      "sms_c.inc"
+#include      "spmd_c.inc"
+#include      "tabsiz_c.inc"
+#include      "task_c.inc"
+#include      "units_c.inc"
+#include      "remesh_c.inc"
+#include      "sphcom.inc"
+#include      "inter18.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,LEN,IFILNAM(2148), IFIL,LEN_G,LEN_M,LENG,LEN_S,IXEL,
+     .        FLAG_XFEM
+      CHARACTER FILNAM*100, FILNAMR*100, FILNAMG*128,
+     .          PROCNAM*4, CHRUNR*4,PLAST*4
+      CHARACTER*1 IJK(26)
+      INTEGER LHEADER,LVARINT,LVARREA,LMXVINT,LMXVREA,M
+      PARAMETER (LHEADER=15)
+      PARAMETER (LMXVINT=4000)
+      PARAMETER (LMXVREA=1000+30*MAXLAW+30)
+      INTEGER   TABHEAD(LHEADER),TABVINT(LMXVINT)
+      my_real
+     .          TABVREA(LMXVREA), ENTMP(100)
+      INTEGER MY_ILEN,MY_RLEN,LTABLE, LENI, LENR
+
+      INTEGER :: LEN_TMP_NAME
+      CHARACTER(len=2048) :: TMP_NAME
+      INTEGER, DIMENSION(NVOLU) :: NTRI
+      INTEGER :: II, NS_DIFF, ITMP
+      INTEGER :: MY_SIZE
+      INTEGER,DIMENSION(LTITLE) :: ITITLE
+      INTEGER :: SKEW_LEN
+      INTEGER, INTENT(IN) :: LIFLOW  !< Size of IFLOW
+      INTEGER, INTENT(IN) :: LRFLOW  !< Size of RFLOW
+      INTEGER, INTENT(IN), DIMENSION(LIFLOW) :: IFLOW
+      INTEGER, INTENT(IN), DIMENSION(LRFLOW) :: RFLOW
+      INTEGER :: NPT
+C-----------------------------------------------
+C     Python interface
+C-----------------------------------------------
+      INTEGER, DIMENSION(:), ALLOCATABLE :: BUFFER
+      INTEGER :: BUFFER_SIZE
+C-----------------------------------------------
+C     Restart size
+      INTEGER,INTENT(INOUT) :: RESTSIZE
+      integer :: N
+      my_real, allocatable :: DIST_SAV(:)
+C-----------------------------------------------
+      DATA IJK/'I','J','K','L','M','N','O','P','Q','R',
+     .         'S','T','U','V','W','X','Y','Z','A','B',
+     .         'C','D','E','F','G','H'/
+C--------------------------------------
+C     preparation of integer and real variables.
+C--------------------------------------
+      IPARI0 = IPARIT
+      SFR_ELEM = SIZE(NODES%BOUNDARY,1)
+      SIAD_ELEM = SIZE(NODES%BOUNDARY_ADD,1) * SIZE(NODES%BOUNDARY_ADD,2)
+      CALL WRCOMI(OUTPUT,LMXVINT,LVARINT,TABVINT,1,MULTI_FVM,H3D_DATA,DYNAIN_DATA,
+     .     INTERFACES%PARAMETERS,SENSORS,LOADS,GLOB_THERM,PBLAST,SFEM)
+C
+      ENTMP(1) = OUTPUT%TH%WFEXT
+      ENTMP(2) = EHOUR
+      ENTMP(3) = ECONTV
+      ENTMP(4) = EPOR
+      ENTMP(5) = GLOB_THERM%HEAT_STORED
+      ENTMP(6) = GLOB_THERM%HEAT_MECA
+      ENTMP(7) = GLOB_THERM%HEAT_CONV
+      ENTMP(8) = GLOB_THERM%HEAT_RADIA
+      ENTMP(9) = GLOB_THERM%HEAT_FFLUX
+      ENTMP(10)= ECONTD
+      ENTMP(11)= ECONT_CUMU
+      IF(NSPMD > 1) CALL SPMD_GLOB_DSUM9(ENTMP,11)
+      IF(ISPMD/=0) THEN
+        OUTPUT%TH%WFEXT = ZERO
+        EHOUR = ZERO
+        ECONTV = ZERO
+        EPOR = ZERO
+        GLOB_THERM%HEAT_STORED = ZERO
+        GLOB_THERM%HEAT_MECA   = ZERO
+        GLOB_THERM%HEAT_CONV   = ZERO
+        GLOB_THERM%HEAT_RADIA  = ZERO
+        GLOB_THERM%HEAT_FFLUX  = ZERO
+        ECONTD = ZERO
+        ECONT_CUMU = ZERO
+      ELSE
+        OUTPUT%TH%WFEXT = ENTMP(1)
+        EHOUR = ENTMP(2)
+        ECONTV= ENTMP(3)
+        EPOR  = ENTMP(4)
+        GLOB_THERM%HEAT_STORED = ENTMP(5)
+        GLOB_THERM%HEAT_MECA   = ENTMP(6)
+        GLOB_THERM%HEAT_CONV   = ENTMP(7)
+        GLOB_THERM%HEAT_RADIA  = ENTMP(8)
+        GLOB_THERM%HEAT_FFLUX  = ENTMP(9)
+        ECONTD = ENTMP(10)
+        ECONT_CUMU = ENTMP(11)
+      ENDIF
+C
+      IF(ALE%GRID%NWALE == 2) THEN
+        ENTMP(1) = ALE%GRID%VGZ
+        IF(NSPMD > 1) CALL SPMD_GLOB_DMIN9(ENTMP,1)
+        IF(ISPMD==0) ALE%GRID%VGZ = ENTMP(1)
+      ENDIF
+
+      ENTMP(1) = OUTPUT%DATA%INOUT%DM_IN
+      ENTMP(2) = OUTPUT%DATA%INOUT%DM_OUT
+      ENTMP(3) = OUTPUT%DATA%INOUT%DE_IN
+      ENTMP(4) = OUTPUT%DATA%INOUT%DE_OUT
+      IF(NSPMD > 1) CALL SPMD_GLOB_DSUM9(ENTMP,4)
+      IF(ISPMD /= 0) THEN
+        OUTPUT%DATA%INOUT%DM_IN = ZERO
+        OUTPUT%DATA%INOUT%DM_OUT = ZERO
+        OUTPUT%DATA%INOUT%DE_IN = ZERO
+        OUTPUT%DATA%INOUT%DE_OUT = ZERO
+      ELSE
+        OUTPUT%DATA%INOUT%DM_IN = ENTMP(1)
+        OUTPUT%DATA%INOUT%DM_OUT = ENTMP(2)
+        OUTPUT%DATA%INOUT%DE_IN = ENTMP(3)
+        OUTPUT%DATA%INOUT%DE_OUT = ENTMP(4)
+      ENDIF
+C
+      CALL WRCOMR(LMXVREA,LVARREA,TABVREA,DYNAIN_DATA,INTERFACES%PARAMETERS,
+     .            OUTPUT,GLOB_THERM)
+C--------------------------------------
+C     OPEN
+C--------------------------------------
+      WRITE(CHRUNR,'(I4.4)')IRUN
+      WRITE(PROCNAM,'(I4.4)')ISPMD+1
+        FILNAM=ROOTNAM(1:ROOTLEN)//'_'//CHRUNR//'_'//PROCNAM
+      WRITE(PLAST,'(I4.4)')NSPMD
+      FILNAMG=ROOTNAM(1:ROOTLEN)//'_'//CHRUNR//'_[0001-'//PLAST//']'
+      LENG = ROOTLEN+17
+      LEN = ROOTLEN + 10
+      FILNAMR = FILNAM
+      IFIL = 2
+      IF(ICH/=0)IFIL = 41
+      IF(MULTIREST/=0.AND.MCHECK==0)THEN
+        IRPREV = 1 + MOD(IRPREV,MULTIREST)
+        FILNAM=FILNAM(1:LEN)//'_'//IJK(IRPREV)
+        LEN = LEN+2
+        FILNAMG=FILNAMG(1:LENG)//'_'//IJK(IRPREV)
+        LENG = LENG+2
+      ENDIF
+      FILNAM=FILNAM(1:LEN)//'.rst'
+      LEN = LEN +4
+      FILNAMG=FILNAMG(1:LENG)//'.rst'
+      LENG = LENG+4
+
+      LEN_TMP_NAME = OUTFILE_NAME_LEN + LEN
+      TMP_NAME=OUTFILE_NAME(1:OUTFILE_NAME_LEN)//FILNAM(1:LEN)
+
+      DO I = 1, LEN_TMP_NAME
+        IFILNAM(I) = ICHAR(TMP_NAME(I:I))
+      END DO
+      CALL CUR_FIL_C(IFIL)
+      IF (IRFORM/5==2) THEN
+        CALL OPEN_C(IFILNAM,LEN_TMP_NAME,0)
+      ELSEIF (IRFORM/5==3) THEN
+        CALL OPEN_C(IFILNAM,LEN_TMP_NAME,3)
+      ELSEIF (IRFORM/5==4) THEN
+        CALL OPEN_C(IFILNAM,LEN_TMP_NAME,6)
+      ENDIF
+      DO I = 1, LEN
+        IFILNAM(I) = ICHAR(FILNAM(I:I))
+      END DO
+      CALL WRITE_C_C(IFILNAM,LEN)
+C--------------------------------------
+C     Deck title
+C--------------------------------------
+      DO I=1,LTITLE
+        ITITLE(I) = ICHAR( NAMES_AND_TITLES%TITLE(I:I) )
+      ENDDO
+      CALL WRITE_I_C(ITITLE,LTITLE)
+C--------------------------------------
+C     writing the header.
+C--------------------------------------
+C     RADIOSS FILE R/W
+      TABHEAD(1) =IRADIOS
+C     RESTART FILE
+      TABHEAD(2) =IRESFIL
+C     ITESTV
+      TABHEAD(3) =ITESTV
+C     THIS RUN NUMBER
+      TABHEAD(4) =IRUN
+C     CODE FOR THIS RUN (-1:UNKNOWN,0:STARTER,1:ENGINE,2:MODIF)
+      ICODRUN =1
+      TABHEAD(5) =ICODRUN
+C     CODVERS FOR THIS RUN
+      TABHEAD(6) =CODVERS
+C     MINOR VERSION CODE FOR THIS RUN
+      TABHEAD(7) =IMINVER
+C     SOURCE VERSION CODE FOR THIS RUN
+      TABHEAD(8) =ISRCVER
+C     INPUT VERSION FOR THIS RUN
+      TABHEAD(9) =INVERS
+C     STARTER CODVERS
+      TABHEAD(10)=SCODVER
+C     STARTER MINOR VERSION CODE.
+      TABHEAD(11)=SMINVER
+C     STARTER SOURCE VERSION CODE.
+      TABHEAD(12)=SSRCVER
+C     STARTER INPUT VERSION
+      TABHEAD(13)=INVSTR
+C
+      TABHEAD(14) =LVARINT
+      TABHEAD(15)=LVARREA
+      CALL WRITE_I_C(LHEADER, 1)
+      CALL WRITE_I_C(TABHEAD, LHEADER)
+C--------------------------------------
+C     writing integer variables
+C--------------------------------------
+      CALL WRITE_I_C(TABVINT,LVARINT)
+C--------------------------------------
+C     WRITE CHECKSUM DIGEST
+C--------------------------------------
+      CALL checksum_restart_write(OUTPUT%CHECKSUM)
+C--------------------------------------
+C     writing integers
+C--------------------------------------
+      LEN_G = NPROPGI*NUMGEO
+      LEN_M = NPROPMI*NUMMAT
+      LEN_S = NPART
+        CALL WRITE_I_C(NODES%NODGLOB,NODES%NUMNOD)
+
+        CALL WRITE_I_C(NODES%MAIN_PROC,SWEIGHT)
+
+        CALL WRITE_I_C(NODES%WEIGHT,SWEIGHT)
+
+        CALL WRITE_I_C(NODES%ICODE,SICODE)
+
+        CALL WRITE_I_C(NODES%ISKEW,SISKEW)
+
+        CALL WRITE_I_C(ISKWN,SISKWN)
+
+        CALL WRITE_I_C(IFRAME,SIFRAME)
+
+        CALL WRITE_I_C(NETH,SNETH)
+
+        CALL WRITE_I_C(IBCSLAG,SIBCSLAG)
+
+        CALL WRITE_I_C(IPART,SIPART)
+
+        CALL WRITE_I_C(NOM_OPT,SNOM_OPT)
+
+        CALL PYTHON_SERIALIZE(PYTHON,BUFFER, BUFFER_SIZE)
+        CALL WRITE_I_C(BUFFER, BUFFER_SIZE)
+
+        CALL WRITE_I_C(NPC,SNPC)
+
+        CALL WRITE_I_C(IXTG,SIXTG)
+
+        CALL WRITE_I_C(IXTG1,SIXTG1)
+
+        CALL WRITE_I_C(IXS,SIXS)
+
+        CALL WRITE_I_C(IXQ,SIXQ)
+
+        CALL WRITE_I_C(ELEMENTS%SHELL%IXC,SIXC)
+
+        CALL WRITE_I_C(IXT,SIXT)
+
+        CALL WRITE_I_C(IXP,SIXP)
+
+        CALL WRITE_I_C(IXR,SIXR)
+
+        CALL WRITE_I_C(NODES%ITAB,SITAB)
+
+        CALL WRITE_I_C(NODES%ITABM1,SITABM1)
+
+        CALL WRITE_I_C(GJBUFI,SGJBUFI)
+
+        CALL WRITE_I_C(ALE_CONNECTIVITY%NALE,ALE%GLOBAL%SNALE)
+
+        IF (IALE + IEULER + IALELAG + GLOB_THERM%ITHERM /= 0) THEN
+           ITMP = SIZE(ALE_CONNECTIVITY%ee_connect%iad_connect)
+           CALL WRITE_I_C(ITMP, 1)
+           CALL WRITE_I_C(ALE_CONNECTIVITY%ee_connect%iad_connect, ITMP)
+
+           ITMP = SIZE(ALE_CONNECTIVITY%ee_connect%connected)
+           CALL WRITE_I_C(ITMP, 1)
+           CALL WRITE_I_C(ALE_CONNECTIVITY%ee_connect%connected, ITMP)
+
+           ITMP = SIZE(ALE_CONNECTIVITY%ee_connect%type)
+           CALL WRITE_I_C(ITMP, 1)
+           CALL WRITE_I_C(ALE_CONNECTIVITY%ee_connect%type, ITMP)
+
+           ITMP = SIZE(ALE_CONNECTIVITY%ee_connect%iface2)
+           CALL WRITE_I_C(ITMP, 1)
+           CALL WRITE_I_C(ALE_CONNECTIVITY%ee_connect%iface2, ITMP)
+        ENDIF
+
+        CALL WRITE_I_C(ID_GLOBAL_VOIS,ALE%GLOBAL%SIELVS)
+
+        CALL WRITE_I_C(FACE_VOIS,ALE%GLOBAL%SIELVS)
+
+        IF(IALE > 0 .AND. ALE%GRID%NWALE == 6 .OR. INTER18_AUTOPARAM == 1 .OR. INTER18_IS_VARIABLE_GAP_DEFINED) THEN
+           CALL WRITE_I_C(NE_NERCVOIS, NSPMD + 1)
+           CALL WRITE_I_C(NE_LERCVOIS, NE_SLERCVOIS)
+           CALL WRITE_I_C(NE_NESDVOIS, NSPMD + 1)
+           CALL WRITE_I_C(NE_LESDVOIS, NE_SLESDVOIS)
+        ENDIF
+        IF (IALE > 0 .AND. (ALE%GRID%NWALE < 2 .OR. ALE%GRID%NWALE == 5.OR. ALE%GRID%NWALE == 7)) THEN
+           CALL WRITE_I_C(ALE_CONNECTIVITY%NN_CONNECT%IAD_CONNECT, NUMNOD + 1)
+           CALL WRITE_I_C(ALE_CONNECTIVITY%NN_CONNECT%CONNECTED, ALE_CONNECTIVITY%NN_CONNECT%IAD_CONNECT(NUMNOD + 1))
+        ENDIF
+        IF (IALE > 0 .AND. ALE%GRID%NWALE == 6 .OR. INTER18_AUTOPARAM == 1 .OR. INTER18_IS_VARIABLE_GAP_DEFINED) THEN
+           CALL WRITE_I_C(ALE_CONNECTIVITY%NE_CONNECT%IAD_CONNECT, NUMNOD + 1)
+           CALL WRITE_I_C(ALE_CONNECTIVITY%NE_CONNECT%CONNECTED,
+     .          ALE_CONNECTIVITY%NE_CONNECT%IAD_CONNECT(NUMNOD + 1))
+        ENDIF
+
+        NS_DIFF = 0
+        IF (MULTI_FVM%NS_DIFF) THEN
+           NS_DIFF = 1
+        ENDIF
+        CALL WRITE_I_C(NS_DIFF, 1)
+        IF (NS_DIFF == 1) THEN
+           CALL WRITE_I_C(ALE_CONNECTIVITY%IDGLOB%ID,
+     .          NUMELS + NSVOIS + NUMELQ + NQVOIS + NUMELTG + NTGVOIS)
+        ENDIF
+
+        CALL WRITE_I_C(IFILL,SIFILL)
+
+        CALL WRITE_I_C(IMS,SIMS)
+
+        CALL W_SUBSET_STR(SUBSET)
+
+        CALL W_GROUP_STR
+
+        CALL W_SURF_STR(IGRSURF)
+
+        CALL W_LINE_STR(IGRSLIN)
+
+        CALL WRITE_I_C(KXX,SKXX)
+
+        CALL WRITE_I_C(IXX,SIXX)
+
+        CALL WRITE_I_C(KXSP,SKXSP)
+
+        CALL WRITE_I_C(IXSP,SIXSP)
+
+        CALL WRITE_I_C(NOD2SP,SNOD2SP)
+
+        CALL WRITE_I_C(ISPSYM,SISPSYM)
+
+        CALL WRITE_I_C(ISPCOND,SISPCOND)
+
+        CALL WRITE_I_C(ISPHIO,SISPHIO)
+
+        CALL WRITE_I_C(LPRTSPH,SLPRTSPH)
+
+        CALL WRITE_I_C(LONFSPH,SLONFSPH)
+
+        CALL WRITE_I_C(IBUFSSG_IO,SIBUFSSG_IO)
+
+        IF(NSPHSOL/=0)THEN
+
+          CALL WRITE_I_C(SPH2SOL,NUMSPH)
+
+          CALL WRITE_I_C(SOL2SPH,2*NUMELS8)
+
+          CALL WRITE_I_C(IRST,3*NSPHSOL)
+
+          CALL WRITE_I_C(SOL2SPH_TYP,NUMELS8)
+        END IF
+
+        CALL WRITE_I_C(IBCL,SIBCL)
+
+        IF (NINTLOADP>0) THEN
+            CALL WRITE_I_C(KLOADPINTER, NINTER+1)
+            CALL WRITE_I_C(LOADPINTER,NINTER*NLOADP_HYD)
+        ENDIF
+
+        CALL WRITE_I_C(IBFV,SIBFV)
+
+        CALL WRITE_I_C(IECRAN,SIECRAN)
+
+        CALL WRITE_I_C(ILAS,SILAS)
+       
+        ! -----------------------------
+        ! EBCS option
+        CALL WRITE_I_C(EBCS_TAB%nebcs, 1) ! total number of EBCS
+        CALL WRITE_I_C(EBCS_TAB%nebcs_fvm, 1) ! number of multifluid ebcs
+        CALL WRITE_I_C(EBCS_TAB%nebcs_parallel, 1) ! number of parallel ebcs
+        CALL WRITE_I_C(EBCS_TAB%nebcs_loc, 1) ! number of other ebcs
+        LENI = 0
+        LENR = 0
+        IF (EBCS_TAB%nebcs > 0) THEN
+            ! write the type of /EBCS ( /EBCS/NRF --> typ = 10) ( /EBCS/PROPELLANT --> typ = 11)
+            CALL WRITE_I_C(EBCS_TAB%my_typ,EBCS_TAB%nebcs)
+        ENDIF
+        ! -------------
+        ! write the data of /EBCS options
+        IF (EBCS_TAB%nebcs_loc +EBCS_TAB%nebcs_parallel +  EBCS_TAB%nebcs_fvm> 0) THEN
+           DO II = 1, EBCS_TAB%nebcs_fvm + EBCS_TAB%nebcs_loc + EBCS_TAB%nebcs_parallel
+              CALL EBCS_TAB%tab(II)%poly%write_common_data(leni, lenr)
+              CALL EBCS_TAB%tab(II)%poly%write_data(leni, lenr)
+           ENDDO
+        ENDIF
+        ! -----------------------------
+
+        CALL WRITE_I_C(LACCELM,SLACCELM)
+
+        CALL WRITE_I_C(LGAUGE,3*NBGAUGE)
+
+        CALL WRITE_I_C(NNLINK,SNNLINK)
+
+        CALL WRITE_I_C(LNLINK,SLNLINK)
+
+        CALL USERWI_WRITE(USER_WINDOWS,ISPMD,NSPMD,NUMNOD)
+
+        CALL WRITE_I_C(IPARG,SIPARG)
+
+        CALL WRITE_I_C(DD_IAD,SDD_IAD)
+
+        CALL WRITE_I_C(IGRV,SIGRV)
+
+        CALL WRITE_I_C(LGRAV,SLGRAV)
+
+        CALL WRITE_I_C(IEXLNK,SIEXLNK)
+
+        CALL WRITE_I_C(IBVEL,SIBVEL)
+
+        CALL WRITE_I_C(LBVEL,SLBVEL)
+
+        CALL WRITE_I_C(IRBE2,SIRBE2)
+
+        CALL WRITE_I_C(LRBE2,SLRBE2)
+
+        CALL WRITE_I_C(RBE3%IRBE3,RBE3%NRBE3*irbe3_variables)
+
+        CALL WRITE_I_C(RBE3%LRBE3,RBE3%lrbe3_sz)
+
+        CALL WRITE_I_C(IACTIV,SIACTIV)
+
+        CALL WRITE_I_C(IBMPC,SIBMPC)
+
+        CALL WRITE_I_C(NODES%KINET,NUMNOD)
+
+        CALL WRITE_I_C(FASOLFR,SFASOLFR)
+
+        CALL WRITE_I_C(SEGQUADFR,SSEGQUADFR)
+
+        CALL WRITE_I_C(sfem%in_sfem,sfem%ne_sfem)
+
+        CALL WRITE_I_C(IPARI,SIPARI)
+
+c        CALL WRITE_I_C(INBUF,SINBUF)
+
+        CALL W_BUFBRIC_22() !inter22
+
+        !write new structure INTBUF_TAB
+        ! Ensure type10 distance is negative so next run triggers a sort
+        ALLOCATE(DIST_SAV(NINTER))
+        DO N = 1, NINTER
+          IF (IPARI(NPARI*(N-1)+7)==10 .AND.
+     .        INTBUF_TAB(N)%S_VARIABLES >= distance_index) THEN
+            DIST_SAV(N) = INTBUF_TAB(N)%VARIABLES(distance_index)
+            INTBUF_TAB(N)%VARIABLES(distance_index) =
+     .        -ABS(DIST_SAV(N))
+          ENDIF
+        ENDDO
+        CALL WRITE_INTBUF(INTBUF_TAB)
+        DO N = 1, NINTER
+          IF (IPARI(NPARI*(N-1)+7)==10 .AND.
+     .        INTBUF_TAB(N)%S_VARIABLES >= distance_index) THEN
+            INTBUF_TAB(N)%VARIABLES(distance_index) = DIST_SAV(N)
+          ENDIF
+        ENDDO
+        DEALLOCATE(DIST_SAV)
+
+        CALL WRITE_I_C(RWALL%NPRW,RWALL%NNPRW*RWALL%NRWALL)
+
+        CALL WRITE_I_C(RWALL%LPRW,RWALL%sz_lprw)
+
+        CALL WRITE_I_C(ICONX,SICONX)
+
+        CALL WRITE_I_C(MADPRT,SMADPRT)
+
+        CALL WRITE_I_C(MADSH4,SMADSH4)
+
+        CALL WRITE_I_C(MADSH3,SMADSH3)
+
+        CALL WRITE_I_C(MADSOL,SMADSOL)
+
+        CALL WRITE_I_C(MADNOD,SMADNOD)
+
+        CALL WRITE_I_C(MADCLNOD,MADCLNODS)
+
+        CALL WRITE_I_C(MADIDX,SMADIDX)
+
+        CALL WRITE_I_C(NPBY,SNPBY)
+
+        CALL WRITE_I_C(NPBYL,SNPBYL)
+
+        CALL WRITE_I_C(LPBY,SLPBY)
+
+        CALL WRITE_I_C(LPBYL,SLPBYL)
+
+        CALL WRITE_I_C(LRIVET,SLRIVET)
+
+        CALL WRITE_I_C(NSTRF,SNSTRF)
+
+        CALL WRITE_I_C(NOM_SECT,SNOM_SECT)
+
+        CALL WRITE_JOINT()
+
+        CALL WRITE_I_C(NODPOR,SNODPOR)
+
+        CALL WRITE_I_C(MONVOL,SMONVOL)
+
+        DO II = 1, NVOLU
+           NTRI(II) = T_MONVOL(II)%NB_FILL_TRI
+        ENDDO
+
+        CALL WRITE_I_C(NTRI, NVOLU)
+        DO II = 1, NVOLU
+           IF (NTRI(II) > 0) THEN
+              CALL WRITE_I_C(T_MONVOL(II)%FILL_TRI(1:3* NTRI(II)), 3* NTRI(II))
+           ENDIF
+        ENDDO
+
+        CALL WRITE_I_C(LAGBUF,SLAGBUF)
+
+        IF(NS10E > 0)THEN
+          CALL WRITE_I_C(ICNDS10,3*NS10E)
+        ENDIF
+
+        CALL WRITE_TH_RESTART(OUTPUT%TH)   ! Write Time History Buffer
+
+        CALL THSURF_WRITE_RESTART(OUTPUT%TH%TH_SURF,2)
+        
+        CALL WRITE_I_C(FR_MV,SFR_MV)
+
+        CALL WRITE_I_C(NODES%BOUNDARY_ADD,SIAD_ELEM)
+
+        CALL WRITE_I_C(IAD_RBY,SIAD_RBY)
+
+        CALL WRITE_I_C(IAD_RBY2,SIAD_RBY2)
+
+        CALL WRITE_I_C(IAD_I2M,SIAD_I2M)
+
+        CALL WRITE_I_C(IADCJ,SIADCJ)
+
+        CALL WRITE_I_C(IAD_RBM,SIAD_RBM)
+
+        CALL WRITE_I_C(IAD_RBM2,SIAD_RBM2)
+
+        CALL WRITE_I_C(IAD_RBE2,SIAD_RBE2)
+
+        CALL WRITE_I_C(rbe3%mpi%IAD_RBE3,NSPMD+1)
+
+        CALL WRITE_I_C(IAD_SEC,SIAD_SEC)
+
+        CALL WRITE_I_C(IAD_CUT,SIAD_CUT)
+C
+        CALL WRITE_I_C(IAD_RBYM,SIAD_RBYM)
+
+        CALL WRITE_I_C(IAD_RBYM2,SIAD_RBYM2)
+
+        CALL WRITE_I_C(NODES%BOUNDARY,SFR_ELEM)
+
+        CALL WRITE_I_C(FR_RBY,SFR_RBY)
+
+        CALL WRITE_I_C(RWALL%FR_WALL,SFR_WALL)
+
+        CALL WRITE_I_C(FR_RBY2,SFR_RBY2)
+
+        CALL WRITE_I_C(FR_I2M,SFR_I2M)
+
+        CALL WRITE_I_C(FR_LL,SFR_LL)
+
+        CALL WRITE_I_C(FR_CJ,SFR_CJ)
+
+        CALL WRITE_I_C(FR_RBM,SFR_RBM)
+
+        CALL WRITE_I_C(FR_RBM2,SFR_RBM2)
+
+        CALL WRITE_I_C(FR_RBE2,SFR_RBE2)
+
+        CALL WRITE_I_C(RBE3%mpi%FR_RBE3,RBE3%mpi%fr_rbe3_sz)
+
+        CALL WRITE_I_C(RBE3%mpi%FR_RBE3MP,RBE3%mpi%fr_rbe3_sz)
+
+        CALL WRITE_I_C(FR_SEC,SFR_SEC)
+
+        CALL WRITE_I_C(FR_CUT,SFR_CUT)
+
+        CALL WRITE_I_C(RG_CUT,SRG_CUT)
+
+        CALL WRITE_I_C(FR_MAD,SFR_MAD)
+
+        CALL WRITE_I_C(FR_I18,SFR_I18)
+
+        CALL WRITE_I_C(DD_R2R,SDD_R2R)
+
+        CALL WRITE_I_C(DD_R2R_ELEM,SDD_R2R_ELEM)
+
+        CALL WRITE_I_C(FR_RBYM,SFR_RBYM)
+
+        CALL WRITE_I_C(FR_RBYM2,SFR_RBYM2)
+
+        CALL WRITE_I_C(ADDCSRECT,NUMNOR+1)
+
+        CALL WRITE_I_C(FR_NOR,NBDDNORT)
+
+        CALL WRITE_I_C(IAD_FRNOR,(NSPMD+1)*NINTER25)
+
+        CALL WRITE_I_C(PROCNOR,NBCCNOR)
+
+        CALL WRITE_I_C(INTERFACES%SPMD_ARRAYS%FR_EDG,2*NBDDEDGT)
+
+        CALL WRITE_I_C(INTERFACES%SPMD_ARRAYS%IAD_FREDG,(NSPMD+1)*NINTER25)
+
+        CALL WRITE_I_C(ISKWP,SISKWP)
+
+        CALL WRITE_I_C(NSKWP,SNSKWP)
+
+        IF(SNSKWP>0) CALL WRITE_I_C(ISKWP_L,NSKWP(ISPMD+1))
+
+        CALL WRITE_I_C(ISENSP,SISENSP)
+
+        CALL WRITE_I_C(NSENSP,SNSENSP)
+
+        CALL WRITE_I_C(IACCP,SIACCP)
+
+        CALL WRITE_I_C(NACCP,SNACCP)
+
+        CALL WRITE_I_C(IGAUP,SIGAUP)
+
+        CALL WRITE_I_C(NGAUP,SNGAUP)
+
+        CALL WRITE_I_C(FR_LAGF,SFR_LAGF)
+
+        CALL WRITE_I_C(NEWFRONT,SNEWFRONT)
+
+        CALL WRITE_I_C(NBRCVOIS,SNBRCVOIS)
+
+        CALL WRITE_I_C(LNRCVOIS,SLNRCVOIS)
+
+        CALL WRITE_I_C(NBSDVOIS,SNBSDVOIS)
+
+        CALL WRITE_I_C(LNSDVOIS,SLNSDVOIS)
+
+        CALL WRITE_I_C(NERCVOIS,SNERCVOIS)
+
+        CALL WRITE_I_C(LERCVOIS,SLERCVOIS)
+
+        CALL WRITE_I_C(NESDVOIS,SNESDVOIS)
+
+        CALL WRITE_I_C(LESDVOIS,SLESDVOIS)
+
+        CALL WRITE_I_C(NPSEGCOM,SNPSEGCOM)
+
+        CALL WRITE_I_C(LSEGCOM,SLSEGCOM)
+
+        CALL WRITE_I_C(NPORGEO,SNPORGEO)
+
+        CALL WRITE_I_C(LNODPOR,SLNODPOR)
+
+        CALL WRITE_I_C(LLAGF,SLLAGF)
+
+        IF(ICRACK3D > 0)THEN
+          CALL WRITE_I_C(IAD_EDGE,SIAD_EDGE)
+          CALL WRITE_I_C(FR_EDGE,SFR_EDGE)
+          CALL WRITE_I_C(FR_NBEDGE,SFR_NBEDGE)
+        ENDIF
+
+c        IF(NS10E > 0)THEN
+          CALL WRITE_I_C(IAD_CNDM,SIAD_CNDM)
+          CALL WRITE_I_C(FR_CNDM,SFR_CNDM)
+c        ENDIF
+
+      IF(IPARIT==1)THEN
+        CALL WRITE_I_C(ELEMENTS%PON%ADSKY,NUMNOD+1)
+        CALL WRITE_I_C(ELEMENTS%PON%PROCNE,SIZE(ELEMENTS%PON%PROCNE))
+        IF(I2NSNT>0)THEN
+          CALL WRITE_I_C(ADDCNI2,NUMNOD+1)
+        ENDIF
+        CALL WRITE_I_C(PROCNI2,LCNI2)
+        IF(NS10E>0) THEN
+         CALL WRITE_I_C(ADDCNCND,SADDCNCND)
+        ENDIF
+        CALL WRITE_I_C(PROCNCND,SPROCNCND)
+        CALL WRITE_I_C(ELEMENTS%PON%IADS       ,SIZE(ELEMENTS%PON%IADS))       !< 1 ; 8xNUMELS  solid indexes to FSKY
+        CALL WRITE_I_C(ELEMENTS%PON%IADS10     ,SIZE(ELEMENTS%PON%IADS10 ))    !< 6* NUMELS10 
+        CALL WRITE_I_C(ELEMENTS%PON%IADS20     ,SIZE(ELEMENTS%PON%IADS20 ))     ! 12*NUMELS20
+        CALL WRITE_I_C(ELEMENTS%PON%IADS16     ,SIZE(ELEMENTS%PON%IADS16 ))       ! 8*NUMELS16
+        CALL WRITE_I_C(ELEMENTS%PON%IADQ       ,SIZE(ELEMENTS%PON%IADQ  ))        !<i87b ; quad i87b 
+        CALL WRITE_I_C(ELEMENTS%PON%IADC       ,SIZE(ELEMENTS%PON%IADC  ))         !<i87C shell (4 nodes) indexes to FSKY
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_TRUSS  ,SIZE(ELEMENTS%PON%IAD_TRUSS))        !< I87D 2xNUMELT
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_BEAM   ,SIZE(ELEMENTS%PON%IAD_BEAM ))         !< I87E 2xNUMELP
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_SPRING ,SIZE(ELEMENTS%PON%IAD_SPRING ))       !<F 3xNUMELR
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_TG     ,SIZE(ELEMENTS%PON%IAD_TG  ))       !<G 3xNUMELTG
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_TG6    ,SIZE(ELEMENTS%PON%IAD_TG6 ))        !<H 3xNUMELTG6
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_MV     ,SIZE(ELEMENTS%PON%IAD_MV  ))         !I 4xNSKYMV0
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_CONLD  ,SIZE(ELEMENTS%PON%IAD_CONLD))         !<J 4xNCONLD
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_CONV   ,SIZE(ELEMENTS%PON%IAD_CONV))        !<K 4x glob_therm%NCONV
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_RADIA  ,SIZE(ELEMENTS%PON%IAD_RADIA))          !<L 4x glob_therm%Numrada
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_LOADP  ,SIZE(ELEMENTS%PON%IAD_LOADP))          !<M SLLOADP
+        CALL WRITE_I_C(ELEMENTS%PON%IAD_FXFLUX ,SIZE(ELEMENTS%PON%IAD_FXFLUX))     !<N 4x glob_therm%nfxflux
+
+
+C       CALL WRITE_I_C(IADS,NISKY0)
+        CALL WRITE_I_C(IADWAL,NSKYRW0)
+        CALL WRITE_I_C(IADRBK,NSKYRBK0)
+        CALL WRITE_I_C(IADI2,NISKYI2)
+        CALL WRITE_I_C(IADCND,SIADCND)
+        CALL WRITE_I_C(IADMV2,NSKYMV0)
+        CALL WRITE_I_C(IADMV3,NSKYMVC0)
+        CALL WRITE_I_C(IADLL,NSKYLL0)
+        CALL WRITE_I_C(IADRBM,NSKYRBM0)
+        CALL WRITE_I_C(IADI18,NSKYI18)
+        CALL WRITE_I_C(IADRBMK,NSKYRBMK0)
+C
+C  ply xfem
+C
+        IF(IPLYXFEM > 0) THEN
+            CALL WRITE_I_C(ADSKY_PXFEM,NPLYXFE+1 )
+C direct reading of PROCNE
+            CALL WRITE_I_C(PROCNE_PXFEM,LCNEPXFEM)
+            CALL WRITE_I_C(IADC_PXFEM,4*EPLYXFE)
+        ENDIF
+C
+C  xfem for layered shell (cracks)
+C
+        IF(ICRACK3D > 0) THEN
+          CALL WRITE_I_C(ADSKY_CRKXFEM,NCRKXFE+1)
+          CALL WRITE_I_C(CNE_CRKXFEM,LCNECRKXFEM)
+          CALL WRITE_I_C(PROCNE_CRKXFEM,LCNECRKXFEM)
+          CALL WRITE_I_C(IADC_CRKXFEM,4*ECRKXFEC+3*ECRKXFETG)
+          CALL WRITE_I_C(CRKNODIAD,LCNECRKXFEM)
+        ENDIF
+      ENDIF
+      ! ---------------
+      ! ebcs option : adress of FSKY array
+      IF(EBCS_TAB%nebcs_parallel>0) THEN
+        DO I=1,EBCS_TAB%nebcs
+                IF(EBCS_TAB%my_typ(I)==10 .or. EBCS_TAB%my_typ(I)==11) THEN
+                    MY_SIZE = EBCS_TAB%tab(I)%poly%nb_elem
+                    CALL WRITE_I_C(EBCS_PARITHON(I)%ELEM_ADRESS,4*MY_SIZE)
+                ENDIF
+            ENDDO
+       ENDIF
+       ! ---------------
+
+      CALL COMPRESS_I_NNZ(IGEO,LEN_G)
+      CALL COMPRESS_I_NNZ(IPM,LEN_M)
+
+      CALL WRITE_I_C(ICONTACT ,SICONTACT)
+      CALL WRITE_I_C(IPART_STATE,LEN_S)
+
+      IF(NADMESH /= 0)THEN
+        CALL WRITE_I_C(SH4TREE,KSH4TREE*NUMELC)
+        CALL WRITE_I_C(SH3TREE,KSH3TREE*NUMELTG)
+        CALL WRITE_I_C(IPADMESH,KIPADMESH*NPART)
+        LEN=ABS(LSH4TRIM)
+        CALL WRITE_I_C(SH4TRIM,LEN)
+        LEN=ABS(LSH3TRIM)
+        CALL WRITE_I_C(SH3TRIM,LEN)
+      END IF
+C--------------------------------------
+C Writing Additional Tables Boundary Interfaces (entire part)
+C--------------------------------------
+      CALL SPMD_SAVEFI(IPARI,1,INTBUF_TAB,SENSORS%NSENSOR,SENSORS%SENSOR_TAB,
+     .                 INTERFACES%PARAMETERS)
+C--------------------------------------
+C Writing Additional Tables Frontieres SPH (integer part)
+C--------------------------------------
+      CALL SPMD_SAVESPH(1,NUMSPHG)
+C--------------------------------------
+C Int 21 structures
+C--------------------------------------
+      IF(NINTSTAMP /= 0)THEN
+        CALL INTSTAMP_WRESTI(INTSTAMP)
+      END IF
+C--------------------------------------
+C  Interface friction buffer (integer )
+C--------------------------------------
+      IF(NINTERFRIC /= 0)THEN
+        CALL INTFRIC_WRESTI(INTBUF_FRIC_TAB,NINTERFRIC)
+      END IF
+C--------------------------------------
+C Table structure (integer part)
+C--------------------------------------
+      IF(NTABLE /= 0)THEN
+        CALL TABLE_WRESTI(TABLE, LTABLE)
+      END IF
+C--------------------------------------
+      CALL WRITE_I_C(ITHVAR,SITHVAR)
+C--------------------------------------
+      IF (NLOADC>0)THEN
+        CALL WRITE_I_C(ICFIELD,SIZFIELD*NLOADC)
+        CALL WRITE_I_C(LCFIELD,SLCFIELD)
+      ENDIF
+      IF (NLOADP>0)THEN
+        CALL WRITE_I_C(ILOADP,SIZLOADP*NLOADP)
+        CALL WRITE_I_C(LLOADP,SLLOADP)
+      ENDIF
+      IF (PBLAST%NLOADP_B>0)THEN
+        CALL PBLAST_WRITE_ENGINE(PBLAST)
+      ENDIF
+C--------------------------------------
+      IF (LOADS%NLOAD_CYL > 0) THEN
+        CALL WRITE_PCYL(LOADS)
+      ENDIF
+C--------------------------------------
+      IF(ICRACK3D > 0)THEN
+        CALL WRITE_I_C(IBORDNODE,SIBORDNODE)
+        CALL WRITE_I_C(IEDGESH,SIEDGESH)
+        CALL WRITE_I_C(NODEDGE,2*NUMEDGES)
+        CALL WRITE_I_C(IEDGE,NUMEDGES)
+        CALL WRITE_I_C(NODGLOBXFE,SNODGLOBXFE)
+      END IF
+C--------------------------------------
+      IF(NUMELIG3D > 0)THEN
+        CALL WRITE_I_C(KXIG3D,SKXIG3D)
+
+        CALL WRITE_I_C(IXIG3D,SIXIG3D)
+      ENDIF
+C----------------------------------
+C Q1NP element integer arrays
+C----------------------------------
+      IF (NUMELQ1NP_G > 0) THEN
+        IF (SKQ1NP_G > 0) THEN
+          CALL WRITE_I_C(KQ1NP_TAB,SKQ1NP_G)
+        ENDIF
+        IF (SIQ1NP_G > 0) THEN
+          CALL WRITE_I_C(IQ1NP_TAB,SIQ1NP_G)
+        ENDIF
+        IF (SQ1NPBULK_G > 0) THEN
+          CALL WRITE_I_C(IQ1NP_BULK_TAB,SQ1NPBULK_G)
+        ENDIF
+        ITMP = MAX(0, Q1NP_NKNOT_SETS_G)
+        CALL WRITE_I_C(ITMP,1)
+        IF (Q1NP_NKNOT_SETS_G > 0) THEN
+          CALL WRITE_I_C(Q1NP_NX_SET_G,Q1NP_NKNOT_SETS_G)
+          CALL WRITE_I_C(Q1NP_NY_SET_G,Q1NP_NKNOT_SETS_G)
+          CALL WRITE_I_C(Q1NP_KTAB_OFF_G,Q1NP_NKNOT_SETS_G)
+          CALL WRITE_I_C(Q1NP_KTAB_LEN_G,Q1NP_NKNOT_SETS_G)
+        ENDIF
+C       Q1NP inverse connectivity (local solid element -> Q1NP element)
+        CALL WRITE_I_C(KQ1NP_TAB_INV,NUMELS)
+      ENDIF
+C----------------------------------
+      CALL WRITE_I_C(TAG_SKINS6,NUMELS)
+C--------------------------------------
+C /BCS/CYCLIC
+C--------------------------------------
+      IF(NBCSCYC > 0)THEN
+        CALL WRITE_I_C(IBCSCYC,SIBCSCYC)
+        CALL WRITE_I_C(LBCSCYC,SLBCSCYC)
+      ENDIF
+C--------------------------------------
+C /BCS/WALL
+C--------------------------------------
+      ITMP = BCS%NUM_WALL
+      CALL WRITE_I_C(ITMP,1)
+      IF(BCS%NUM_WALL > 0)THEN
+        DO I=1, BCS%NUM_WALL
+          CALL WRITE_BCS_WALL(BCS%WALL(I))
+        ENDDO
+      ENDIF
+C--------------------------------------
+C /BCS/NRF
+C--------------------------------------
+      ITMP = BCS%NUM_NRF
+      CALL WRITE_I_C(ITMP,1)
+      IF(BCS%NUM_NRF > 0)THEN
+        DO I=1, BCS%NUM_NRF
+          CALL WRITE_BCS_NRF(BCS%NRF(I))
+        ENDDO
+        call write_bcs_nrf_cfl(bcs,nspmd)
+      ENDIF
+C--------------------------------------
+C     writing real variables
+C--------------------------------------
+      CALL WRITE_DB(TABVREA, LVARREA)
+C--------------------------------------
+C     writing reals
+C--------------------------------------
+         CALL WRITE_DB(NODES%X,SX)
+
+         CALL WRITE_DB(NODES%D,SD)
+
+         CALL WRITE_DB(NODES%V,SV)
+
+         CALL WRITE_DB(NODES%VR,SVR)
+
+         CALL WRITE_DB(NODES%DR,SDR)
+
+         CALL WRITE_DB(THKE,STHKE)
+
+         CALL WRITE_DB(DAMPR,SDAMPR)
+
+         CALL WRITE_DB(DAMP,SDAMP)
+
+         CALL WRITE_DB(NODES%MS,SMS)
+
+         IF (N2D >0) THEN
+           CALL WRITE_DB(MS_2D,NUMNOD)
+         ENDIF
+
+         CALL WRITE_DB(NODES%IN,SIN)
+
+         CALL WRITE_DB(TF,STF)
+
+         CALL WRITE_DB(PM,SPM)
+
+         CALL WRITE_MATPARAM(MAT_ELEM)
+
+         CALL WRITE_ELGROUP_PARAM(MAT_ELEM%GROUP_PARAM,NGROUP)
+
+         SKEW_LEN = SKEWS%N_SKEW_VAR * SKEWS%TOTAL_SKEW_NUMBER
+         CALL WRITE_DB(SKEWS%SKEW,SKEW_LEN)
+
+         CALL WRITE_DB(XFRAME,SXFRAME)
+
+         CALL COMPRESS_R_NNZ(GEO,SGEO)
+
+         CALL WRITE_DB(EANI,SEANI)
+
+         CALL WRITE_DB(BUFMAT,SBUFMAT)
+
+         CALL WRITE_DB(BUFGEO,SBUFGEO)
+
+         CALL WRITE_DB(BUFSF,SBUFSF)
+
+         CALL WRITE_DB(RBMPC,SRBMPC)
+
+         CALL WRITE_DB(GJBUFR,SGJBUFR)
+
+         CALL WRITE_DB(W,SW)
+
+         CALL WRITE_DB(VEUL,SVEUL)
+
+         IF (MULTI_FVM%IS_USED) THEN
+            CALL WRITE_DB(MULTI_FVM%PRES_SHIFT, 1)
+            IF (N2D == 0) THEN
+               CALL WRITE_DB(MULTI_FVM%VEL(1, :), NUMELS)
+               CALL WRITE_DB(MULTI_FVM%VEL(2, :), NUMELS)
+               CALL WRITE_DB(MULTI_FVM%VEL(3, :), NUMELS)
+            ELSE
+               CALL WRITE_DB(MULTI_FVM%VEL(1, :), NUMELQ + NUMELTG)
+               CALL WRITE_DB(MULTI_FVM%VEL(2, :), NUMELQ + NUMELTG)
+               CALL WRITE_DB(MULTI_FVM%VEL(3, :), NUMELQ + NUMELTG)
+            ENDIF
+         ENDIF
+
+         CALL WRITE_DB(FILL,SFILL)
+
+         CALL WRITE_DB(DFILL,SDFILL)
+
+         CALL WRITE_DB(ALPH,SALPH)
+
+         CALL WRITE_DB(WB,SWB)
+
+         CALL WRITE_DB(DSAVE,SDSAVE)
+
+         CALL WRITE_DB(ASAVE,SASAVE)
+
+         CALL WRITE_DB(SPBUF,SSPBUF)
+
+         CALL WRITE_DB(VSPHIO,SVSPHIO)
+
+         CALL WRITE_DB(SPHVELN,SSPHVELN)
+
+         CALL WRITE_DB(MSNF,SMSNF)
+
+         CALL WRITE_DB(FORC,SFORC)
+
+         CALL WRITE_DB(VEL,SVEL)
+
+         CALL WRITE_DB(FSAV,SFSAV)
+
+         CALL WRITE_I_C(TAB_UMP,7*TAILLE)
+
+         CALL WRITE_I_C(POIN_UMP,NUMMAT)
+
+         CALL WRITE_DB(TAB_MAT,STAB_MAT)
+
+         CALL WRITE_DB(FZERO,SFZERO)
+
+         CALL WRITE_DB(XLAS,SXLAS)
+
+         CALL WRITE_DB(ACCELM,SACCELM)
+
+         CALL WRITE_DB(GAUGE,LLGAUGE*NBGAUGE)
+
+         CALL WRITE_SENSORS(SENSORS)
+
+         CALL WRITE_DB(FBVEL,SFBVEL)
+
+         CALL WRITE_DB(RBE3%FRBE3,RBE3%frbe3_sz)
+
+         CALL write_rrbe3pen(RBE3%PEN)
+
+         CALL WRITE_DB(FACTIV,LRACTIV*NACTIV)
+
+         CALL WRITE_DB(GRAV,SGRAV)
+
+         CALL WRITE_DB(FR_WAVE,SFR_WAVE)
+
+         CALL W_FAILWAVE(FAILWAVE)
+
+         CALL WRITE_NLOC_STRUCT(NLOC_DMG)
+
+         CALL WRITE_DB(PARTS0,SPARTS0)
+
+         CALL WRITE_DB(ELBUF,SELBUF)
+
+         FLAG_XFEM = 0
+         CALL W_ELBUF_STR(IPARG,ELBUF_TAB,FLAG_XFEM)
+
+C  if xfem
+         IF (ICRACK3D > 0) THEN
+           FLAG_XFEM = 1
+           DO IXEL=1,NXEL
+             CALL W_ELBUF_STR(IPARG,XFEM_TAB(1:NGROUP,IXEL),FLAG_XFEM)
+           ENDDO
+         ENDIF
+
+         CALL W_CLUSTER(CLUSTER)
+
+         CALL WRITE_DB(RWALL%RWBUF,RWALL%nrwlp*RWALL%nrwall)
+
+         CALL WRITE_DB(RWALL%RWSAV,RWALL%sz_rwsav)
+
+         CALL write_rrwallpen(RWALL%nrwall_pen,RWALL%PEN,RWALL%PEN%lnspen)
+
+         CALL WRITE_DB(RBY,SRBY)
+
+         CALL WRITE_DB(RBYL,SRBYL)
+
+         CALL WRITE_DB(RIVET,SRIVET)
+
+         CALL WRITE_DB(SECBUF,SSECBUF)
+
+         CALL WRITE_DB(VOLMON,SVOLMON)
+
+         CALL WRITE_DB(LAMBDA,SLAMBDA)
+
+         CALL WRITE_DB(RCONX,SRCONX)
+
+         CALL WRITE_DB(RCONTACT,SRCONTACT)
+         CALL WRITE_DB(ACONTACT,SRCONTACT)
+         CALL WRITE_DB(PCONTACT,SRCONTACT)
+C--------------------------------------
+C Writing Additional Tables Boundary Interfaces (real part)
+C--------------------------------------
+      CALL SPMD_SAVEFI(IPARI,2,INTBUF_TAB,SENSORS%NSENSOR,SENSORS%SENSOR_TAB,
+     .                 INTERFACES%PARAMETERS)
+C--------------------------------------
+C Writing Additional Tables Frontieres SPH (Real part)
+C--------------------------------------
+      CALL SPMD_SAVESPH(2,NUMSPHG)
+C--------------------------------------
+C     OPTIONAL WRITES
+C--------------------------------------
+      IF (IRESMD==0.AND.NPSAV>=25) THEN
+C   bring PARTSAV back to the proc and set the others to zero
+          IF(NSPMD > 1)
+     .      CALL SPMD_GLOB_DSUM9(PARTSAV,NPSAV*NPART)
+          IF (ISPMD/=0)THEN
+            DO M=1,NPSAV*NPART
+                 PARTSAV(M) = ZERO
+            ENDDO
+          ENDIF
+          CALL WRITE_DB(PARTSAV,NPSAV*NPART)
+      ENDIF
+      IF(NNOISE>0)THEN
+        CALL WRITE_I_C (IAF(IF01),2*NNOISE+10)
+        CALL WRITE_DB(AF(MF01),6*NCNOIS*NNOISE+1)
+      ENDIF
+C-----
+C  Save A, AR to Restart RAD2MD
+      IF (IRESMD==1) THEN
+        CALL WRITE_DB(NODES%A,3*NUMNOD)
+        CALL WRITE_DB(NODES%AR,3*NUMNOD)
+C    Save PARTSAV.
+        CALL WRITE_DB(PARTSAV,NPSAV*NPART)
+      ENDIF
+C
+      IF (IRESP == 1) THEN
+        CALL WRITE_DPDB(NODES%XDP,3*NUMNOD)
+        CALL WRITE_DPDB(NODES%DDP,3*NUMNOD)
+      ENDIF
+C needed for check restart
+C needed because the restarts are the same as the check restart
+        MY_ILEN = 4*NRLINK+NRLINK*(NSPMD+2)
+     .           +LLLINK+LLLINK*MIN(1,IPARIT)
+     .           +NSFLSW+8*NTFLSW+44*NCUTS !+LLINAL
+        CALL WRITE_I_C (MY_ILEN,1)
+        MY_RLEN = 9*NSFLSW+7*NCUTS
+        CALL WRITE_I_C (MY_RLEN,1)
+        CALL WRITE_I_C (ILINK,4*NRLINK)
+        CALL WRITE_I_C (FR_RL,NRLINK*(NSPMD+2))
+        CALL WRITE_I_C (LLINK,LLLINK)
+        CALL WRITE_I_C (IADRL,LLLINK*MIN(1,IPARIT))
+        !CALL WRITE_I_C (LINALE,LLINAL)
+C       section
+        CALL WRITE_I_C(NEFLSW,NSFLSW)
+        CALL WRITE_I_C(NNFLSW,8*NTFLSW)
+        CALL WRITE_I_C(ICUT,44*NCUTS)
+        CALL WRITE_DB (CRFLSW,9*NSFLSW)
+        CALL WRITE_DB (XCUT,7*NCUTS)
+C--------------------------------------
+        IF(NADMESH /= 0 .OR. IREST_MSELT /= 0)THEN
+          CALL WRITE_DB(MSC,NUMELC)
+          CALL WRITE_DB(INC,NUMELC)
+          CALL WRITE_DB(MSTG,NUMELTG)
+          CALL WRITE_DB(INTG,NUMELTG)
+          CALL WRITE_DB(PTG,3*NUMELTG)
+        END IF
+
+        IF(IREST_MSELT /= 0)THEN
+          CALL WRITE_DB(MSSA,NUMELS)
+          CALL WRITE_DB(MSTR,NUMELT)
+          CALL WRITE_DB(MSP,NUMELP)
+          CALL WRITE_DB(MSRT,NUMELR)
+        END IF
+
+        IF(NADMESH /= 0)THEN
+          CALL WRITE_DB(PADMESH,KPADMESH*NPART)
+          IF(GLOB_THERM%ITHERM_FE > 0)THEN
+            CALL WRITE_DB(MCPC,NUMELC)
+            CALL WRITE_DB(MCPTG,NUMELTG)
+          END IF
+        END IF
+C pinching shell
+        IF(NPINCH > 0) THEN
+          CALL WRITE_DB(PINCH_DATA%VPINCH,3*NPINCH)
+          CALL WRITE_DB(PINCH_DATA%DPINCH,3*NPINCH)
+          CALL WRITE_DB(PINCH_DATA%XPINCH,3*NPINCH)
+          CALL WRITE_DB(PINCH_DATA%MSPINCH,NPINCH)
+        ENDIF
+C--------------------------------------
+        IF(ISTATCND /= 0)THEN
+          CALL WRITE_DB(MSCND,NUMNOD)
+          CALL WRITE_DB(INCND,NUMNOD)
+        ENDIF
+C--------------------------------------
+C Int 21 structures
+C--------------------------------------
+        IF(NINTSTAMP /= 0)THEN
+          CALL INTSTAMP_WRESTR(INTSTAMP)
+        END IF
+
+        IF(H3D_DATA%N_SCAL_SKID > 0) THEN
+         IF(NINTSTAMP/=0) THEN
+           CALL WRITE_DB(PSKIDS, H3D_DATA%N_SCAL_SKID*NUMNODG)
+         ELSE
+           CALL WRITE_DB(PSKIDS, H3D_DATA%N_SCAL_SKID*NUMNOD)
+         ENDIF
+       ENDIF
+
+        IF(IFCONTMAX >0)THEN
+          IF(NINTSTAMP/=0.AND.NSPMD > 1 ) THEN
+             IF(ISPMD == 0) CALL WRITE_DB(FCONT_MAX, 3*NUMNODG)
+          ELSE
+             CALL WRITE_DB(FCONT_MAX, 3*NUMNOD)
+         ENDIF
+        ENDIF
+
+        IF(IFCONTPMAX >0)THEN
+          CALL WRITE_DB(FNCONT_MAX, 3*SPCONT_MAX)
+          CALL WRITE_DB(FTCONT_MAX, 3*SPCONT_MAX)
+        ENDIF
+
+        IF(IFCONT2MAX >0)THEN
+          CALL WRITE_DB(FCONT2_MAX, 3*NUMNOD)
+        ENDIF
+        IF(IFCONTP2MAX >0)THEN
+          CALL WRITE_DB(FNCONT2_MAX, 3*NUMNOD)
+          CALL WRITE_DB(FTCONT2_MAX, 3*NUMNOD)
+          CALL WRITE_DB(NPCONT2_MAX, 3*NUMNOD)
+        ENDIF
+
+        IF(IFCONT2MIN >0)THEN
+          CALL WRITE_DB(FCONT2_MIN, 3*NUMNOD)
+        ENDIF
+        IF(IFCONTP2MIN >0)THEN
+          CALL WRITE_DB(FNCONT2_MIN, 3*NUMNOD)
+          CALL WRITE_DB(FTCONT2_MIN, 3*NUMNOD)
+          CALL WRITE_DB(NPCONT2_MIN, 3*NUMNOD)
+        ENDIF
+C--------Frictional energy output-------
+      IF(OUTPUT%DATA%S_EFRICINT >0)THEN
+         IF(OUTPUT%DATA%NINEFRIC > 0) CALL WRITE_DB(OUTPUT%DATA%EFRIC, OUTPUT%DATA%NINEFRIC*NUMNOD)
+         IF(OUTPUT%DATA%NINEFRIC_STAMP > 0) CALL WRITE_DB(OUTPUT%DATA%EFRIC_STAMP, OUTPUT%DATA%NINEFRIC_STAMP*NUMNODG)
+      ENDIF
+      IF(OUTPUT%DATA%S_EFRIC >0)THEN
+         CALL WRITE_DB(OUTPUT%DATA%EFRICG, NUMNOD)
+         IF(NINTSTAMP/=0) CALL WRITE_DB(OUTPUT%DATA%EFRICG_STAMP, NUMNODG)
+      ENDIF
+C--------------------------------------
+C  Interface friction buffer (integer )
+C--------------------------------------
+      IF(NINTERFRIC /= 0)THEN
+        CALL INTFRIC_WRESTR(INTBUF_FRIC_TAB,NINTERFRIC)
+      END IF
+C--------------------------------------
+        CALL WRITE_DB(NODES%MS0,NUMNOD)
+        CALL WRITE_DB(NODES%IN0,SIN)
+        IF(IDTMINS==1)THEN
+          CALL WRITE_DB(ADMSMS,NUMNOD)
+        ELSEIF(IDTMINS==2)THEN
+          CALL WRITE_DB(DMELC ,NUMELC)
+          CALL WRITE_DB(DMELTG,NUMELTG)
+          CALL WRITE_DB(DMELS ,NUMELS)
+          CALL WRITE_DB(DMELTR,NUMELT)
+          CALL WRITE_DB(DMELP ,NUMELP)
+          CALL WRITE_DB(DMELRT,NUMELR)
+        END IF
+        IF(IDTMINS/=0.OR.IDTMINS_INT/=0)THEN
+          CALL WRITE_DB(RES_SMS,3*NUMNOD)
+        END IF
+c
+        IF(IDTMINS==2.OR.IDTMINS_INT/=0) THEN
+Cfor TYPE20
+          CALL WRITE_DB(DIAG_SMS ,NUMNOD)
+Cfor TYPE2
+          CALL WRITE_DB(DMINT2 ,4*I2NSN25)
+        END IF
+C
+        IF (ISMS_SELEC /= 0) THEN
+          CALL WRITE_I_C(NATIV0_SMS,NUMNOD)
+        ENDIF
+C--------------------------------------
+C Table structure (real part)
+C--------------------------------------
+      IF(NTABLE /= 0)THEN
+        CALL TABLE_WRESTR(TABLE, LTABLE)
+      END IF
+C--------------------------------------
+C    MDS Parameters
+C--------------------------------------
+#ifdef DNC
+      CALL ENG_WRT_MDS()
+#endif
+C--------------------------------------
+C ALE LINKS
+C--------------------------------------
+      IF(SLINALE > 0)THEN
+        CALL WRITE_I_C(LINALE,SLINALE)
+      END IF
+C--------------------------------------
+C ALE GRID
+C--------------------------------------
+      CALL WRITE_ALE_GRID()
+C--------------------------------------
+C FXBODY (moved from resol.F)
+C--------------------------------------
+      IF (NFXBODY>0) CALL FXBWREST(ICH)
+C--------------------------------------
+C EIGEN MODES
+C--------------------------------------
+      IF (NEIG>0) THEN
+         CALL EIGWREST(EIGIPM, EIGIBUF, EIGRPM)
+      ENDIF
+C--------------------------------------
+C SEATBELTS - SLIPRING / RETRACTOR / GUIDE
+C--------------------------------------
+      DO I = 1, NSLIPRING
+        CALL WRITE_I_C(SLIPRING(I)%ID, 1)
+        CALL WRITE_I_C(SLIPRING(I)%IDG, 1)
+        CALL WRITE_I_C(SLIPRING(I)%NFRAM, 1)
+        CALL WRITE_I_C(SLIPRING(I)%IFUNC, 4)
+        CALL WRITE_I_C(SLIPRING(I)%SENSID, 1)
+        CALL WRITE_I_C(SLIPRING(I)%FL_FLAG, 1)
+        CALL WRITE_I_C(SLIPRING(I)%RBODY, 1)
+C
+        CALL WRITE_DB(SLIPRING(I)%DC, 1)
+        CALL WRITE_DB(SLIPRING(I)%A, 1)
+        CALL WRITE_DB(SLIPRING(I)%FRIC, 1)
+        CALL WRITE_DB(SLIPRING(I)%FAC_D, 3)
+        CALL WRITE_DB(SLIPRING(I)%FRICS, 1)
+        CALL WRITE_DB(SLIPRING(I)%FAC_S, 3)
+C
+        DO J=1,SLIPRING(I)%NFRAM
+C
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%UPDATE, 1)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%ANCHOR_NODE, 1)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%NODE, 3)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%NODE_NEXT, 3)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%NODE2_PREV, 1)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%N_REMOTE_PROC, 1)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%ORIENTATION_NODE, 1)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%STRAND_DIRECTION, 2)
+          CALL WRITE_I_C(SLIPRING(I)%FRAM(J)%LOCKED, 1)
+C
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%VECTOR, 6)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%ORIENTATION_ANGLE, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%MATERIAL_FLOW, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%MATERIAL_FLOW_OLD, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%DFS, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%RESIDUAL_LENGTH, 2)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%CURRENT_LENGTH, 2)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%RINGSLIP, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%BETA, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%SLIP_FORCE, 3)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%PREV_REF_LENGTH, 1)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%INTVAR_STR1, 8)
+          CALL WRITE_DB(SLIPRING(I)%FRAM(J)%INTVAR_STR2, 8)
+C
+        ENDDO
+C
+      ENDDO
+C
+      DO I = 1, NRETRACTOR
+        CALL WRITE_I_C(RETRACTOR(I)%ID, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%IDG, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%UPDATE, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%ANCHOR_NODE, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%NODE, 2)
+        CALL WRITE_I_C(RETRACTOR(I)%NODE_NEXT, 2)
+        CALL WRITE_I_C(RETRACTOR(I)%STRAND_DIRECTION, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%IFUNC, 3)
+        CALL WRITE_I_C(RETRACTOR(I)%ISENS, 2)
+        CALL WRITE_I_C(RETRACTOR(I)%TENS_TYP, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%LOCKED, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%LOCKED_FREEZE, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%PRETENS_ACTIV, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%INACTI_NNOD, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%INACTI_NNOD_MAX, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%INACTI_NODE, RETRACTOR(I)%INACTI_NNOD)
+        CALL WRITE_I_C(RETRACTOR(I)%N_REMOTE_PROC, 1)
+        CALL WRITE_I_C(RETRACTOR(I)%S_TABLE, 2)
+        CALL WRITE_DB(RETRACTOR(I)%VECTOR, 3)
+        CALL WRITE_DB(RETRACTOR(I)%ELEMENT_SIZE, 1)
+        CALL WRITE_DB(RETRACTOR(I)%FORCE, 1)
+        CALL WRITE_DB(RETRACTOR(I)%MATERIAL_FLOW, 1)
+        CALL WRITE_DB(RETRACTOR(I)%RESIDUAL_LENGTH, 1)
+        CALL WRITE_DB(RETRACTOR(I)%FAC, 4)
+        CALL WRITE_DB(RETRACTOR(I)%PULLOUT, 1)
+        CALL WRITE_DB(RETRACTOR(I)%UNLOCK_FORCE, 1)
+        CALL WRITE_DB(RETRACTOR(I)%LOCK_PULL, 1)
+        CALL WRITE_DB(RETRACTOR(I)%LOCK_PULL_SAV, 1)
+        CALL WRITE_DB(RETRACTOR(I)%LOCK_OFFSET, 1)
+        CALL WRITE_DB(RETRACTOR(I)%LOCK_YIELD_FORCE, 1)
+        CALL WRITE_DB(RETRACTOR(I)%RINGSLIP, 1)
+        CALL WRITE_DB(RETRACTOR(I)%PRETENS_TIME, 1)
+        CALL WRITE_DB(RETRACTOR(I)%PRETENS_PULL, 1)
+        CALL WRITE_DB(RETRACTOR(I)%PRETENS_PULLMAX, 1)
+        CALL WRITE_DB(RETRACTOR(I)%RET_FORCE, 1)
+        DO J=1,2
+          IF (RETRACTOR(I)%S_TABLE(J) > 0) THEN
+            NPT = RETRACTOR(I)%S_TABLE(J)
+            CALL WRITE_DB(RETRACTOR(I)%TABLE(J)%X(1)%VALUES(1:NPT),NPT)
+            CALL WRITE_DB(RETRACTOR(I)%TABLE(J)%Y%VALUES(1:NPT),NPT)
+          ENDIF  
+        ENDDO
+      ENDDO
+c
+      DO I = 1, NGUIDED_CABLE
+C
+        CALL WRITE_I_C(GUIDE(I)%ID, 1)
+        CALL WRITE_I_C(GUIDE(I)%ID_G, 1)
+        CALL WRITE_I_C(GUIDE(I)%ISTIFF, 1)
+        CALL WRITE_I_C(GUIDE(I)%NODE_SET, 1)
+        CALL WRITE_I_C(GUIDE(I)%PART_SET, 1)
+        CALL WRITE_I_C(GUIDE(I)%NCONT, 1)  
+        CALL WRITE_I_C(GUIDE(I)%ELTYPE, 1)
+        CALL WRITE_I_C(GUIDE(I)%N_REMOTE_PROC, 1)
+C        
+        CALL WRITE_DB(GUIDE(I)%STFAC, 1)
+        CALL WRITE_DB(GUIDE(I)%FRIC, 1)
+C        
+        DO J=1,GUIDE(I)%NCONT
+          CALL WRITE_I_C(GUIDE(I)%CONT(J)%UPDATE, 1)
+          CALL WRITE_I_C(GUIDE(I)%CONT(J)%ACTIVE_SEGMENT, 1)
+          CALL WRITE_I_C(GUIDE(I)%CONT(J)%ANCHOR_NODE, 1)
+          CALL WRITE_I_C(GUIDE(I)%CONT(J)%NODE, 3)
+          CALL WRITE_I_C(GUIDE(I)%CONT(J)%NODE_NEXT, 2)
+          CALL WRITE_I_C(GUIDE(I)%CONT(J)%NODE_IREMOTE, 4)          
+C
+          CALL WRITE_DB(GUIDE(I)%CONT(J)%FORC, 3)
+          CALL WRITE_DB(GUIDE(I)%CONT(J)%FORC_AD, 3)
+          CALL WRITE_DB(GUIDE(I)%CONT(J)%DIST, 1)
+        ENDDO
+C
+      ENDDO      
+C
+      IF (N_ANCHOR_REMOTE > 0) THEN
+        CALL WRITE_I_C(ANCHOR_REMOTE%ADD_PROC, NSPMD+1)
+        CALL WRITE_I_C(ANCHOR_REMOTE%NODE, N_ANCHOR_REMOTE)
+      ENDIF
+C
+      IF (N_ANCHOR_REMOTE_SEND > 0) THEN
+        CALL WRITE_I_C(ANCHOR_REMOTE_SEND%ADD_PROC, NSPMD+1)
+        CALL WRITE_I_C(ANCHOR_REMOTE_SEND%BUF_INDEX, N_ANCHOR_REMOTE_SEND)
+        CALL WRITE_I_C(ANCHOR_REMOTE_SEND%NODE, N_ANCHOR_REMOTE_SEND)
+      ENDIF
+C
+      IF ((NSLIPRING_G + NRETRACTOR_G >0).AND.(ISPMD == 0)) THEN
+        CALL WRITE_I_C(NSEATBELT_TH_PROC, 1)
+        IF ((NSPMD > 1).AND.(NSEATBELT_TH_PROC > 0)) THEN
+          DO I=1,NSEATBELT_TH_PROC
+            CALL WRITE_I_C(SEATBELT_TH_EXCH(I)%ID_PROC, 1)
+            CALL WRITE_I_C(SEATBELT_TH_EXCH(I)%ADD_PROC, 1)
+            CALL WRITE_I_C(SEATBELT_TH_EXCH(I)%NSLIPRING, 1)
+            CALL WRITE_I_C(SEATBELT_TH_EXCH(I)%NRETRACTOR, 1)
+          ENDDO
+        ENDIF
+      ENDIF
+C
+C--------------------------------------------
+C /H3D/?/TMAX part noda
+C--------------------------------------------
+      CALL WRITE_DB(TM_DIS,LMAX_DIS*NUMNOD)
+      CALL WRITE_DB(TM_VEL,LMAX_VEL*NUMNOD)
+      CALL WRITE_DB(TM_NSIG1,LMAX_NSIG*NUMNOD)
+      CALL WRITE_DB(TM_NSIG3,LMAX_NSIG*NUMNOD)
+      CALL WRITE_DB(TM_NSTRA1,LMAX_NSTRA*NUMNOD)
+      CALL WRITE_DB(TM_NSTRA3,LMAX_NSTRA*NUMNOD)
+C--------------------------------------
+      IF (NCONLD > 0) THEN
+        CALL WRITE_DB(DPL0CLD,6*NCONLD)
+        CALL WRITE_DB(VEL0CLD,6*NCONLD)
+      ENDIF
+C--------------------------------------
+C   /DAMP/VREL
+C--------------------------------------
+      IF (NDAMP_VREL > 0) THEN
+        CALL WRITE_I_C(ID_DAMP_VREL,NDAMP_VREL)
+        CALL WRITE_I_C(FR_DAMP_VREL,NDAMP_VREL*(NSPMD+2)) 
+      ENDIF
+C--------------------------------------
+      IF (NFLOW>0) CALL NFWREST(IFLOW, RFLOW)
+c     
+      CALL FVWREST()  
+c
+      IF (IMPL_S>0) THEN
+        CALL IMP_TRANS(IMPBUF_TAB%R_IMP)
+        CALL IMPWREST(IMPL_S0)
+      ENDIF
+c
+      IF(GLOB_THERM%ITHERM_FE > 0 ) CALL THCWREST(MCP, TEMP)
+C
+      IF(NITSCHE > 0 )CALL NITSCHEWREST(FORNEQS)
+c
+      CALL WRITE_UNITS(UNITAB)
+c
+      IF(IRIGID_MAT > 0 )CALL RIGMATWREST(RBYM ,IRBYM ,LNRBYM,WEIGHT_RM)
+
+C thermal boundary
+      IF (GLOB_THERM%NUMCONV > 0)   THEN
+        CALL CONVWREST(IBCV, FCONV,GLOB_THERM)
+      END IF
+      IF (GLOB_THERM%NUMRADIA > 0)  THEN
+        CALL RADIAWREST(IBCR, FRADIA,GLOB_THERM)
+      END IF
+      IF (GLOB_THERM%NFXFLUX > 0)  THEN
+        CALL FXFLUXWREST(IBFFLUX, FBFFLUX, GLOB_THERM)
+      END IF
+      IF (GLOB_THERM%NFXTEMP > 0)  THEN
+        CALL FXTEMPWREST(IBFTEMP, FBFTEMP,GLOB_THERM)
+      END IF
+!
+c Ply XFEM
+      IF (IPLYXFEM > 0)THEN
+        CALL PLYXFEM_WREST(MS_PLY,ZI_PLY,INOD_PXFEM,IEL_PXFEM,
+     .                     ICODE_PLY,ISKEW_PLY,MSZ2)
+        CALL PLYXFEM_WRESTANIM()
+        CALL PLYXFEM_WRAVUPLY()
+      ENDIF  
+c
+      IF (NLOADC > 0) CALL WRITE_DB(CFIELD,LFACLOAD*NLOADC)
+      IF (NLOADP > 0) CALL WRITE_DB(LOADP,LFACLOAD*NLOADP)
+      IF (NINTLOADP > 0) CALL WRITE_DB(DGAPLOADINT,NINTER*NLOADP_HYD)
+C
+C /INIVEL w/ T_start or senor_id
+      IF (LOADS%NINIVELT>0) CALL WRITE_INIVEL(LOADS%NINIVELT,LOADS%INIVELT) 
+C                                                         
+C xfem for layerd shell (cracks)
+      IF (ICRACK3D > 0) THEN
+        CALL CRKXFEM_WREST(INOD_CRKXFEM,IEL_CRKXFEM,NODLEVXF)
+        CALL CRKXFEM_WRESTANIM(CRKEDGE,CRKSKY,INDX_CRK,XEDGE4N,XEDGE3N)
+      ENDIF
+C
+      IF(ALEFVM_Param%IEnabled > 0) CALL WRITE_DB(ALEFVM_Buffer%FCELL ,6*NUMELS)
+C foam + air
+      IF(IALELAG > 0 )CALL ALELAG_WREST()
+C THoutput
+      IF(SRTHBUF > 0) CALL RTHBUFWREST()
+C Knot
+      IF (SKNOT > 0) CALL WRITE_DB(KNOT,SKNOT)
+      IF (SKNOTLOCPC > 0) CALL WRITE_DB(KNOTLOCPC,SKNOTLOCPC)
+      IF (SKNOTLOCEL > 0) CALL WRITE_DB(KNOTLOCEL,SKNOTLOCEL)
+      IF (NUMELIG3D > 0) CALL WRITE_DB(WIGE,NUMNOD)
+C
+      IF(IPART_STACK >0) CALL STACK_WREST(STACK%IGEO,STACK%GEO,STACK%PM )
+C
+      IF (NDRAPE > 0) CALL DRAPE_WREST(DRAPE_SH4N  , DRAPE_SH3N,DRAPEG)
+C
+      IF (NUMPLY > 0) CALL PLY_INFO_WREST(PLY_INFO)
+C
+C--------------------------------------
+C Q1NP element real arrays
+C--------------------------------------
+      IF (NUMELQ1NP_G > 0) THEN
+        IF (SQ1NPWEIGHT_L_G > 0) THEN
+          CALL WRITE_DB(Q1NP_WTAB,SQ1NPWEIGHT_L_G)
+        ENDIF
+        IF (SQ1NPKNOT_L_G > 0) THEN
+          CALL WRITE_DB(Q1NP_KTAB,SQ1NPKNOT_L_G)
+        ENDIF
+        IF (SQ1NPCTRL_SHARED_G > 0) THEN
+          CALL WRITE_DB(Q1NP_CPTAB,3*SQ1NPCTRL_SHARED_G)
+        ENDIF
+      ENDIF
+
+      ! ---------------------------
+      ! write the starter + engine elapsed time
+      CALL WRITE_DPDB(GLOBAL_COMP_TIME%STARTER_TIME,1)
+      CALL WRITE_DPDB(GLOBAL_COMP_TIME%ENGINE_TIME,GLOBAL_COMP_TIME%RUN_NBR)
+      ! ---------------------------
+
+      ! restart file size - mist be before closing the file
+      CALL  file_size(RESTSIZE)
+
+      ! Closing the file
+      CALL CLOSE_C
+C
+      IF(ISPMD==0)THEN
+        WRITE (IOUT,1000)  FILNAMG(1:LENG)
+        WRITE (ISTDO,1050) FILNAMG(1:LENG)
+      ENDIF      
+C--------------------------------------
+ 1000 FORMAT (/4X,' RESTART FILES:',1X,A,' WRITTEN'/
+     .         4X,' -------------'/)
+ 1050 FORMAT (4X,' RESTART FILES:',1X,A,' WRITTEN')
+C-----------
+      RETURN
+      END

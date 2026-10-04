@@ -1,0 +1,423 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C Please note: any modification in these routines must be postponed
+C             in identical routines in the machine
+!||====================================================================
+!||    fvmesh0                  ../starter/source/airbag/fvmesh0.F
+!||--- called by ------------------------------------------------------
+!||    lectur                   ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    fvbric                   ../starter/source/airbag/fvbric.F
+!||    fvelarea                 ../starter/source/airbag/fvelarea.F
+!||    fvelinte                 ../starter/source/airbag/fvelinte.F
+!||    fvelprint                ../starter/source/airbag/fvelprint.F
+!||    fvelsurf                 ../starter/source/airbag/fvelsurf.F
+!||    fvinjectint              ../starter/source/airbag/fvinjectint.F
+!||    fvinjnormal              ../starter/source/airbag/fvinjnormal.F
+!||    fvlength                 ../starter/source/airbag/fvlength.F
+!||    fvmesh1                  ../starter/source/airbag/fvmesh.F
+!||    fvnodbr                  ../starter/source/airbag/fvmbag1.F
+!||    fvthsurf                 ../starter/source/airbag/fvthsurf.F
+!||    fvventholeint            ../starter/source/airbag/fvventholeint.F
+!||    fvverif                  ../starter/source/airbag/fvmbag1.F
+!||    fvvolu                   ../starter/source/airbag/fvvolu.F
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod                ../starter/share/modules1/fvbag_mod.F
+!||    fvelinte_mod             ../starter/source/airbag/fvelinte.F
+!||    fvinjnormal_mod          ../starter/source/airbag/fvinjnormal.F
+!||    fvlength_mod             ../starter/source/airbag/fvlength.F
+!||    fvvolu_mod               ../starter/source/airbag/fvvolu.F
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    monvol_struct_mod        ../starter/share/modules1/monvol_struct_mod.F
+!||    reorder_mod              ../starter/share/modules1/reorder_mod.F
+!||====================================================================
+      SUBROUTINE FVMESH0(T_MONVOL, XYZINI, IXS, IXC, IXTG, PM,IPM, IGRSURF, XYZREF,NB_NODE)
+C-----------------------------------------------
+C   M o d u l e s 
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE FVBAG_MOD
+      USE FVMBAG_MESHCONTROL_MOD
+      USE REORDER_MOD
+      USE MESSAGE_MOD
+      USE GROUPDEF_MOD
+      USE MONVOL_STRUCT_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+      USE FVELINTE_MOD , ONLY : FVELINTE
+      USE FVVOLU_MOD , ONLY : FVVOLU
+      USE FVINJNORMAL_MOD , ONLY : FVINJNORMAL
+      USE FVLENGTH_MOD , ONLY : FVLENGTH
+      use element_mod , only : nixs,nixc,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "units_c.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(MONVOL_STRUCT_), DIMENSION(NVOLU), INTENT(INOUT) :: T_MONVOL
+      INTEGER IXS(NIXS,*), IXC(NIXC,*), IXTG(NIXTG,*)
+      INTEGER IPM(NPROPMI,*)
+      INTEGER NB_NODE
+      my_real XYZINI(3,NB_NODE), PM(NPROPM,*), XYZREF(3,NB_NODE)
+      TYPE (SURF_)   , DIMENSION(NSURF)   :: IGRSURF
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IFV,
+     .        N, ITYP, NNS, NTG, NBRIC, NBX, NBY, NNB,
+     .        NBA, NTGA, NNA, 
+     .        PFLAG, NNI, NTGI, ILVOUT, NNFV, NNT, NSURFI, 
+     .        NSEG, IREF, NTRFV,  NPOLH, ID,
+     .        NTGT, INODE
+      INTEGER I
+      INTEGER IBID
+      CHARACTER(len=nchartitle) :: TITR
+      INTEGER, DIMENSION(:), ALLOCATABLE :: MINUS_SIGN_REVERSE
+      my_real, DIMENSION(:,:), ALLOCATABLE :: X
+      my_real DIRX,DIRY,DIRZ,DIR2X,DIR2Y,DIR2Z,ORIGX,ORIGY,ORIGZ,LX,LY,LZ
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+      CALL MY_ALLOC(X,3,NB_NODE,"X")
+      PFLAG = 0
+      IFV=0
+      DO N = 1, NVOLU
+         ITYP = T_MONVOL(N)%TYPE
+         ID = T_MONVOL(N)%ID
+         TITR = T_MONVOL(N)%TITLE
+         IF (ITYP == 6 .OR. ITYP == 8) THEN
+            IF (PFLAG == 0) THEN
+              WRITE(IOUT,1000)
+              PFLAG = 1
+            ENDIF
+C
+            IREF = T_MONVOL(N)%IVOLU(59)
+            IF(IREF==0) THEN
+               X=XYZINI
+            ELSE
+               X=XYZREF
+            ENDIF
+C
+            IFV=IFV+1
+            NNS = T_MONVOL(N)%NNS
+            NTG = T_MONVOL(N)%NTG
+            NNI = T_MONVOL(N)%NNI
+            NTGI = T_MONVOL(N)%NTGI
+            NBA = T_MONVOL(N)%NBRIC
+            NTGA = T_MONVOL(N)%NTGA
+            NNA = T_MONVOL(N)%NNA
+            NNT = NNS + NNI
+            NTGT = NTG + NTGI
+
+            T_MONVOL(N)%KR5 = 1+NRVOLU*NVOLU+LRCBAG+LRBAGJET+LRBAGHOL+T_MONVOL(N)%IVOLU(34) + NNT*6
+C----------------------------------------------
+C Automatic volume cutting parameters
+C----------------------------------------------
+            DIRX = T_MONVOL(N)%RVOLU(35)
+            DIRY = T_MONVOL(N)%RVOLU(36)
+            DIRZ = T_MONVOL(N)%RVOLU(37)
+            DIR2X = T_MONVOL(N)%RVOLU(38)
+            DIR2Y = T_MONVOL(N)%RVOLU(39)
+            DIR2Z = T_MONVOL(N)%RVOLU(40)
+            ORIGX = T_MONVOL(N)%RVOLU(41)
+            ORIGY = T_MONVOL(N)%RVOLU(42)
+            ORIGZ = T_MONVOL(N)%RVOLU(43)
+            LX = T_MONVOL(N)%RVOLU(44)
+            LY = T_MONVOL(N)%RVOLU(45)
+            LZ = T_MONVOL(N)%RVOLU(53)
+            FVDATA(IFV)%L_TYPE = 0
+            FVDATA(IFV)%ID_DT_OPTION = T_MONVOL(N)%IVOLU(27)
+            FVDATA(IFV)%LAMBDA = ZERO
+            FVDATA(IFV)%DTOLD = ZERO
+            FVDATA(IFV)%CFL_COEF = T_MONVOL(N)%RVOLU(71)
+            FVDATA(IFV)%DTMIN = T_MONVOL(N)%RVOLU(72)
+            FVDATA(IFV)%PDISP = ZERO
+            FVDATA(IFV)%PDISP_OLD = ZERO
+C
+            CALL FVVERIF(
+     .           NTGA, T_MONVOL(N)%ELEMA, X, ID,
+     .           DIRX, DIRY, DIRZ, DIR2X, DIR2Y,
+     .           DIR2Z, ORIGX, ORIGY, ORIGZ, 
+     .           LX, LY, LZ, T_MONVOL(N)%NODES, T_MONVOL(N)%IBUFA, T_MONVOL(N)%TAGELA, 
+     .           TITR)
+C    
+            T_MONVOL(N)%RVOLU(44) = LX
+            T_MONVOL(N)%RVOLU(45) = LY
+            T_MONVOL(N)%RVOLU(53) = LZ
+C
+            NBX = T_MONVOL(N)%IVOLU(54)
+            NBY = T_MONVOL(N)%IVOLU(55)          
+            NBRIC = NBX * NBY          
+            NNB = (NBX + 1) * (NBY + 1) * 2
+            call my_alloc(FVDATA(IFV)%BRIC, 8, NBRIC, "FVDATA(IFV)%BRIC")
+            call my_alloc(FVDATA(IFV)%TBRIC, 13, NBRIC, "FVDATA(IFV)%TBRIC")
+            call my_alloc(FVDATA(IFV)%XB, 3, NNB, "FVDATA(IFV)%XB")
+            call my_alloc(FVDATA(IFV)%SFAC, 6, 4, NBRIC, "FVDATA(IFV)%SFAC")
+C
+            CALL FVBRIC(T_MONVOL(N)%IVOLU, T_MONVOL(N)%RVOLU, T_MONVOL(N)%NODES, X, NNS)
+C
+            T_MONVOL(N)%IVOLU(50) = T_MONVOL(N)%IVOLU(46)
+            T_MONVOL(N)%IVOLU(51) = T_MONVOL(N)%IVOLU(47)
+            T_MONVOL(N)%IVOLU(52) = T_MONVOL(N)%IVOLU(48)
+            T_MONVOL(N)%IVOLU(53) = T_MONVOL(N)%IVOLU(49)
+C
+            CALL FVMESH1(
+     .           T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM, X, T_MONVOL(N)%IVOLU, FVDATA(IFV)%BRIC,
+     .           FVDATA(IFV)%XB, T_MONVOL(N)%RVOLU, NTG, NTGI, NBRIC, FVDATA(IFV)%TBRIC,
+     .           FVDATA(IFV)%SFAC, FVDATA(IFV)%DLH, NBA, NTGA,
+     .           T_MONVOL(N)%TBRIC, T_MONVOL(N)%TFAC, T_MONVOL(N)%TAGELS, T_MONVOL(N)%IBUFA,
+     .           T_MONVOL(N)%ELEMA, T_MONVOL(N)%TAGELA, IXS, ID ,TITR, NB_NODE, ITYP)
+
+            IF (KMESH(N) >= 2) THEN
+               T_MONVOL(N)%KRA5 = 1 + NRVOLU * NVOLU + LRCBAG + LRBAGJET + LRBAGHOL +
+     .              T_MONVOL(N)%IVOLU(34) + 7*NNT+4*NTGT+6*NNA
+               T_MONVOL(N)%VELOCITY(1:3, 1:NNA) = ZERO
+               DO I = 1, NNA
+                  INODE = T_MONVOL(N)%IBUFA(I)
+                  T_MONVOL(N)%NODE_COORD(1, I) = NODE_COORD(1, INODE)
+                  T_MONVOL(N)%NODE_COORD(2, I) = NODE_COORD(2, INODE)
+                  T_MONVOL(N)%NODE_COORD(3, I) = NODE_COORD(3, INODE)
+               ENDDO
+            ENDIF
+C
+            IF (NTGI > 0) THEN
+              ILVOUT = T_MONVOL(N)%IVOLU(44)
+              NSURFI=T_MONVOL(N)%INT_SURFID
+              NSEG=IGRSURF(NSURFI)%NSEG
+C-----------------------------
+C  Internal surface elements
+C-----------------------------
+              T_MONVOL(N)%POROSITY(1:NTGI) = ZERO
+              CALL FVELINTE(T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM(1, NTG + 1), IXC, IXTG,
+     .                     PM, IPM, ILVOUT, IFV, NNT, NTG, T_MONVOL(N)%POROSITY,
+     .                     NSEG,IGRSURF(NSURFI)%ELTYP, NTGI, T_MONVOL(N)%ELTG,
+     .                     NB_NODE,IGRSURF(NSURFI)%ELEM)
+C--------------------------------
+C  Injectors on internal surface
+C--------------------------------
+              call my_alloc(MINUS_SIGN_REVERSE, NTGI, "MINUS_SIGN_REVERSE")
+              MINUS_SIGN_REVERSE(:) = 0
+              CALL FVINJECTINT(
+     .               T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM(1, NTG + 1), T_MONVOL(N)%IBAGJET,
+     .               T_MONVOL(N)%NJET , IGRSURF          ,
+     .               T_MONVOL(N)%ITAGEL(NTG + 1), NNS+NNI          , NTGI,NB_NODE,
+     .               MINUS_SIGN_REVERSE)
+C--------------------------------
+C  Porous surface on internal surface
+C--------------------------------
+              CALL FVVENTHOLEINT(
+     .               T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM(1, NTG + 1), T_MONVOL(N)%IBAGHOL,
+     .               T_MONVOL(N)%NVENT, IGRSURF          ,
+     .               T_MONVOL(N)%ITAGEL(NTG + 1), NNS+NNI          , NTGI, NB_NODE)
+C
+              CALL FVELSURF(
+     .               T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM(1, NTG + 1), IBID, IXC, IXTG, NTGI,
+     .               T_MONVOL(N)%ELTG(NTG + 1), T_MONVOL(N)%MATTG(NTG + 1), NB_NODE, .FALSE.)
+C-----------------------------------------------------------------------
+C        REDEFINE INTERNAL TRIANGLE FOR NORMAL CONSISTENCY FOR INJECTORS
+C-----------------------------------------------------------------------
+              CALL FVINJNORMAL(
+     .             T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM(1, NTG + 1), IXC, IXTG, 
+     .             T_MONVOL(N)%ELTG(NTG + 1), NTGI, ILVOUT,
+     .             MINUS_SIGN_REVERSE)
+              CALL MY_DEALLOC(MINUS_SIGN_REVERSE)
+              CALL FVELPRINT(
+     .               IXC, IXTG, NTGI, T_MONVOL(N)%ITAGEL(NTG + 1), T_MONVOL(N)%ELTG(NTG + 1),
+     .               T_MONVOL(N)%IBAGHOL,  ILVOUT , 1 )
+C------------------------------------------------------
+C  Tag internal element for /TH/SURF mass flow option
+C------------------------------------------------------
+              DO I=1,NSURF
+                NSEG=IGRSURF(I)%NSEG
+                CALL FVTHSURF(NSEG, NTGI,IGRSURF(I)%ELTYP, T_MONVOL(N)%ELTG(NTG + 1),
+     .                        T_MONVOL(N)%THSURF_TAG(I, 1:NTGI + 1), IGRSURF(I)%ELEM)
+              ENDDO
+            ENDIF
+C---------------------------------
+C  Additional brick nodes
+C---------------------------------  
+            IF (NNA > 0) THEN
+               NNFV = T_MONVOL(N)%IVOLU(46)
+               CALL FVNODBR(T_MONVOL(N)%IBUFA, NNA, NNFV, IFV, NB_NODE)
+            ENDIF
+C
+            NNFV = T_MONVOL(N)%IVOLU(46)
+            NTRFV = T_MONVOL(N)%IVOLU(47) 
+            NPOLH = T_MONVOL(N)%IVOLU(49)
+C------------------------------------
+C    REFERENCE METRICS : VOLUME CHECK
+C------------------------------------
+            IF (IREF /= 0) THEN
+               CALL FVVOLU( ITYP, NNFV,  NTRFV, NPOLH,
+     1              T_MONVOL(N)%NODES, T_MONVOL(N)%IBUFA, T_MONVOL(N)%ELEMA, T_MONVOL(N)%TAGELA,
+     2              XYZINI,      T_MONVOL(N)%IVOLU,   T_MONVOL(N)%RVOLU,
+     3              FVDATA(IFV)%IFVNOD, FVDATA(IFV)%RFVNOD, FVDATA(IFV)%IFVTRI,
+     4              FVDATA(IFV)%IFVPOLY,FVDATA(IFV)%IFVTADR,FVDATA(IFV)%IFVPOLH,
+     5              FVDATA(IFV)%IFVPADR,FVDATA(IFV)%MPOLH,
+     6              FVDATA(IFV)%EPOLH,  FVDATA(IFV)%VPOLH_INI )
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+
+            ENDIF
+C----------------------------------------
+C    COMPUTE MINIMUM LENGTH FOR TIME STEP
+C----------------------------------------
+            CALL FVLENGTH(NNFV,         NTRFV,        NPOLH,
+     1           T_MONVOL(N)%NODES, T_MONVOL(N)%IBUFA, T_MONVOL(N)%ELEMA, T_MONVOL(N)%TAGELA,
+     2           XYZINI,     T_MONVOL(N)%IVOLU,
+     3           FVDATA(IFV)%IFVNOD, FVDATA(IFV)%RFVNOD, FVDATA(IFV)%IFVTRI,
+     4           FVDATA(IFV)%IFVPOLY,FVDATA(IFV)%IFVTADR,FVDATA(IFV)%IFVPOLH,
+     5           FVDATA(IFV)%IFVPADR,FVDATA(IFV)%IBPOLH, FVDATA(IFV)%DLH    ) 
+C----------------------------
+C     COMPUTE INITIAL SURFACE
+C----------------------------
+            CALL FVELAREA(T_MONVOL(N)%NODES, T_MONVOL(N)%ELEM, XYZREF,   NTGT,
+     1                    T_MONVOL(N)%ELAREA)
+C
+         ENDIF
+      ENDDO
+C
+      CALL MY_DEALLOC(X)
+      RETURN
+C
+1000  FORMAT(
+     . //,'     FVMBAG: FINITE VOLUME MESH     '/
+     .    '     --------------------------     ')
+C
+      END
+
+
+
+!||====================================================================
+!||    applysort2fvm            ../starter/source/airbag/fvmesh0.F
+!||--- called by ------------------------------------------------------
+!||    lectur                   ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod                ../starter/share/modules1/fvbag_mod.F
+!||    monvol_struct_mod        ../starter/share/modules1/monvol_struct_mod.F
+!||    reorder_mod              ../starter/share/modules1/reorder_mod.F
+!||====================================================================
+      SUBROUTINE APPLYSORT2FVM(T_MONVOL)
+C Description: Apply renumbering to FVMBAGS (ELTG et TBA) 
+C after S*HEAD S*TAILS routines 
+C-----------------------------------------------
+C   M o d u l e s 
+C-----------------------------------------------
+      USE FVBAG_MOD
+      USE FVMBAG_MESHCONTROL_MOD
+      USE REORDER_MOD
+      USE MONVOL_STRUCT_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(MONVOL_STRUCT_), DIMENSION(NVOLU), INTENT(INOUT) :: T_MONVOL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: IFV, N, ITYP, NNS, NTG, NBA, NTGA, NNA, NNI, NTGI,  NNT,  IREF, ID, NTGT
+      INTEGER J, IEL
+      INTEGER, DIMENSION(:), ALLOCATABLE :: TMP
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+      IFV=0
+      DO N = 1, NVOLU
+         ITYP = T_MONVOL(N)%TYPE
+         ID = T_MONVOL(N)%ID
+         IF (ITYP == 6 .OR. ITYP == 8 .OR. ITYP == 11) THEN
+            IREF = T_MONVOL(N)%IVOLU(59)
+            IFV = IFV + 1
+            NNS = T_MONVOL(N)%NNS
+            NTG = T_MONVOL(N)%NTG
+            NNI = T_MONVOL(N)%NNI
+            NTGI = T_MONVOL(N)%NTGI
+            NBA = T_MONVOL(N)%NBRIC
+            NTGA = T_MONVOL(N)%NTGA
+            NNA = T_MONVOL(N)%NNA
+            NNT = NNS + NNI
+            NTGT = NTG + NTGI
+
+C----------------------------------------------
+C Parameters for automatic volume splitting
+C----------------------------------------------
+C           PERMUTATION ELTG
+            IF (NTG > 0) THEN
+              call my_alloc(TMP, NTG, "TMP")
+              DO J = 1, NTG
+                IEL = T_MONVOL(N)%ELTG(J)
+                IF (IEL <= NUMELC) THEN
+                  TMP(J) = PERMUTATION%SHELL(IEL + NUMELC)
+                ELSE IF (IEL > NUMELC) THEN
+                  TMP(J) = NUMELC + PERMUTATION%TRIANGLE(IEL - NUMELC + NUMELTG)
+                ENDIF
+              ENDDO 
+              T_MONVOL(N)%ELTG(1:NTG) = TMP(1:NTG)
+              CALL MY_DEALLOC(TMP)
+            ENDIF
+     
+            IF (NTGI > 0) THEN
+              call my_alloc(TMP, NTGI, "TMP")
+              DO J = 1, NTGI
+                IEL = T_MONVOL(N)%ELTG(NTG + J) 
+                IF (IEL <= NUMELC) THEN
+                  TMP(J) = PERMUTATION%SHELL(IEL + NUMELC)
+                ELSE IF (IEL > NUMELC) THEN
+                  TMP(J) = NUMELC + PERMUTATION%TRIANGLE(IEL - NUMELC + NUMELTG)
+                ENDIF
+              ENDDO 
+              T_MONVOL(N)%ELTG(NTG + 1: NTG + NTGI) = TMP(1:NTGI)
+              CALL MY_DEALLOC(TMP)
+            ENDIF
+
+C      PERMUTATION TBA 
+            IF (NTG > 0 .AND. (.NOT. TETRAMESHER_USED)) THEN
+              DO J = 1, NBA
+                IEL = T_MONVOL(N)%TBRIC(1, J) 
+                T_MONVOL(N)%TBRIC(1, J) = PERMUTATION%SOLID(IEL + NUMELS)
+              ENDDO 
+            ELSE IF(NTG > 0 .AND. TETRAMESHER_USED) THEN
+C     Not possible
+            ENDIF
+         ENDIF
+      ENDDO
+C
+
+      RETURN
+C
+      END

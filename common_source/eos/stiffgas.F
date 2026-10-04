@@ -1,0 +1,131 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    stiffgas_mod   ../common_source/eos/stiffgas.F
+!||--- called by ------------------------------------------------------
+!||    eosmain        ../common_source/eos/eosmain.F
+!||    eosmain51      ../engine/source/materials/mat/mat051/eosmain51.F90
+!||====================================================================
+      MODULE STIFFGAS_MOD
+      IMPLICIT NONE
+      CONTAINS
+!||====================================================================
+!||    stiffgas        ../common_source/eos/stiffgas.F
+!||--- called by ------------------------------------------------------
+!||    eosmain         ../common_source/eos/eosmain.F
+!||    eosmain51       ../engine/source/materials/mat/mat051/eosmain51.F90
+!||--- uses       -----------------------------------------------------
+!||    constant_mod    ../common_source/modules/constant_mod.F
+!||    eos_param_mod   ../common_source/modules/mat_elem/eos_param_mod.F90
+!||====================================================================
+      SUBROUTINE STIFFGAS(
+     1                    IFLAG,NEL  ,PMIN ,OFF  ,EINT ,MU   ,MU2 ,
+     2                    ESPE ,DVOL ,DF   ,VNEW ,PSH ,
+     3                    PNEW ,DPDM ,DPDE ,EOS_STRUCT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+       USE CONSTANT_MOD , ONLY : ZERO, EM15, HALF, ONE, TWO, THREE, THREE100
+       USE EOS_PARAM_MOD , ONLY : EOS_PARAM_
+C-----------------------------------------------
+C   D e s c r i p t i o n
+C-----------------------------------------------
+C This subroutine contains numerical solving
+C of STIFFENED-GAS EOS
+!----------------------------------------------------------------------------
+!! \details STAGGERED SCHEME IS EXECUTED IN TWO PASSES IN EOSMAIN : IFLG=0 THEN IFLG=1
+!! \details COLLOCATED SCHEME IS DOING A SINGLE PASS : IFLG=2
+!! \details
+!! \details  STAGGERED SCHEME
+!! \details     EOSMAIN / IFLG = 0 : DERIVATIVE CALCULATION FOR SOUND SPEED ESTIMATION c[n+1] REQUIRED FOR PSEUDO-VISCOSITY (DPDE:partial derivative, DPDM:total derivative)
+!! \details     MQVISCB            : PSEUDO-VISCOSITY Q[n+1]
+!! \details     MEINT              : INTERNAL ENERGY INTEGRATION FOR E[n+1] : FIRST PART USING P[n], Q[n], and Q[n+1] CONTRIBUTIONS
+!! \details     EOSMAIN / IFLG = 1 : UPDATE P[n+1], T[N+1]
+!! \details                          INTERNAL ENERGY INTEGRATION FOR E[n+1] : LAST PART USING P[n+1] CONTRIBUTION
+!! \details                            (second order integration dE = -P.dV where P = 0.5(P[n+1] + P[n]) )
+!! \details  COLLOCATED SCHEME
+!! \details     EOSMAIN / IFLG = 2 : SINGLE PASS FOR P[n+1] AND DERIVATIVES
+!----------------------------------------------------------------------------
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      IMPLICIT NONE
+#include    "my_real.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER,INTENT(IN) :: IFLAG, NEL
+      my_real,INTENT(IN) :: OFF(NEL),MU(NEL),MU2(NEL),ESPE(NEL),DVOL(NEL),DF(NEL),VNEW(NEL)
+      my_real, INTENT(INOUT) :: PSH(NEL),PNEW(NEL) ,DPDM(NEL), DPDE(NEL),EINT(NEL)
+      my_real,INTENT(IN) :: PMIN
+      TYPE(EOS_PARAM_),INTENT(IN) :: EOS_STRUCT
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I
+      my_real :: P0,GAMMA,E0,AA, BB, DVV, PP, PSTAR
+C-----------------------------------------------
+C   S o u r c e  L i n e s
+C-----------------------------------------------
+      GAMMA      = EOS_STRUCT%UPARAM(1)
+      P0         = EOS_STRUCT%UPARAM(2)
+      PSTAR      = EOS_STRUCT%UPARAM(3)
+      PSH(1:NEL) = EOS_STRUCT%PSH
+      E0         = EOS_STRUCT%E0
+
+      IF(IFLAG == 0) THEN
+        DO I=1,NEL
+          PP      = -GAMMA*PSTAR-PSH(I) + (GAMMA-ONE)*(ONE+MU(I))*ESPE(I)
+          DPDM(I) =  (GAMMA-ONE) *ESPE(I)+(GAMMA-ONE)*(ONE+MU(I))*DF(I)*DF(I)*(PP+PSH(I) )
+          DPDE(I) = (GAMMA-ONE)*(ONE+MU(I))
+          PNEW(I) = MAX(PP,PMIN-PSH(I))*OFF(I)
+        ENDDO
+
+      ELSEIF(IFLAG == 1) THEN
+        DO I=1,NEL
+          AA      = -GAMMA*PSTAR-PSH(I)
+          BB      = (GAMMA-ONE)*(ONE+MU(I))
+          DPDE(I) = (GAMMA-ONE)*(ONE+MU(I))
+          DVV     = HALF*DVOL(I)*DF(I) / MAX(EM15,VNEW(I))
+          PNEW(I) = (AA+BB*(ESPE(I)-PSH(I) *DVV))/(ONE+BB*DVV)
+          PNEW(I) = MAX(PNEW(I),PMIN-PSH(I) )*OFF(I)
+          EINT(I) = EINT(I) - HALF*DVOL(I)*(PNEW(I)+PSH(I) )
+        ENDDO
+
+      ELSEIF(IFLAG == 2) THEN
+        DO I=1, NEL
+          IF (VNEW(I) > ZERO) THEN
+            PNEW(I) = (GAMMA-ONE)*(ONE+MU(I))*ESPE(I) - GAMMA*PSTAR
+            PNEW(I) = MAX(PNEW(I),PMIN)*OFF(I)
+            !EINT(I) = (PNEW(I) + PSH(I) + GAMMA * PSTAR) / (GAMMA - ONE)
+            DPDM(I) = (GAMMA-ONE)*(ESPE(I)+PNEW(I)*DF(I)) !total derivative
+            DPDE(I) = (GAMMA-ONE)*(ONE+MU(I)) !partial derivative
+            PNEW(I) = PNEW(I)-PSH(I)
+          ENDIF
+        ENDDO
+      ENDIF
+C-----------------------------------------------
+        RETURN
+      END SUBROUTINE STIFFGAS
+      END MODULE STIFFGAS_MOD

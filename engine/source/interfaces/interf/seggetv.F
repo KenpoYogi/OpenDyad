@@ -1,0 +1,144 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C fills the segvar array with the values of the neighboring element variables
+C used for interfaces and for ebc
+!||====================================================================
+!||    seggetv                ../engine/source/interfaces/interf/seggetv.F
+!||--- called by ------------------------------------------------------
+!||    alemain                ../engine/source/ale/alemain.F
+!||--- calls      -----------------------------------------------------
+!||    initbuf                ../engine/share/resol/initbuf.F
+!||    my_barrier             ../engine/source/system/machine.F
+!||    varcondec              ../engine/source/interfaces/interf/varcondec.F
+!||--- uses       -----------------------------------------------------
+!||    ale_connectivity_mod   ../common_source/modules/ale/ale_connectivity_mod.F
+!||    ale_mod                ../common_source/modules/ale/ale_mod.F
+!||    elbufdef_mod           ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    initbuf_mod            ../engine/share/resol/initbuf.F
+!||    segvar_mod             ../engine/share/modules/segvar_mod.F
+!||====================================================================
+      SUBROUTINE SEGGETV(IPARG,ELBUF_TAB,ALE_CONNECTIVITY,ITASK,SEGVAR)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE INITBUF_MOD
+      USE ELBUFDEF_MOD    
+      USE SEGVAR_MOD              
+      USE ALE_CONNECTIVITY_MOD
+      USE ALE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "vect01_c.inc"
+#include      "param_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPARG(NPARG,ngroup), ITASK
+      TYPE(t_segvar),TARGET :: SEGVAR
+      TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+      TYPE(t_ale_connectivity), INTENT(IN) :: ALE_CONNECTIVITY
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NG, I, J, IV, KVAR, KK, JCODV(ALE%GLOBAL%LCONV),CODTOT, IAD2, LGTH
+      TYPE(G_BUFEL_)  ,POINTER :: GBUF     
+      TYPE(BUF_MAT_)  ,POINTER :: MBUF  
+C=======================================================================
+C
+      CALL MY_BARRIER
+C
+      DO 100 NG=ITASK+1,NGROUP,NTHREAD
+         IF (IPARG(8,NG) == 1) GO TO 100
+c
+         CALL VARCONDEC(JCODV,IPARG(34,NG),CODTOT)
+         IF (CODTOT == 0) GOTO 100
+         CALL INITBUF(IPARG    ,NG      ,                     
+     2         MTN     ,LLT     ,NFT     ,IAD     ,ITY     ,   
+     3         NPT     ,JALE    ,ISMSTR  ,JEUL    ,JTUR    ,   
+     4         JTHE    ,JLAG    ,JMULT   ,JHBE    ,JIVF    ,   
+     5         NVAUX   ,JPOR    ,JCVT    ,JCLOSE  ,JPLASOL ,   
+     6         IREP    ,IINT    ,IGTYP   ,ISRAT   ,ISROT   ,   
+     7         ICSEN   ,ISORTH  ,ISORTHG ,IFAILURE,JSMS    )            
+         LFT=1
+c         NBB(1) =  NB4
+c         NBB(2) =  NB3
+c         NBB(3) =  NB10
+c         NBB(4) =  NB12
+         GBUF => ELBUF_TAB(NG)%GBUF
+         MBUF => ELBUF_TAB(NG)%BUFLY(1)%MAT(1,1,1)
+
+         DO  I=LFT,LLT
+           J=I+NFT
+           IAD2 = ALE_CONNECTIVITY%ee_connect%iad_connect(J)
+           LGTH = ALE_CONNECTIVITY%ee_connect%iad_connect(J+1)-
+     .          ALE_CONNECTIVITY%ee_connect%iad_connect(J)
+           DO IV=1,LGTH
+             IF (ALE_CONNECTIVITY%ee_connect%connected(IAD2 + IV - 1) < 0) THEN 
+               KK=-ALE_CONNECTIVITY%ee_connect%connected(IAD2 + IV - 1)
+c
+               KVAR = 1
+               IF (JCODV(KVAR) == 1) THEN            
+                 SEGVAR%RHO(KK) = GBUF%RHO(I)
+               ENDIF                              
+c
+               KVAR = 2
+               IF (JCODV(KVAR) == 1) THEN           
+                 SEGVAR%EINT(KK) = GBUF%EINT(I)
+               ENDIF                              
+c
+               KVAR = 3
+               IF (JCODV(KVAR) == 1) THEN           
+                 SEGVAR%RK(KK) = GBUF%RK(I)
+               ENDIF                              
+c
+               KVAR = 4
+               IF (JCODV(KVAR) == 1) THEN            
+                 SEGVAR%RE(KK) = GBUF%RE(I)
+               ENDIF                              
+c
+               KVAR = 5         
+               IF (JCODV(KVAR) == 1) THEN    !  UVAR(1)  
+                 SEGVAR%UVAR(KK) = MBUF%VAR(LLT*(I-1)+1)
+               ENDIF                              
+
+             ENDIF
+           ENDDO
+         ENDDO
+  100  CONTINUE
+c
+c      write(iout,*)'NVCONV =',NVCONV,' NSEGFLU=',NSEGFLU
+c      write(iout,'(2(1pE10.3))')(segvar(i),i=1,NVCONV*NSEGFLU)
+C
+      CALL MY_BARRIER
+c-----------
+      RETURN
+      END
+

@@ -1,0 +1,575 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    fail_fld_xfem           ../engine/source/materials/fail/fld/fail_fld_xfem.F
+!||--- called by ------------------------------------------------------
+!||    mulawc                  ../engine/source/materials/mat_share/mulawc.F90
+!||    usermat_shell           ../engine/source/materials/mat_share/usermat_shell.F
+!||--- calls      -----------------------------------------------------
+!||    table_mat_vinterp       ../engine/source/materials/tools/table_mat_vinterp.F
+!||    vinter_1d               ../engine/source/materials/fail/fld/fail_fld_c.F
+!||--- uses       -----------------------------------------------------
+!||    fail_param_mod          ../common_source/modules/mat_elem/fail_param_mod.F90
+!||    my_alloc_mod            ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod          ../common_source/tools/memory/my_dealloc.F90
+!||    table_mat_vinterp_mod   ../engine/source/materials/tools/table_mat_vinterp.F
+!||====================================================================
+      SUBROUTINE FAIL_FLD_XFEM(FAIL     ,
+     1     NEL      ,NUVAR    ,NVARTMP  ,UVAR     ,VARTMP   ,
+     2     TIME     ,
+     3     NGL      ,IPT      ,NPTOT    ,SSP      ,TENS     ,
+     4     SIGNXX   ,SIGNYY   ,SIGNXY   ,SIGNYZ   ,SIGNZX   ,
+     5     EPSXX    ,EPSYY    ,EPSXY    ,EPSYZ    ,EPSZX    ,  
+     6     NOFF     ,OFF      ,LF_DAMMX ,
+     7     ELCRKINI ,IXFEM    ,IXEL     ,ILAY     ,IPTT     ,  
+     8     OFFL     ,NPTT     ,NPTTF    ,DFMAX    ,TDEL     ,   
+     9     DAM      ,FLD_IDX  ,PLA      ,
+     A     DEPSXX   ,DEPSYY   ,DEPSXY   ,DT1      )
+C-----------------------------------------------
+c    FLD failure model for XFEM
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+      use fail_param_mod
+      use table_mat_vinterp_mod
+
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include "units_c.inc"
+#include "comlock.inc"
+#include "com_xfem1.inc"
+C---------+---------+---+---+--------------------------------------------
+C VAR     | SIZE    |TYP| RW| DEFINITION
+C---------+---------+---+---+--------------------------------------------
+C NEL     |  1      | I | R | SIZE OF THE ELEMENT GROUP NEL 
+C NUVAR   |  1      | I | R | NUMBER OF USER ELEMENT VARIABLES
+C UVAR    |NEL*NUVAR| F |R/W| USER ELEMENT VARIABLE ARRAY 
+C---------+---------+---+---+--------------------------------------------
+C TIME    |  1      | F | R | CURRENT TIME
+C---------+---------+---+---+--------------------------------------------
+C EPSXX   | NEL     | F | R | STRAIN XX
+C EPSYY   | NEL     | F | R | STRAIN YY
+C ...     |         |   |   |
+C---------+---------+---+---+--------------------------------------------
+C OFF     | NEL     | F |R/W| DELETED ELEMENT FLAG (=1. ON, =0. OFF)
+C---------+---------+---+---+--------------------------------------------
+C ILAY                        CURRENT LAYER
+C IPTT                        CURRENT INTEGRATION POINT IN THE LAYER (FOR OUTPUT ONLY)
+C---------+---------+---+---+--------------------------------------------
+C   I N P U T   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NEL,NUVAR,NVARTMP,IPT,IPTT,NPTOT,IXFEM,IXEL,ILAY,NPTT
+      INTEGER ELCRKINI(NXLAYMAX,NEL),NOFF(NEL),NGL(NEL),FLD_IDX(NEL)
+      my_real 
+     .   TIME,SIGNXX(NEL),SIGNYY(NEL),
+     .   SIGNXY(NEL),SIGNYZ(NEL),SIGNZX(NEL),SSP(NEL),
+     .   EPSXX(NEL),EPSYY(NEL),EPSXY(NEL),EPSYZ(NEL),EPSZX(NEL),
+     .   TENS(NEL,5),DFMAX(NEL,LF_DAMMX),TDEL(NEL),NPTTF(NEL),DAM(NEL)
+      INTEGER, DIMENSION(NEL,NVARTMP), INTENT(INOUT) :: VARTMP
+      INTEGER, INTENT(IN) :: LF_DAMMX
+      my_real, DIMENSION(NEL), INTENT(IN) :: PLA,DEPSXX,DEPSYY,DEPSXY
+      my_real, INTENT(IN) :: DT1
+C-----------------------------------------------
+C   I N P U T   O U T P U T   A r g u m e n t s 
+C-----------------------------------------------
+      my_real UVAR(NEL,NUVAR),OFF(NEL),OFFL(NEL)
+      type (fail_param_) ,intent(inout) :: fail    !< failure model data structure
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,IENG,IAD,NINDX,NINDXP,ISHELL,LAYXFEM,LENF
+      INTEGER INDX(NEL),INDXP(NEL),RFLAG(NEL),RFLAGP(NEL)  
+      my_real 
+     .   RANI,R1,R2,DADV,S1,S2,SS,Q,E12
+      my_real, ALLOCATABLE, DIMENSION(:) :: XF,YF  
+      my_real 
+     .   EMAJ(NEL),EMIN(NEL),DYDX(NEL),
+     .   EM(NEL),EM_DCRIT(NEL),EM_DADV(NEL),DEMAJ(NEL),DEMIN(NEL),
+     .   BETA(NEL),ALPHA,FCUT
+      CHARACTER (LEN=8) :: XCHAR
+C=======================================================================
+      IAD = (IPT-1)*NEL
+      XCHAR  = ' '
+      DO I=1,NEL
+        RFLAG(I) = 0
+        RFLAGP(I)= 0
+        INDXP(I) = 0
+        INDX(I)  = 0
+      ENDDO 
+      NINDX  = 0  
+      NINDXP = 0  
+c---
+      !=================================================================
+      ! - INITIALISATION OF FAILURE MODEL PARAMETERS
+      !=================================================================
+      ! Recovering failure criterion parameters
+      ! -> Integer parameter
+      ISHELL = FAIL%IPARAM(1)
+      IENG   = FAIL%IPARAM(3)
+      ! -> Real parameters
+      DADV   = FAIL%UPARAM(2)
+      RANI   = FAIL%UPARAM(3)
+      FCUT   = FAIL%UPARAM(5)
+      IF (FAIL%UPARAM(6) > ZERO) THEN 
+        ALPHA = FAIL%UPARAM(6) 
+      ELSE 
+        ALPHA = TWO*PI*FCUT*DT1/(ONE + TWO*PI*FCUT*DT1)
+      ENDIF
+c
+      LAYXFEM = IXFEM
+      IF (IXFEM == 1 .and. ISHELL == 1) ISHELL=2
+c
+      DO I=1,NEL
+        EM_DCRIT(I)= ZERO
+        EM_DADV(I) = ZERO
+      END DO
+c
+      !=================================================================
+      ! - MINOR AND MAJOR (TRUE) STRAIN DEFORMATION
+      !=================================================================
+      DO I = 1,NEL
+        ! For classic linear formulation
+        E12= HALF*EPSXY(I)
+        S1 = HALF*(EPSXX(I) + EPSYY(I))
+        S2 = HALF*(EPSXX(I) - EPSYY(I))
+        Q  = SQRT(S2**2 + E12**2)
+        EMAJ(I) = S1 + Q
+        EMIN(I) = S1 - Q
+        IF (EMIN(I) >= EMAJ(I)) THEN
+          SS      = EMIN(I)
+          EMIN(I) = EMAJ(I)
+          EMAJ(I) = SS
+        ENDIF
+        ! For non-linear path formulation
+        E12 = HALF*DEPSXY(I)
+        S1  = HALF*(DEPSXX(I) + DEPSYY(I))
+        S2  = HALF*(DEPSXX(I) - DEPSYY(I))
+        Q   = SQRT(S2**2 + E12**2)
+        DEMAJ(I)  = S1 + Q
+        DEMIN(I)  = S1 - Q   
+        ! Strain ratio filtering value for non-linear path formulation
+        DEMAJ(I)  = ALPHA*DEMAJ(I) + (ONE - ALPHA)*UVAR(I,2) 
+        DEMIN(I)  = ALPHA*DEMIN(I) + (ONE - ALPHA)*UVAR(I,3) 
+        BETA(I)   = DEMIN(I)/SIGN(MAX(ABS(DEMAJ(I)),EM20),DEMAJ(I))
+        UVAR(I,2) = DEMAJ(I)
+        UVAR(I,3) = DEMIN(I)
+        IF (IENG == 2) THEN
+          DFMAX(I,4) = BETA(I)
+        ENDIF 
+      ENDDO
+c
+      !=================================================================
+      ! FAILURE MAJOR STRAIN FROM INPUT CURVE AND DAMAGE RATIO
+      !=================================================================
+      ! -> Engineering strains input
+      IF (IENG == 1) THEN   ! transform input fld curve to true strain
+        LENF = size(fail%table4d(1)%x(1)%values)
+        call my_alloc(XF, LENF, "XF")
+        call my_alloc(YF, LENF, "YF")
+        DO I = 1,LENF
+          XF(I) = LOG(fail%table4d(1)%x(1)%values(i) + ONE)
+          YF(I) = fail%table4d(1)%y1d(i)
+        ENDDO
+        call vinter_1d(nel,nel,lenf,vartmp,xf,yf,emin,em)
+c
+        DO I = 1,NEL
+          DAM(I) = EMAJ(I) / EM(I)
+          DFMAX(I,2) = DAM(I)
+          DFMAX(I,1) = MIN(ONE, DAM(I))
+        ENDDO
+        call my_dealloc(XF)
+        call my_dealloc(YF)
+
+      ELSE          ! -> True strain input
+        ! -> Classic formulation
+        IF (IENG == 0) THEN 
+          call table_mat_vinterp(fail%table4d(1),nel,nel,vartmp,emin,em,dydx)
+          DO I = 1,NEL
+            DAM(I) = EMAJ(I) / EM(I)
+            DFMAX(I,2) = DAM(I)
+            DFMAX(I,1) = MIN(ONE, DAM(I))
+          ENDDO
+        ! -> Non-linear path formulation
+        ELSEIF (IENG == 2) THEN
+          call table_mat_vinterp(fail%table4d(1),nel,nel,vartmp,emin,em,dydx)
+          DO I = 1,NEL
+            DAM(I) = MAX(PLA(I) / EM(I),DAM(I))
+            DFMAX(I,2) = DAM(I)
+            DFMAX(I,1) = MIN(ONE, DAM(I))
+          ENDDO
+        ENDIF
+      ENDIF 
+c
+      !=================================================================
+      ! FLD ZONE INDEX CALCULATION FOR ANIM OUTPUT
+      !=================================================================
+      R1 = TWO*EM02
+      R2 = RANI/(RANI+ONE)
+      IF (IENG < 2) THEN
+        DO I = 1,NEL
+          IF (EMAJ(I) >= EM(I)) THEN
+            FLD_IDX(I) = 6      ! zone 6 = failure
+          ELSEIF (EMAJ(I) >= EM(I) - EM01) THEN
+            FLD_IDX(I) = 5      ! zone 5 = margin to fail
+          ELSEIF (EMAJ(I)**2 + EMIN(I)**2 < R1**2) THEN
+            FLD_IDX(I) = 1      ! zone 1 = radius 0.02
+          ELSEIF (EMAJ(I) >= ABS(EMIN(I))) THEN
+            FLD_IDX(I) = 4      ! zone 4 = safe (45 deg line)
+          ELSEIF (EMAJ(I) >= R2*ABS(EMIN(I))) THEN
+            FLD_IDX(I) = 3      ! zone 3  = angle atan(r/(1+r))  - compression
+          ELSE
+            FLD_IDX(I) = 2      ! zone 2  - high wrinkle tendency
+          ENDIF
+          DFMAX(I,3) = FLD_IDX(I)
+        ENDDO
+      ELSE
+        DO I = 1,NEL
+          IF (PLA(I) >= EM(I)) THEN
+            FLD_IDX(I) = MAX(6,FLD_IDX(I))      ! zone 6 = failure
+          ELSEIF (PLA(I) >= EM(I) - EM01) THEN
+            FLD_IDX(I) = MAX(5,FLD_IDX(I))      ! zone 5 = margin to fail
+          ELSEIF (PLA(I)**2 + BETA(I)**2 < R1**2) THEN
+            FLD_IDX(I) = MAX(1,FLD_IDX(I))      ! zone 1 = radius 0.02
+          ELSEIF (PLA(I) >= ABS(BETA(I))) THEN
+            FLD_IDX(I) = MAX(4,FLD_IDX(I))      ! zone 4 = safe (45 deg line)
+          ELSEIF (PLA(I) >= R2*ABS(BETA(I))) THEN
+            FLD_IDX(I) = MAX(3,FLD_IDX(I))      ! zone 3  = angle atan(r/(1+r))  - compression
+          ELSE
+            FLD_IDX(I) = MAX(2,FLD_IDX(I))      ! zone 2  - high wrinkle tendency
+          ENDIF
+          DFMAX(I,3) = FLD_IDX(I)
+        ENDDO
+      ENDIF
+c--------------------------------------------------------------------
+      DO I = 1,NEL
+        TENS(I,1) = SIGNXX(I)
+        TENS(I,2) = SIGNYY(I)
+        TENS(I,3) = SIGNXY(I)
+        TENS(I,4) = SIGNYZ(I)
+        TENS(I,5) = SIGNZX(I)
+        EM_DCRIT(I)= EM(I)
+      END DO
+      IF (fail%table4d(2)%notable > 0) THEN
+        call table_mat_vinterp(fail%table4d(2),nel,nel,vartmp(1:nel,2),emin,em_dadv,dydx)
+        EM_DADV(1:nel) = DADV*EM_DADV(1:nel)
+      ELSE
+        EM_DADV(1:NEL) = DADV*EM(1:NEL)
+      ENDIF
+C
+      IF (IXEL > 0) THEN  ! testing phantom elements
+        IF (IXEL == 1) THEN
+          XCHAR = '1st'
+        ELSEIF (IXEL == 2) THEN
+          XCHAR = '2nd'
+        ELSEIF (IXEL == 3) THEN
+          XCHAR = '3rd'
+        ENDIF
+      ELSE
+        XCHAR = 'standard'
+      ENDIF
+c--------------------------
+      SELECT CASE (LAYXFEM)                           
+c---------------
+        CASE (1)    ! multilayer XFEM                                    
+c---------------
+            DO I = 1,NEL   
+              IF (IENG == 2) EMAJ(I) = PLA(I)                                                       
+              IF (OFF(I) == ONE) THEN                                              
+                IF (UVAR(I,1) == ZERO) THEN                                       
+                  IF (IXEL == 0) THEN                                             
+                    IF (ELCRKINI(ILAY,I)==0 .and. EMAJ(I)>=EM_DCRIT(I)) THEN                                
+                      NINDXP = NINDXP+1
+                      INDXP(NINDXP) = I
+                      UVAR(I,1) = ONE                                              
+                      OFFL(I)   = ZERO                                            
+                      NOFF(I)   = NOFF(I) + 1                                        
+                      NPTTF(I)  = NPTTF(I) + ONE
+                      RFLAGP(I) = 1
+                      IF (INT(NPTTF(I)) == NPTT) THEN
+                        NINDX = NINDX+1
+                        INDX(NINDX) = I
+                        ELCRKINI(ILAY,I) = -1 ! one layer failed (by initiation)
+                        RFLAG(I) = 1                                               
+                      ENDIF
+                      IF (NOFF(I) == NPTOT) THEN   
+                        OFF(I) = FOUR_OVER_5                                           
+                        TDEL(I)= TIME                                             
+                      ENDIF                                                       
+                    ELSEIF (ELCRKINI(ILAY,I)==2 .and. EMAJ(I)>=EM_DADV(I)) THEN                             
+                      NINDXP   = NINDXP + 1
+                      INDXP(NINDXP) = I
+                      UVAR(I,1) = ONE                                              
+                      OFFL(I)   = ZERO                                            
+                      NOFF(I)   = NOFF(I) + 1                                        
+                      NPTTF(I)  = NPTTF(I)+ ONE
+                      RFLAGP(I) = 1
+                      IF (INT(NPTTF(I)) == NPTT) THEN
+                        NINDX = NINDX+1
+                        INDX(NINDX) = I
+                        ELCRKINI(ILAY,I) = 1 !  one layer failed (by advancing)
+                        RFLAG(I) = -1
+                      ENDIF
+                      IF (NOFF(I) == NPTOT) THEN
+                        OFF(I) = FOUR_OVER_5                                           
+                        TDEL(I)= TIME
+                      ENDIF
+                    ENDIF                                                         
+                  ELSEIF (EMAJ(I) >= EM_DCRIT(I)) THEN  ! IXEL > 0                  
+                    NINDXP    = NINDXP + 1
+                    INDXP(NINDXP) = I
+                    UVAR(I,1) = ONE                                                
+                    OFFL(I)   = ZERO                                            
+                    NPTTF(I)  = NPTTF(I) + ONE
+                    RFLAGP(I) = 1
+                    IF (INT(NPTTF(I)) == NPTT) THEN
+                      NINDX = NINDX+1
+                      INDX(NINDX) = I
+                      OFF(I) = FOUR_OVER_5                                           
+                      TDEL(I)  = TIME
+                      RFLAG(I) = 3
+                    ENDIF
+                  ENDIF ! IXEL == 0                                                   
+                ELSEIF (UVAR(I,1) == ONE) THEN                                     
+                  SIGNXX(I) = ZERO                                                
+                  SIGNYY(I) = ZERO                                                
+                  SIGNXY(I) = ZERO                                                
+                  SIGNYZ(I) = ZERO                                                
+                  SIGNZX(I) = ZERO                                                
+                ENDIF ! UVAR                                                      
+              ENDIF   ! IF (OFF(I) == ONE)                                                                  
+            ENDDO     ! DO I=1,NEL                                                                        
+            IF (NINDXP > 0) THEN    
+              DO J=1,NINDXP        
+                I = INDXP(J)        
+                SIGNXX(I) = ZERO                                              
+                SIGNYY(I) = ZERO                                              
+                SIGNXY(I) = ZERO                                              
+                SIGNYZ(I) = ZERO                                              
+                SIGNZX(I) = ZERO                                              
+#include "lockon.inc"
+                IF (RFLAGP(I) == 1) WRITE(IOUT, 3800)NGL(I),ILAY,IPTT
+                IF (RFLAGP(I) == 1) WRITE(ISTDO,3900)NGL(I),ILAY,IPTT,TIME      
+#include "lockoff.inc"
+              ENDDO               
+            ENDIF  !  NINDXP > 0   
+            IF (NINDX > 0) THEN    
+              DO J=1,NINDX         
+                I = INDX(J)        
+#include "lockon.inc"
+c               initialization std element                                                
+                IF (RFLAG(I) == 1) WRITE(IOUT ,3000)  NGL(I),ILAY    
+                IF (RFLAG(I) == 1) WRITE(ISTDO,3100)  NGL(I),ILAY,TIME            
+c               advancement std element                                                   
+                IF (RFLAG(I) == -1) WRITE(IOUT ,3200) NGL(I),ILAY                
+                IF (RFLAG(I) == -1) WRITE(ISTDO,3300) NGL(I),ILAY,TIME           
+c               delete phantom element                                                       
+                IF (RFLAG(I) == 3) WRITE(IOUT, 3400)  XCHAR,NGL(I),ILAY           
+                IF (RFLAG(I) == 3) WRITE(ISTDO,3500)  XCHAR,NGL(I),ILAY,TIME      
+#include "lockoff.inc"
+              ENDDO               
+            ENDIF  !  NINDX > 0   
+c---------------
+        CASE (2)    ! monolayer XFEM                                    
+c---------------
+            IF (ISHELL == 1) THEN   
+c
+              IF (LAYXFEM > 0) THEN
+                DO I = 1,NEL
+                  IF (IENG == 2) EMAJ(I) = PLA(I)                                                       
+                  IF (OFF(I) == ONE) THEN
+                    IF (IXEL == 0) THEN    ! not cut yet
+                      IF (ELCRKINI(ILAY,I) == 0 .and. 
+     .                    EMAJ(I) >= EM_DCRIT(I)) THEN
+                        ELCRKINI(ILAY,I) = -1 ! ready to start       
+                        OFF(I) = FOUR_OVER_5                                           
+                        NINDX=NINDX+1
+                        INDX(NINDX)=I
+                        RFLAG(I) = 1
+                        TDEL(I)= TIME
+                      ELSEIF (ELCRKINI(ILAY,I) == 2 .and. 
+     .                        EMAJ(I) >= EM_DADV(I)) THEN  
+                        ELCRKINI(ILAY,I) = 1  ! ready to advance
+                        OFF(I) = FOUR_OVER_5                                           
+                        NINDX=NINDX+1
+                        INDX(NINDX)=I
+                        RFLAG(I) = -1
+                        TDEL(I)= TIME
+                      ENDIF
+                    ELSE IF (EMAJ(I) >= EM_DCRIT(I)) THEN! IXEL > 0 
+                      OFF(I) = FOUR_OVER_5                                           
+                      NINDX=NINDX+1
+                      INDX(NINDX)=I
+                      RFLAG(I) = 3
+                    ENDIF  ! IXEL
+                  ENDIF
+                ENDDO
+              ENDIF  ! LAYXFEM
+C
+              IF (NINDX > 0) THEN
+                DO J=1,NINDX
+                  I=INDX(J)
+#include "lockon.inc"
+                  WRITE(IOUT, 4800)NGL(I),IPTT        
+                  WRITE(ISTDO,4900)NGL(I),IPTT,TIME        
+c                 initialization std element
+                  IF (RFLAG(I) == 1)  WRITE(IOUT ,4000) NGL(I)
+                  IF (RFLAG(I) == 1)  WRITE(ISTDO,4100) NGL(I),TIME
+c                 advancement std element
+                  IF (RFLAG(I) == -1) WRITE(IOUT, 4200) NGL(I)
+                  IF (RFLAG(I) == -1) WRITE(ISTDO,4300) NGL(I),TIME
+c                 delete phantom
+                  IF (RFLAG(I) == 3)  WRITE(IOUT, 4400) XCHAR,NGL(I)
+                  IF (RFLAG(I) == 3)  WRITE(ISTDO,4500) XCHAR,NGL(I),TIME
+#include "lockoff.inc"
+                ENDDO
+              ENDIF
+c
+            ELSEIF (ISHELL == 2)THEN
+c
+              DO I = 1,NEL
+                IF (IENG == 2) EMAJ(I) = PLA(I)                                                       
+                IF (OFF(I) == ONE) THEN
+                  IF (UVAR(I,1) == ZERO) THEN
+                    IF (IXEL == 0) THEN    ! testing standard element
+                      IF (ELCRKINI(ILAY,I) == 0 .and. EMAJ(I) >= EM_DCRIT(I)) THEN
+                        UVAR(I,1) = ONE
+                        NINDX=NINDX+1
+                        INDX(NINDX)=I
+                        NINDXP = NINDXP + 1                                                 
+                        INDXP(NINDXP) = I                                                 
+                        RFLAGP(I) = 1
+                        NOFF(I) = NOFF(I) + 1
+                        IF (NOFF(I) == NPTOT) THEN
+                          ELCRKINI(ILAY,I) = -1 ! one layer failed (by initiation)
+                          OFF(I) = FOUR_OVER_5                                           
+                          RFLAG(I) = 1
+                          TDEL(I)= TIME 
+                        ENDIF
+                      ELSEIF (ELCRKINI(ILAY,I) == 2 .and. EMAJ(I) >= EM_DADV(I)) THEN
+                        UVAR(I,1) = ONE
+                        NINDX=NINDX+1
+                        INDX(NINDX)=I
+                        NINDXP = NINDXP + 1                                                 
+                        INDXP(NINDXP) = I                                                 
+                        RFLAGP(I) = 1
+                        NOFF(I) = NOFF(I) + 1
+                        IF (NOFF(I) == NPTOT) THEN
+                          OFF(I) = FOUR_OVER_5                                           
+                          ELCRKINI(ILAY,I) = 1 !  one layer failed (by advancing)
+                          RFLAG(I) = -1
+                          TDEL(I)= TIME
+                        ENDIF
+                      ENDIF
+                    ELSEIF (EMAJ(I) >= EM_DCRIT(I)) THEN  ! IXEL > 0
+                      UVAR(I,1) = ONE
+                      NINDX = NINDX+1
+                      INDX(NINDX) = I
+                      NINDXP = NINDXP + 1                                                 
+                      INDXP(NINDXP) = I                                                 
+                      RFLAGP(I) = 1
+                      NOFF(I) = NOFF(I) + 1
+                      IF (NOFF(I) == NPTOT) THEN
+                        OFF(I) = FOUR_OVER_5                                           
+                        RFLAG(I) = 3
+                      ENDIF
+                    ENDIF ! IXEL 
+                  ELSEIF (UVAR(I,1) == ONE) THEN
+                    SIGNXX(I) = ZERO
+                    SIGNYY(I) = ZERO
+                    SIGNXY(I) = ZERO
+                    SIGNYZ(I) = ZERO
+                    SIGNZX(I) = ZERO
+                  ENDIF ! UVAR
+                ENDIF
+              ENDDO
+c
+            IF (NINDXP > 0) THEN                                             
+              DO J=1,NINDXP                                                  
+                I = INDXP(J)                                                 
+                SIGNXX(I) = ZERO                                                
+                SIGNYY(I) = ZERO                                                
+                SIGNXY(I) = ZERO                                                
+                SIGNYZ(I) = ZERO                                                
+                SIGNZX(I) = ZERO                                                
+#include        "lockon.inc"                                                
+                IF (RFLAGP(I) == 1) WRITE(IOUT, 4800)NGL(I),IPTT        
+                IF (RFLAGP(I) == 1) WRITE(ISTDO,4900)NGL(I),IPTT,TIME        
+#include       "lockoff.inc"                                                
+              ENDDO                                                          
+            ENDIF  !  NINDXP > 0                                              
+            IF (NINDX > 0) THEN
+              DO J=1,NINDX
+                I = INDX(J)
+#include "lockon.inc"
+c               initialization std element
+                IF (RFLAG(I) == 1)  WRITE(IOUT ,4000) NGL(I)
+                IF (RFLAG(I) == 1)  WRITE(ISTDO,4100) NGL(I),TIME
+c               advancement std element
+                IF (RFLAG(I) == -1) WRITE(IOUT, 4200) NGL(I)
+                IF (RFLAG(I) == -1) WRITE(ISTDO,4300) NGL(I),TIME
+c               delete phantom
+                IF (RFLAG(I) == 3)  WRITE(IOUT, 4400) XCHAR,NGL(I)
+                IF (RFLAG(I) == 3)  WRITE(ISTDO,4500) XCHAR,NGL(I),TIME
+#include "lockoff.inc"
+              ENDDO
+            ENDIF  !  NINDX > 0
+          ENDIF    ! ISHELL
+c-----------------
+      END SELECT ! LAYXFEM
+c
+      IF (IENG == 1) call my_dealloc(XF)
+c-----------------------------------------------
+c---  multilayer xfem
+ 3000 FORMAT(1X,'CRACK INITIALIZATION IN SHELL ELEMENT',I10,1X,'LAYER',I3)
+ 3100 FORMAT(1X,'CRACK INITIALIZATION IN SHELL ELEMENT',I10,1X,'LAYER',I3,/
+     .       1X,'AT TIME :',1PE12.4)
+ 3200 FORMAT(1X,'CRACK ADVANCEMENT IN SHELL ELEMENT',I10,' LAYER',I3)
+ 3300 FORMAT(1X,'CRACK ADVANCEMENT IN SHELL ELEMENT',I10,' LAYER',I3/
+     .       1X,'AT TIME :',1PE12.4)
+ 3400 FORMAT(1X,'DELETE ',A4,' PHANTOM ELEMENT, SHELL ID=',I10,' LAYER',I3)
+ 3500 FORMAT(1X,'DELETE ',A4,' PHANTOM ELEMENT, SHELL ID=',I10,' LAYER',I3,/
+     .       1X,'AT TIME :',1PE12.4)
+ 3800 FORMAT(1X,'FLD FAILURE IN SHELL',I10,1X,'LAYER',I3,1X,'INT POINT',I2)
+ 3900 FORMAT(1X,'FLD FAILURE IN SHELL',I10,1X,'LAYER',I3,1X,'INT POINT',I2,/
+     .       1X,'AT TIME :',1PE12.4)
+c---  monolayer xfem
+ 4000 FORMAT(1X,'CRACK INITIALIZATION IN SHELL ELEMENT',I10)
+ 4100 FORMAT(1X,'CRACK INITIALIZATION IN SHELL ELEMENT',I10,/
+     .       1X,'AT TIME :',1PE12.4)
+ 4200 FORMAT(1X,'CRACK ADVANCEMENT IN SHELL ELEMENT',I10)
+ 4300 FORMAT(1X,'CRACK ADVANCEMENT IN SHELL ELEMENT',I10,/
+     .       1X,'AT TIME :',1PE12.4)
+ 4400 FORMAT(1X,'DELETE ',A4,' PHANTOM ELEMENT, SHELL ID=',I10)
+ 4500 FORMAT(1X,'DELETE ',A4,' PHANTOM ELEMENT, SHELL ID=',I10,/
+     .       1X,'AT TIME :',1PE12.4)
+ 4800 FORMAT(1X,'FLD FAILURE IN SHELL',I10,1X,'INT POINT',I2)
+ 4900 FORMAT(1X,'FLD FAILURE IN SHELL',I10,1X,'INT POINT',I2,1X,'AT TIME :',1PE12.4)
+c-----------------------------------------------
+      RETURN
+      END

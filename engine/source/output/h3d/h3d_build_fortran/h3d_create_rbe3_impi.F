@@ -1,0 +1,279 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    h3d_create_rbe3_impi     ../engine/source/output/h3d/h3d_build_fortran/h3d_create_rbe3_impi.F
+!||--- called by ------------------------------------------------------
+!||    genh3d                   ../engine/source/output/h3d/h3d_results/genh3d.F
+!||--- calls      -----------------------------------------------------
+!||    c_h3d_create_rbe3_impi   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_rbe3.cpp
+!||    spmd_glob_isum9          ../engine/source/mpi/interfaces/spmd_th.F
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod             ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod           ../common_source/tools/memory/my_dealloc.F90
+!||    spmd_comm_world_mod      ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+      SUBROUTINE H3D_CREATE_RBE3_IMPI(LRBE3, IRBE3,NODGLOB,WEIGHT,NERBE3Y,
+     *                         NERBE3T ,ITAB,COMPID_RBE3S)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "param_c.inc"
+#include      "spmd_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),NODGLOB(*),WEIGHT(*),
+     * NERBE3Y,NERBE3T(NRBE3G),ITAB(*),COMPID_RBE3S
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER I,N,P, SZLOCRBE3(NRBE3G),PGLOBRBE3(NRBE3G),ID
+      INTEGER SNRBE3,SIZRBE3,SBUFSIZ,PSNRBE3
+      INTEGER NSN,IADG,IAD,SN,MN,NGRBE
+      INTEGER SECNDNODS(NRBE3G),ID_RBE3(NRBE3G)
+      INTEGER,  DIMENSION(:),ALLOCATABLE :: SENDBUF,RECBUF,
+     *                                      P0RBE3BUF,IADRBE3
+      INTEGER,  DIMENSION(:,:),ALLOCATABLE :: P0RECRBE3
+
+C MPI variables 
+      INTEGER MSGOFF,MSGOFF2,MSGTYP
+      INTEGER STATUS(MPI_STATUS_SIZE),IERROR
+
+      DATA MSGOFF/7020/
+      DATA MSGOFF2/7021/
+C-----------------------------------------------
+C     1st step - send to pro 0 a table with number
+C                  Local send nodes by Rbe3 to send
+C                  and preparation of the send buffer
+C                  (taille)
+      NERBE3T = 0
+      SNRBE3 = 0
+      SBUFSIZ = 0
+      SZLOCRBE3=0
+      PGLOBRBE3 = 0
+
+      DO I=1,NRBE3
+          NGRBE = IRBE3(10,I)
+          SZLOCRBE3(NGRBE) = 0
+          NSN = IRBE3(5,I)
+          DO N=1,NSN
+           IF (WEIGHT(LRBE3(IRBE3(1,I)+N))==1)
+     .       SZLOCRBE3(NGRBE) = SZLOCRBE3(NGRBE)  + 1
+          ENDDO
+          SBUFSIZ = SBUFSIZ + SZLOCRBE3(NGRBE)
+
+      ENDDO
+
+C sending the size array to processor 0
+
+      IF (ISPMD == 0) THEN
+C Procement reception of sizes
+        call my_alloc(P0RECRBE3, MAX(1,NRBE3G), NSPMD, "P0RECRBE3")
+! size 1 to avoid zero size allocation (argument of mpi_recv)
+        DO I=1,NRBE3G
+           P0RECRBE3(I,1) = SZLOCRBE3(I)
+        ENDDO
+
+        DO P=2,NSPMD
+           MSGTYP = MSGOFF
+           CALL MPI_RECV(P0RECRBE3(1,P),NRBE3G,MPI_INTEGER,IT_SPMD(P),
+     *                   MSGTYP,SPMD_COMM_WORLD,STATUS,IERROR)
+        ENDDO
+
+      ELSE
+C Procs Other shipments
+        MSGTYP = MSGOFF
+        CALL MPI_SEND(SZLOCRBE3,NRBE3G,MPI_INTEGER,IT_SPMD(1),
+     .                MSGTYP,SPMD_COMM_WORLD,IERROR)
+
+      ENDIF
+
+C --------------------------------------------------------------
+C sending the rbe3 nodes to processor 0 and writing to disk
+C --------------------------------------------------------------
+      IF (ISPMD /= 0) THEN
+C ------------------------
+C Procs other than pro 0
+C ------------------------
+         call my_alloc(SENDBUF, SBUFSIZ, "SENDBUF")
+         SNRBE3 = 0
+         DO I=1,NRBE3
+           NSN = IRBE3(5,I)
+           IAD = IRBE3(1,I)
+           DO N=1,NSN
+              SN = LRBE3(IAD+N)
+              IF (WEIGHT(SN) == 1 )THEN
+                SNRBE3 = SNRBE3+1
+                SENDBUF(SNRBE3)=ITAB(SN)
+              ENDIF
+           ENDDO
+         ENDDO
+         IF (SNRBE3 > 0)THEN
+           MSGTYP = MSGOFF2
+           CALL  MPI_SEND(SENDBUF,SNRBE3,MPI_INTEGER,IT_SPMD(1),MSGTYP,
+     *                  SPMD_COMM_WORLD,IERROR)
+         ENDIF
+         call my_dealloc(SENDBUF)
+
+C sending secondary nodes
+        SECNDNODS = 0
+        DO I=1,NRBE3
+          MN = IRBE3(3,I)
+            IF(MN/=0)THEN
+            IF (WEIGHT(MN)==1)THEN
+              NGRBE = IRBE3(10,I)
+              SECNDNODS(NGRBE)=ITAB(MN)
+            ENDIF
+            ENDIF
+        ENDDO
+        CALL SPMD_GLOB_ISUM9(SECNDNODS,NRBE3G)
+
+C sending ids
+        ID_RBE3 = 0
+        DO I=1,NRBE3
+          ID = IRBE3(2,I)
+            IF(IRBE3(3,I)/=0)THEN
+            IF (WEIGHT(IRBE3(3,I))==1)THEN
+              NGRBE = IRBE3(10,I)
+              ID_RBE3(NGRBE)=ID
+            ENDIF
+            ENDIF
+        ENDDO
+        CALL SPMD_GLOB_ISUM9(ID_RBE3,NRBE3G)
+        
+
+      ELSE
+C --------------------------------------------------------------------
+C PROC 0
+C --------------------------------------------------------------------
+C p0rbe3buf receive array (receive array = lrbe3 global)
+C IAdrbe3 pointers towards p0rbe3buf global
+         call my_alloc(IADRBE3, NRBE3G+1, "IADRBE3")
+         call my_alloc(P0RBE3BUF, NERBE3Y, "P0RBE3BUF")
+
+C preparation IADRBE3
+         IADRBE3(1)=0
+         DO I=1,NRBE3G
+           SNRBE3 = P0RECRBE3(I,1)
+           DO N=2,NSPMD
+             SNRBE3 = SNRBE3 + P0RECRBE3(I,N)
+           ENDDO
+           IADRBE3(I+1)=IADRBE3(I)+SNRBE3
+         ENDDO
+
+C preparation of p0recrbe3 for processor 0
+         DO I=1,NRBE3G
+              PGLOBRBE3(I)=IADRBE3(I)
+         ENDDO
+           
+         DO I=1,NRBE3
+           NSN = IRBE3(5,I)
+           IAD = IRBE3(1,I)
+           NGRBE = IRBE3(10,I)
+           IADG = IADRBE3(NGRBE)
+           SNRBE3 = 0
+           DO N=1,NSN
+             SN = LRBE3( IAD+N )
+             IF (WEIGHT(SN) == 1 )THEN
+               SNRBE3 = SNRBE3+1
+               P0RBE3BUF(IADG + SNRBE3) = ITAB(SN)
+             ENDIF
+           ENDDO
+           PGLOBRBE3(NGRBE)=PGLOBRBE3(NGRBE) + SNRBE3
+         ENDDO
+
+
+C receiving rbe3 from other processors
+         DO P=2,NSPMD
+C size of the receive buffer
+           SIZRBE3 = 0
+           DO I=1,NRBE3G
+             SIZRBE3 = SIZRBE3 + P0RECRBE3(I,P)
+           ENDDO
+
+           IF (SIZRBE3 > 0) THEN
+             call my_alloc(RECBUF, SIZRBE3, "RECBUF")
+             MSGTYP = MSGOFF2 
+             CALL MPI_RECV(RECBUF,SIZRBE3,MPI_INTEGER,IT_SPMD(P),MSGTYP,
+     *                   SPMD_COMM_WORLD,STATUS,IERROR)
+
+             PSNRBE3=0
+             DO I=1,NRBE3G
+               IADG = PGLOBRBE3(I)
+               DO N=1,P0RECRBE3(I,P)
+                 PSNRBE3 = PSNRBE3 + 1
+                 P0RBE3BUF(IADG + N) = RECBUF(PSNRBE3)
+               ENDDO
+               PGLOBRBE3(I) = PGLOBRBE3(I) + P0RECRBE3(I,P)
+             ENDDO
+             call my_dealloc(RECBUF)
+           ENDIF
+         ENDDO
+C  receiving secondary nodes
+         SECNDNODS=0
+         DO I=1,NRBE3
+           MN = IRBE3(3,I)
+           IF (WEIGHT(MN)==1) THEN
+             NGRBE = IRBE3(10,I)
+             SECNDNODS(NGRBE)=ITAB(MN)
+           ENDIF        
+         ENDDO
+         CALL SPMD_GLOB_ISUM9(SECNDNODS,NRBE3G)
+
+C receiving ids
+        ID_RBE3 = 0
+        DO I=1,NRBE3
+          ID = IRBE3(2,I)
+            IF(IRBE3(3,I)/=0)THEN
+            IF (WEIGHT(IRBE3(3,I))==1)THEN
+              NGRBE = IRBE3(10,I)
+              ID_RBE3(NGRBE)=ID
+            ENDIF
+            ENDIF
+        ENDDO
+        CALL SPMD_GLOB_ISUM9(ID_RBE3,NRBE3G)
+
+
+         CALL C_H3D_CREATE_RBE3_IMPI(ITAB,NRBE3G,IADRBE3,SECNDNODS,P0RBE3BUF,ID_RBE3,
+     .                               COMPID_RBE3S)
+
+        ENDIF
+#endif
+        RETURN
+      END 

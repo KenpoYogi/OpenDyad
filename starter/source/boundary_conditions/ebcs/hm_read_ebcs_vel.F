@@ -1,0 +1,223 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_ebcs_vel         ../starter/source/boundary_conditions/ebcs/hm_read_ebcs_vel.F
+!||--- called by ------------------------------------------------------
+!||    read_ebcs                ../starter/source/boundary_conditions/ebcs/read_ebcs.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                   ../starter/source/output/message/message.F
+!||    hm_get_floatv            ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_get_intv              ../starter/source/devtools/hm_reader/hm_get_intv.F
+!||    hm_option_is_encrypted   ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||    ngr2usr                  ../starter/source/system/nintrr.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    submodel_mod             ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_READ_EBCS_VEL(IGRSURF, NPC, MULTI_FVM, UNITAB, ID, TITR, LSUBMODEL, EBCS)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE UNITAB_MOD
+      USE MESSAGE_MOD
+      USE MULTI_FVM_MOD
+      USE GROUPDEF_MOD
+      USE SUBMODEL_MOD
+      USE EBCS_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "units_c.inc"
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE (UNIT_TYPE_),INTENT(IN) ::UNITAB 
+      INTEGER :: NPC(*),ID
+      TYPE (MULTI_FVM_STRUCT), INTENT(INOUT) :: MULTI_FVM
+      TYPE (SURF_)   ,TARGET,  DIMENSION(NSURF)   :: IGRSURF
+      CHARACTER(LEN=NCHARTITLE), INTENT(IN) :: TITR
+      TYPE(t_ebcs_vel), INTENT(INOUT) :: EBCS
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER ISU,SURF,NGR2USR,IRHO,J,NSEG,IENER,IVX,IVY,IVZ
+      my_real C,RHO,LCAR,R1,R2,ENER,VX,VY,VZ
+      EXTERNAL NGR2USR
+      INTEGER, DIMENSION(:), POINTER :: INGR2USR
+      TYPE(SUBMODEL_DATA) LSUBMODEL(NSUBMOD)
+      LOGICAL IS_ENCRYPTED, IS_AVAILABLE
+C-----------------------------------------------
+C   S o u r c e   L i n e s
+C-----------------------------------------------
+
+      IVX=0
+      IVY=0
+      IVZ=0
+      IRHO=0
+      IENER=0
+      C=ZERO
+      RHO=ZERO
+      LCAR=ZERO
+      R1=ZERO
+      R2=ZERO
+      ENER=ZERO
+      VX=ZERO
+      VY=ZERO
+      VZ=ZERO
+
+      EBCS%title = TRIM(TITR)
+      
+      CALL HM_OPTION_IS_ENCRYPTED(IS_ENCRYPTED)
+      CALL HM_GET_INTV('entityid',  SURF  ,IS_AVAILABLE,LSUBMODEL)
+
+        ISU=0
+        INGR2USR => IGRSURF(1:NSURF)%ID
+        IF (SURF/=0) ISU=NGR2USR(SURF,INGR2USR,NSURF)
+        NSEG=0
+        IF (ISU/=0) NSEG=IGRSURF(ISU)%NSEG
+        IF(SURF==0)THEN
+           IERR=IERR+1
+           WRITE(ISTDO,'(6X,A)')' ** A SURFACE SHOULD BE INPUT'  
+           WRITE(IOUT, '(6X,A)')' ** A SURFACE SHOULD BE INPUT'       
+        ELSEIF(ISU==0)THEN
+           IERR=IERR+1
+           WRITE(ISTDO,*)' ** ERROR SURFACE NOT FOUND, ID=',SURF
+           WRITE(IOUT,*) ' ** ERROR SURFACE NOT FOUND, ID=',SURF        
+        ELSEIF(NSEG==0)THEN
+           IERR=IERR+1
+           WRITE(ISTDO,*)' ** ERROR EMPTY SURFACE',SURF
+           WRITE(IOUT,*) ' ** ERROR EMPTY SURFACE',SURF
+        ENDIF
+               
+               
+                
+      !--line-2
+      CALL HM_GET_FLOATV('rad_ebcs_c',  C  ,IS_AVAILABLE,LSUBMODEL,UNITAB)   
+                   
+      !--line-3
+      CALL HM_GET_INTV('rad_fct_vx',  IVX  ,IS_AVAILABLE,LSUBMODEL)
+      CALL HM_GET_FLOATV('rad_ebcs_fscale_vx',  VX  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+      !--line-4
+      CALL HM_GET_INTV('rad_fct_vy',  IVY  ,IS_AVAILABLE,LSUBMODEL)
+      CALL HM_GET_FLOATV('rad_ebcs_fscale_vy',  VY  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+      !--line-5
+      CALL HM_GET_INTV('rad_fct_vz',  IVZ  ,IS_AVAILABLE,LSUBMODEL)
+      CALL HM_GET_FLOATV('rad_ebcs_fscale_vz',  VZ  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+
+      !--line-6
+      CALL HM_GET_INTV('rad_fct_rho',  IRHO  ,IS_AVAILABLE,LSUBMODEL)
+      CALL HM_GET_FLOATV('rad_ebcs_fscale_rho',  RHO  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+
+      !--line-7
+      CALL HM_GET_INTV('rad_fct_en',  IENER  ,IS_AVAILABLE,LSUBMODEL)
+      CALL HM_GET_FLOATV('rad_ebcs_fscale_en',  ENER  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+
+      !--line-8
+      CALL HM_GET_FLOATV('rad_ebcs_lc',  LCAR  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+      CALL HM_GET_FLOATV('rad_ebcs_r1',  R1  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+      CALL HM_GET_FLOATV('rad_ebcs_r2',  R2  ,IS_AVAILABLE,LSUBMODEL,UNITAB)
+
+      IF(SURF/=0 .AND. ISU/=0 .AND. NSEG/=0)THEN
+         WRITE(IOUT,1004)ID,TRIM(TITR)
+         WRITE(IOUT,1103)SURF,NSEG,C,VX,IVX,VY,IVY,VZ,IVZ,RHO,IRHO,ENER,IENER,LCAR
+      ENDIF        
+      DO J=1,NFUNCT
+         IF(IRHO/=0 .AND. IRHO==NPC(J)) THEN 
+            IRHO=J
+            EXIT
+         ENDIF
+      ENDDO
+      DO J=1,NFUNCT
+         IF(IENER/=0 .AND. IENER==NPC(J)) THEN
+            IENER=J
+            EXIT
+         ENDIF
+      ENDDO
+      DO J=1,NFUNCT
+         IF(IVX/=0 .AND. IVX==NPC(J)) THEN 
+            IVX=J
+            EXIT
+         ENDIF
+      ENDDO
+      DO J=1,NFUNCT
+         IF(IVY/=0 .AND. IVY==NPC(J)) THEN
+            IVY=J
+            EXIT
+         ENDIF
+      ENDDO
+      DO J=1,NFUNCT
+         IF(IVZ/=0 .AND. IVZ==NPC(J)) THEN
+            IVZ=J
+            EXIT
+         ENDIF
+      ENDDO
+
+      EBCS%title = TITR
+      EBCS%irho = IRHO
+      EBCS%iener = IENER
+      EBCS%c = C
+      EBCS%rho = RHO
+      EBCS%lcar = LCAR
+      EBCS%r1 = R1
+      EBCS%r2 = R2
+      EBCS%ener = ENER
+      EBCS%ivx = IVX
+      EBCS%ivy = IVY
+      EBCS%ivz = IVZ
+      EBCS%vx = VX
+      EBCS%vy = VY
+      EBCS%vz = VZ
+
+      IF (MULTI_FVM%IS_USED) THEN
+         CALL ANCMSG(MSGID = 1602, MSGTYPE = MSGERROR, ANMODE = ANINFO,
+     .        I1 = ID, C1 = TRIM(TITR), C2 = "NOT COMPATIBLE WITH LAW 151")
+      ENDIF    
+C-----------
+      RETURN
+C-----------
+
+ 1004 FORMAT( //'IMPOSED VELOCITY . . . . . . . . . . . . :',I10,1X,A)
+ 1103 FORMAT(
+     .        '    ON SURFACE  . . . . . . . . . . . . . . . ',I10,/,
+     .        '    NUMBER OF SEGMENTS FOUND. . . . . . . . . ',I10,/,
+     .        '    SPEED OF SOUND  . . . . . . . . . . . . . ',1PG20.13,/,
+     .        '    IMPOSED VELOCITY VX . . . . . . . . . . . ',1PG20.13,/,
+     .        '    VX SCALING FUNCTION . . . . . . . . . . . ',I10,/,
+     .        '    IMPOSED VELOCITY VY . . . . . . . . . . . ',1PG20.13,/,
+     .        '    VY SCALING FUNCTION . . . . . . . . . . . ',I10,/,
+     .        '    IMPOSED VELOCITY VZ . . . . . . . . . . . ',1PG20.13,/,
+     .        '    VZ SCALING FUNCTION . . . . . . . . . . . ',I10,/,
+     .        '    IMPOSED DENSITY . . . . . . . . . . . . . ',1PG20.13,/,
+     .        '    DENSITY SCALING FUNCTION  . . . . . . . . ',I10,/,
+     .        '    IMPOSED ENERGY  . . . . . . . . . . . . . ',1PG20.13,/,
+     .        '    ENERGY SCALING FUNCTION . . . . . . . . . ',I10,/,
+     .        '    CHARACTERISTIC LENGTH . . . . . . . . . . ',1PG20.13,/)
+
+      END

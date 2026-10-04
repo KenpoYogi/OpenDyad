@@ -1,0 +1,393 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_element_from_part   ../starter/source/model/sets/create_element_from_part.F
+!||--- called by ------------------------------------------------------
+!||    hm_set                     ../starter/source/model/sets/hm_set.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    inverted_group_mod         ../starter/share/modules1/inverted_group_mod.F
+!||    message_mod                ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_ELEMENT_FROM_PART(CLAUSE  ,INV_GROUP,NUMSPH)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Create Element list from PART list
+C------------------------------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     CLAUSE        (SET structure) Clause to be treated
+C     INV_GROUP     Direct access to the list of elements from a given PART
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE INVERTED_GROUP_MOD
+      USE SETDEF_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(INVERTGROUP_STRUCT_) :: INV_GROUP
+      TYPE (SET_) ::  CLAUSE
+      INTEGER, INTENT(IN) :: NUMSPH
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER ID,IE,EL,IP,EL_FIRST,EL_LAST,SIZE,IND,SZELMAX,I
+      INTEGER IWORK(70000)
+      INTEGER, DIMENSION(:), ALLOCATABLE :: INDX,SORT
+C=======================================================================
+      SZELMAX = MAX(NUMELS,NUMELQ,NUMELC,NUMELTG,NUMELTRIA,NUMELT,NUMELP,NUMELR,NUMSPH)
+      call my_alloc(INDX, SZELMAX*2, "CREATE_ELEMENT_FROM_PART/INDX")
+      call my_alloc(SORT, SZELMAX, "SORT")
+!
+!               SOLID
+      IF (NUMELS > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTS(IP)
+          EL_LAST  = INV_GROUP%INDPARTS(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_SOLID = SIZE
+        call my_alloc(CLAUSE%SOLID, SIZE, "CLAUSE%SOLID")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTS(IP)
+          EL_LAST  = INV_GROUP%INDPARTS(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTS(EL)
+            CLAUSE%SOLID(IND) = IE
+          ENDDO 
+        ENDDO
+
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_SOLID) = CLAUSE%SOLID(1:CLAUSE%NB_SOLID)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_SOLID,1)
+
+        DO I=1,CLAUSE%NB_SOLID
+           CLAUSE%SOLID(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELS > 0)
+!
+!               SPHCEL
+      IF (NUMSPH > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTSPH(IP)
+          EL_LAST  = INV_GROUP%INDPARTSPH(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_SPHCEL = SIZE
+        call my_alloc(CLAUSE%SPHCEL, SIZE, "CLAUSE%SPHCEL")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTSPH(IP)
+          EL_LAST  = INV_GROUP%INDPARTSPH(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTSPH(EL)
+            CLAUSE%SPHCEL(IND) = IE
+          ENDDO 
+        ENDDO
+
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_SPHCEL) = CLAUSE%SPHCEL(1:CLAUSE%NB_SPHCEL)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_SPHCEL,1)
+        
+        DO I=1,CLAUSE%NB_SPHCEL
+           CLAUSE%SPHCEL(I) = SORT(INDX(I))
+        ENDDO
+      ENDIF ! IF (NUMSPH > 0)
+!
+!               QUAD
+      IF (NUMELQ > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTQ(IP)
+          EL_LAST  = INV_GROUP%INDPARTQ(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_QUAD = SIZE
+        call my_alloc(CLAUSE%QUAD, SIZE, "CLAUSE%QUAD")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTQ(IP)
+          EL_LAST  = INV_GROUP%INDPARTQ(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTQ(EL)
+            CLAUSE%QUAD(IND) = IE
+          ENDDO 
+        ENDDO
+
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_QUAD) = CLAUSE%QUAD(1:CLAUSE%NB_QUAD)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_QUAD,1)
+
+        DO I=1,CLAUSE%NB_QUAD
+           CLAUSE%QUAD(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELQ > 0)
+!
+!               SHELL (4N)
+      IF (NUMELC > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTC(IP)
+          EL_LAST  = INV_GROUP%INDPARTC(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_SH4N = SIZE
+        call my_alloc(CLAUSE%SH4N, SIZE, "CLAUSE%SH4N")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTC(IP)
+          EL_LAST  = INV_GROUP%INDPARTC(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTC(EL)
+            CLAUSE%SH4N(IND) = IE
+          ENDDO 
+        ENDDO
+
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_SH4N) = CLAUSE%SH4N(1:CLAUSE%NB_SH4N)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_SH4N,1)
+
+        DO I=1,CLAUSE%NB_SH4N
+           CLAUSE%SH4N(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELC > 0)
+
+!
+!               SHELL (3N)
+      IF (NUMELTG > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTTG(IP)
+          EL_LAST  = INV_GROUP%INDPARTTG(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_SH3N = SIZE
+        call my_alloc(CLAUSE%SH3N, SIZE, "CLAUSE%SH3N")
+!
+        IND=0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTTG(IP)
+          EL_LAST  = INV_GROUP%INDPARTTG(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTTG(EL)
+            CLAUSE%SH3N(IND) = IE
+          ENDDO 
+        ENDDO
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_SH3N) = CLAUSE%SH3N(1:CLAUSE%NB_SH3N)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_SH3N,1)
+
+        DO I=1,CLAUSE%NB_SH3N
+           CLAUSE%SH3N(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELTG > 0)
+
+!
+!               TRIA
+      IF (NUMELTRIA > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTTRIA(IP)
+          EL_LAST  = INV_GROUP%INDPARTTRIA(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_TRIA = SIZE
+        call my_alloc(CLAUSE%TRIA, SIZE, "CLAUSE%TRIA")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTTRIA(IP)
+          EL_LAST  = INV_GROUP%INDPARTTRIA(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTTRIA(EL)
+            CLAUSE%TRIA(IND) = IE
+          ENDDO 
+        ENDDO
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_TRIA) = CLAUSE%SH3N(1:CLAUSE%NB_TRIA)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_TRIA,1)
+
+        DO I=1,CLAUSE%NB_TRIA
+           CLAUSE%SH3N(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELTRIA > 0)
+!
+!               TRUSS
+      IF (NUMELT > 0) THEN
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTT(IP)
+          EL_LAST  = INV_GROUP%INDPARTT(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+        CLAUSE%NB_TRUSS = SIZE
+        call my_alloc(CLAUSE%TRUSS, SIZE, "CLAUSE%TRUSS")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTT(IP)
+          EL_LAST  = INV_GROUP%INDPARTT(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTT(EL)
+            CLAUSE%TRUSS(IND) = IE
+          ENDDO 
+        ENDDO
+
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_TRUSS) = CLAUSE%TRUSS(1:CLAUSE%NB_TRUSS)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_TRUSS,1)
+        
+        DO I=1,CLAUSE%NB_TRUSS
+           CLAUSE%TRUSS(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELT > 0)
+
+!               BEAM
+      IF (NUMELP > 0) THEN
+
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTP(IP)
+          EL_LAST  = INV_GROUP%INDPARTP(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+
+        CLAUSE%NB_BEAM = SIZE
+        call my_alloc(CLAUSE%BEAM, SIZE, "CLAUSE%BEAM")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTP(IP)
+          EL_LAST  = INV_GROUP%INDPARTP(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTP(EL)
+            CLAUSE%BEAM(IND) = IE
+          ENDDO 
+        ENDDO
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_BEAM) = CLAUSE%BEAM(1:CLAUSE%NB_BEAM)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_BEAM,1)
+        
+        DO I=1,CLAUSE%NB_BEAM
+           CLAUSE%BEAM(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELP > 0)
+
+
+!
+!     SPRING
+      IF (NUMELR > 0) THEN
+
+        SIZE = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTR(IP)
+          EL_LAST  = INV_GROUP%INDPARTR(IP+1)
+          SIZE = SIZE + EL_LAST - EL_FIRST
+        ENDDO
+
+        CLAUSE%NB_SPRING = SIZE
+        call my_alloc(CLAUSE%SPRING, SIZE, "CLAUSE%SPRING")
+!
+        IND = 0
+        DO ID=1,CLAUSE%NB_PART
+          IP=CLAUSE%PART(ID)
+          EL_FIRST = INV_GROUP%INDPARTR(IP)
+          EL_LAST  = INV_GROUP%INDPARTR(IP+1)-1
+          DO EL=EL_FIRST,EL_LAST 
+            IND = IND+1
+            IE = INV_GROUP%PARTR(EL)
+            CLAUSE%SPRING(IND) = IE
+          ENDDO 
+        ENDDO
+        IWORK(1:70000) = 0
+        SORT(1:CLAUSE%NB_SPRING) = CLAUSE%SPRING(1:CLAUSE%NB_SPRING)
+        CALL MY_ORDERS(0,IWORK,SORT,INDX,CLAUSE%NB_SPRING,1)
+        
+        DO I=1,CLAUSE%NB_SPRING
+           CLAUSE%SPRING(I) = SORT(INDX(I))
+        ENDDO
+
+      ENDIF ! IF (NUMELR > 0)
+
+      CALL MY_DEALLOC(INDX)
+      CALL MY_DEALLOC(SORT)
+!
+C-------------------------
+      RETURN
+      END

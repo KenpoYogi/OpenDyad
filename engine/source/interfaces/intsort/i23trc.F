@@ -1,0 +1,140 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    i23trc        ../engine/source/interfaces/intsort/i23trc.F
+!||--- called by ------------------------------------------------------
+!||    i23main_tri   ../engine/source/interfaces/intsort/i23main_tri.F
+!||====================================================================
+      SUBROUTINE I23TRC(
+     1      NSN    ,I_STOK  ,CAND_N ,CAND_E,CAND_P ,
+     2      CAND_FX,CAND_FY ,CAND_FZ,CAND_A,IFPEN  )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+C   role of the routine:
+C   ===================
+C   sort on N of CAND_N CAND_E CAND_F
+C   and elimination of rebounding nodes
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER I_STOK,NSN
+      INTEGER CAND_N(*),CAND_E(*),CAND_A(*), IFPEN(*),
+     .        CAND_T
+      my_real CAND_FX(*),CAND_FY(*),CAND_FZ(*),CAND_P(*),CAND_TF
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,N,NN,K,IGET(I_STOK),IPUT(I_STOK)
+C=======================================================================
+C
+      DO N=1,NSN+3
+        CAND_A(N) = 0
+      ENDDO
+C=======================================================================
+C     LES NODES DELETES DEVIENNENT NSN+1 
+C=======================================================================
+      DO I=1,I_STOK
+        IF(IFPEN(I)==0)THEN
+          CAND_N(I) = NSN+1
+        ENDIF
+      ENDDO
+C=======================================================================
+C     CAND_A : DENOMBREMENT DE CHAQUE NODE C     APRES 300 CAND_A[3:NSN+3] : occurrence DES NODES [1:NSN+1] 
+C=======================================================================
+      DO I=1,I_STOK
+        NN = CAND_N(I) + 2
+        CAND_A(NN) = CAND_A(NN) + 1
+      ENDDO
+C=======================================================================
+C     CAND_A : ADDRESS DE CHAQUE NODE C     APRES 400 CAND_A[2:NSN+2] : ADDRESS DES NODES [1:NSN+1] 
+C=======================================================================
+      CAND_A(1) = 1
+      CAND_A(2) = 1
+      DO N=3,NSN+2
+        CAND_A(N) = CAND_A(N) + CAND_A(N-1)
+      ENDDO
+C=======================================================================
+C     IPUT(I) ADDRESS OU DOIT ALLER I
+C     IGET(K) ADDRESS D'OU DOIT VENIR K
+C     APRES 500 CAND_A[1:NSN+1] : ADDRESS DES NODES [1:NSN+1] 
+C=======================================================================
+      DO I=1,I_STOK
+        NN = CAND_N(I) + 1
+        K = CAND_A(NN)
+        IPUT(I) = K
+        IGET(K) = I
+        CAND_A(NN) = CAND_A(NN) + 1
+      ENDDO
+C=======================================================================
+C     TRI DE CAND_N CAND_E CAND_P
+C     on increasing N
+C     PERMUTATION 1 PASSE
+C=======================================================================
+      DO K=1,I_STOK
+        I = IGET(K)
+C
+        CAND_T    = CAND_N(K)
+        CAND_N(K) = CAND_N(I)
+        CAND_N(I) = CAND_T
+C
+        CAND_T    = CAND_E(K)
+        CAND_E(K) = CAND_E(I)
+        CAND_E(I) = CAND_T
+C------ Fx
+        CAND_TF    = CAND_FX(K)
+        CAND_FX(K) = CAND_FX(I)
+        CAND_FX(I) = CAND_TF
+C------ Fy
+        CAND_TF    = CAND_FY(K)
+        CAND_FY(K) = CAND_FY(I)
+        CAND_FY(I) = CAND_TF
+C------ Fz
+        CAND_TF    = CAND_FZ(K)
+        CAND_FZ(K) = CAND_FZ(I)
+        CAND_FZ(I) = CAND_TF
+C
+        CAND_TF   = CAND_P(K)
+        CAND_P(K) = CAND_P(I)
+        CAND_P(I) = CAND_TF
+
+        CAND_T    = IFPEN(K)
+        IFPEN(K)  = IFPEN(I)
+        IFPEN(I)  = CAND_T 
+C 
+        IPUT(I) = IPUT(K)
+        IGET(IPUT(I)) = I
+      ENDDO
+C=======================================================================
+C     CAND_A[NSN+1] : ADDRESS DE NSN+1 
+C=======================================================================
+      I_STOK = CAND_A(NSN+1) - 1
+      CAND_A(NSN+2) = CAND_A(NSN+1)
+C
+      RETURN
+      END

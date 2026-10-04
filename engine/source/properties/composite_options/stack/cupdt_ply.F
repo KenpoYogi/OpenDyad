@@ -1,0 +1,207 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    cupdt_ply     ../engine/source/properties/composite_options/stack/cupdt_ply.F
+!||--- called by ------------------------------------------------------
+!||    cbaforc3      ../engine/source/elements/shell/coqueba/cbaforc3.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod   ../common_source/modules/elements/element_mod.F90
+!||    plyxfem_mod   ../engine/share/modules/plyxfem_mod.F
+!||====================================================================
+      SUBROUTINE CUPDT_PLY(
+     1   JFT,     JLT,     NVC,     OFFG,
+     2   OFF,     IADC,    IEL,     INOD,
+     3   IXC,     MS,      IN,      MS_PLY,
+     4   ZI_PLY,  ISTACK,  POSLY,   FLY11,
+     5   FLY12,   FLY13,   FLY14,   FLY21,
+     6   FLY22,   FLY23,   FLY24,   FLY31,
+     7   FLY32,   FLY33,   FLY34,   FAC,
+     8   STI,     MSZ2,    NFT,     NPT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+       USE PLYXFEM_MOD
+       use element_mod , only : nixc
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+#include     "parit_c.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: NFT
+      INTEGER, INTENT(IN) :: NPT
+      INTEGER JFT, JLT, NVC
+      INTEGER IADC(4,*),IXC(NIXC,MVSIZ),ISTACK(MVSIZ,NPT),IEL(*),
+     .        INOD(*)
+C     REAL
+      my_real
+     .    OFFG(*), OFF(*),  IN(*), MS(*),MS_PLY(NPLYXFE,*),
+     .     POSLY(MVSIZ,NPT),ZI_PLY(NPLYXFE,*),
+     .   FLY11(MVSIZ, NPT), FLY21(MVSIZ, NPT), FLY31(MVSIZ, NPT),
+     .   FLY12(MVSIZ, NPT), FLY22(MVSIZ, NPT), FLY32(MVSIZ, NPT),
+     .   FLY13(MVSIZ, NPT), FLY23(MVSIZ, NPT), FLY33(MVSIZ, NPT),
+     .   FLY14(MVSIZ, NPT), FLY24(MVSIZ, NPT), FLY34(MVSIZ, NPT),
+     .   FAC(MVSIZ,2),STI(MVSIZ,*),MSZ2(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NVC1, NVC2, NVC3, NVC4, I, J, IP, I1, I2, I3, I4, N, 
+     .        IN1,IN2,IN3,IN4
+      my_real
+     .   OFF_L
+C-----------------------------------------------
+C
+C accumulation of the energy of deleted elements at the time of deletion
+C
+      OFF_L = ZERO
+      DO I=JFT,JLT
+        IF(OFF(I)<ONE)OFFG(I) = OFF(I)
+        OFF_L = MIN(OFF_L,OFFG(I))
+      ENDDO
+      IF(OFF_L<ZERO)THEN
+        DO I=JFT,JLT
+         IF(OFFG(I)<ZERO)THEN
+          DO J=1,NPT
+           FLY11(I,J)=ZERO
+           FLY21(I,J)=ZERO
+           FLY31(I,J)=ZERO
+           FLY12(I,J)=ZERO
+           FLY22(I,J)=ZERO
+           FLY32(I,J)=ZERO
+           FLY13(I,J)=ZERO
+           FLY23(I,J)=ZERO
+           FLY33(I,J)=ZERO
+           FLY14(I,J)=ZERO
+           FLY24(I,J)=ZERO
+           FLY34(I,J)=ZERO
+          ENDDO
+         ENDIF
+        ENDDO
+      ENDIF
+C
+      IF(IPARIT == 0) THEN
+        NVC1= NVC/8
+        NVC2=(NVC-NVC1*8)/4
+        NVC3=(NVC-NVC1*8-NVC2*4)/2
+        NVC4=(NVC-NVC1*8-NVC2*4-NVC3*2)
+C to do
+C    
+        DO I=JFT,JLT
+        
+         I1 = INOD(IXC(2,I))      
+         I2 = INOD(IXC(3,I))      
+         I3 = INOD(IXC(4,I))      
+         I4 = INOD(IXC(5,I))      
+C                                 
+         IN1 = IXC(2,I)           
+         IN2 = IXC(3,I)           
+         IN3 = IXC(4,I)           
+         IN4 = IXC(5,I)
+         N = IEL(I + NFT)
+         DO J=1,NPT
+          IP = ISTACK(I,J)  
+C         PRINT *,J,IP
+          PLY(IP)%A(1,I1)= PLY(IP)%A(1,I1) - (FLY11(I,J) )
+          PLY(IP)%A(2,I1)= PLY(IP)%A(2,I1) - (FLY21(I,J) )
+          PLY(IP)%A(3,I1)= PLY(IP)%A(3,I1) - (FLY31(I,J) )
+          PLY(IP)%A(4,I1)= PLY(IP)%A(4,I1) + STI(I,J)*FAC(I,1)
+c
+          PLY(IP)%A(1,I2)= PLY(IP)%A(1,I2) - (FLY12(I,J) )
+          PLY(IP)%A(2,I2)= PLY(IP)%A(2,I2) - (FLY22(I,J) )
+          PLY(IP)%A(3,I2)= PLY(IP)%A(3,I2) - (FLY32(I,J) )
+          PLY(IP)%A(4,I2)= PLY(IP)%A(4,I2) + STI(I,J)*FAC(I,2)
+
+c
+          PLY(IP)%A(1,I3)= PLY(IP)%A(1,I3) - (FLY13(I,J) )
+          PLY(IP)%A(2,I3)= PLY(IP)%A(2,I3) - (FLY23(I,J) )
+          PLY(IP)%A(3,I3)= PLY(IP)%A(3,I3) - (FLY33(I,J) )
+          PLY(IP)%A(4,I3)= PLY(IP)%A(4,I3) + STI(I,J)*FAC(I,1)
+c
+          PLY(IP)%A(1,I4)= PLY(IP)%A(1,I4) - (FLY14(I,J) )
+          PLY(IP)%A(2,I4)= PLY(IP)%A(2,I4) - (FLY24(I,J) )
+          PLY(IP)%A(3,I4)= PLY(IP)%A(3,I4) - (FLY34(I,J) )
+          PLY(IP)%A(4,I4)= PLY(IP)%A(4,I4) + STI(I,J)*FAC(I,2)
+C   
+         ENDDO
+       ENDDO 
+
+      ELSE  
+        DO I=JFT,JLT
+        
+         I1 = INOD(IXC(2,I))      
+         I2 = INOD(IXC(3,I))      
+         I3 = INOD(IXC(4,I))      
+         I4 = INOD(IXC(5,I))      
+C                                 
+         IN1 = IXC(2,I)           
+         IN2 = IXC(3,I)           
+         IN3 = IXC(4,I)           
+         IN4 = IXC(5,I)
+C    
+         N = IEL(I + NFT)
+         DO J=1,NPT
+             IP = ISTACK(I,J)  
+             PLYSKY(IP)%FSKY(1,IADC(1,N))= -(FLY11(I,J) )   
+             PLYSKY(IP)%FSKY(2,IADC(1,N))= -(FLY21(I,J) )    
+             PLYSKY(IP)%FSKY(3,IADC(1,N))= -(FLY31(I,J) )   
+C stifness by ply
+             PLYSKY(IP)%FSKY(4,IADC(1,N))= STI(I,J)*FAC(I,1) 
+C               
+             PLYSKY(IP)%FSKY(1,IADC(2,N))= -(FLY12(I,J) ) 
+             PLYSKY(IP)%FSKY(2,IADC(2,N))= -(FLY22(I,J) )  
+             PLYSKY(IP)%FSKY(3,IADC(2,N))= -(FLY32(I,J) )
+C stifness by ply
+             PLYSKY(IP)%FSKY(4,IADC(2,N))= STI(I,J)*FAC(I,2) 
+c                                      
+             PLYSKY(IP)%FSKY(1,IADC(3,N))= -(FLY13(I,J))  
+             PLYSKY(IP)%FSKY(2,IADC(3,N))= -(FLY23(I,J) )
+             PLYSKY(IP)%FSKY(3,IADC(3,N))= -(FLY33(I,J) )  
+C stifness by ply
+             PLYSKY(IP)%FSKY(4,IADC(3,N))= STI(I,J)*FAC(I,1)
+             
+             PLYSKY(IP)%FSKY(1,IADC(4,N))= -(FLY14(I,J) )  
+             PLYSKY(IP)%FSKY(2,IADC(4,N))= -(FLY24(I,J) ) 
+             PLYSKY(IP)%FSKY(3,IADC(4,N))= -(FLY34(I,J) )
+C stifness by ply
+             PLYSKY(IP)%FSKY(4,IADC(4,N))= STI(I,J)*FAC(I,2)
+C   
+         ENDDO
+       ENDDO 
+C  
+      ENDIF  
+C
+      RETURN
+      END
+C      

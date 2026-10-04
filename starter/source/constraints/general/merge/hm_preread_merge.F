@@ -1,0 +1,127 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_preread_merge         ../starter/source/constraints/general/merge/hm_preread_merge.F
+!||--- called by ------------------------------------------------------
+!||    lectur                   ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    grsizen                  ../starter/source/system/nintrr.F
+!||    hm_get_int_array_index   ../starter/source/devtools/hm_reader/hm_get_int_array_index.F
+!||    hm_get_intv              ../starter/source/devtools/hm_reader/hm_get_intv.F
+!||    hm_option_read_key       ../starter/source/devtools/hm_reader/hm_option_read_key.F
+!||    hm_option_start          ../starter/source/devtools/hm_reader/hm_option_start.F
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod       ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    submodel_mod             ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_PREREAD_MERGE(SMGRBY, SLPBY, IGRNOD, LSUBMODEL)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE GROUPDEF_MOD
+      USE MESSAGE_MOD
+      USE SUBMODEL_MOD
+      USE HM_OPTION_READ_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE, NCHARKEY
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER SMGRBY, SLPBY
+C-----------------------------------------------
+      TYPE (GROUP_)  , DIMENSION(NGRNOD)  :: IGRNOD
+      TYPE(SUBMODEL_DATA),INTENT(IN)::LSUBMODEL(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,ID,IGU,NN,UID,IMAIN,M_TYPE,ISECONDARY,S_TYPE,FLAGG_OPT,NOBJ
+      CHARACTER(LEN=NCHARKEY) :: KEY2
+      CHARACTER(LEN=NCHARTITLE) :: TITR
+      LOGICAL IS_AVAILABLE
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+      INTEGER GRSIZEN
+C=======================================================================
+C Counting the number of lines in the /MERGE/RBODY options
+C Increases the size of LPBY based on the merges of NODE and GRNOD
+C=======================================================================
+      SMGRBY = 0
+      NXTRA_NODE = 0
+      NOBJ = 0
+C--------------------------------------------------
+C START BROWSING MODEL MERGE
+C--------------------------------------------------
+      IS_AVAILABLE = .FALSE.
+      CALL HM_OPTION_START('/MERGE/RBODY')
+C--------------------------------------------------
+      DO I=1,NRBMERGE
+C--------------------------------------------------
+C EXTRACT DATAS OF /RBODY/... LINE
+C--------------------------------------------------
+        CALL HM_OPTION_READ_KEY(LSUBMODEL,
+     .                       OPTION_ID = ID,
+     .                       UNIT_ID = UID,
+     .                       OPTION_TITR = TITR,
+     .                       KEYWORD2 = KEY2)
+
+C--------------------------------------------------
+C EXTRACT DATAS (INTEGER VALUES)
+C--------------------------------------------------
+        CALL HM_GET_INTV('NB_SUBOBJVE',NOBJ,IS_AVAILABLE,LSUBMODEL)
+c
+        DO J=1,NOBJ
+          CALL HM_GET_INT_ARRAY_INDEX('Main_ID',IMAIN,J,IS_AVAILABLE,LSUBMODEL)
+          CALL HM_GET_INT_ARRAY_INDEX('M_type',M_TYPE,J,IS_AVAILABLE,LSUBMODEL)
+          CALL HM_GET_INT_ARRAY_INDEX('Secon_ID',ISECONDARY,J,IS_AVAILABLE,LSUBMODEL)
+          CALL HM_GET_INT_ARRAY_INDEX('S_type',S_TYPE,J,IS_AVAILABLE,LSUBMODEL)
+          CALL HM_GET_INT_ARRAY_INDEX('Iflag',FLAGG_OPT,J,IS_AVAILABLE,LSUBMODEL)
+          IF (IMAIN /= 0) THEN
+            SMGRBY = SMGRBY + 1
+            IF(S_TYPE == 2 .OR. S_TYPE == 5) THEN
+              SLPBY = SLPBY + 1
+              NXTRA_NODE = NXTRA_NODE + 1 
+            ELSEIF(S_TYPE == 3) THEN
+              IGU=ISECONDARY
+              NN = GRSIZEN(IGU,IGRNOD,NGRNOD) 
+              SLPBY = SLPBY + NN   
+              NXTRA_NODE = NXTRA_NODE + NN                
+            ENDIF
+          ENDIF  ! IMAIN /= 0
+        ENDDO
+
+      ENDDO
+C-----------
+      RETURN
+      END 
+C
+

@@ -1,0 +1,147 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_elem_all_clause   ../starter/source/model/sets/create_elem_all_clause.F
+!||--- called by ------------------------------------------------------
+!||    hm_set                   ../starter/source/model/sets/hm_set.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_ELEM_ALL_CLAUSE( CLAUSE )
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Create Element list from PART list
+C------------------------------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     CLAUSE        (SET structure) Clause to be treated
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE SETDEF_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE (SET_) ::  CLAUSE
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I
+C=======================================================================
+!
+      !  SOLID
+      IF (NUMELS > 0) THEN
+        CLAUSE%NB_SOLID = NUMELS
+        call my_alloc(CLAUSE%SOLID, NUMELS, "CLAUSE%SOLID")
+        DO I=1,NUMELS
+         CLAUSE%SOLID(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELS > 0)
+      
+!
+      !  QUAD
+      IF (NUMELQ > 0) THEN
+        CLAUSE%NB_QUAD = NUMELQ
+        call my_alloc(CLAUSE%QUAD, NUMELQ, "CLAUSE%QUAD")
+        DO I=1,NUMELQ
+         CLAUSE%QUAD(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELQ > 0)
+!
+      !  SHELL (4N)
+      IF (NUMELC > 0) THEN
+        CLAUSE%NB_SH4N = NUMELC
+        call my_alloc(CLAUSE%SH4N, NUMELC, "CLAUSE%SH4N")
+        DO I=1,NUMELC
+         CLAUSE%SH4N(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELC > 0)
+
+!
+      !  SHELL (3N)
+      IF (NUMELTG > 0) THEN
+        CLAUSE%NB_SH3N = NUMELTG
+        call my_alloc(CLAUSE%SH3N, NUMELTG, "CLAUSE%SH3N")
+        DO I=1,NUMELTG
+          CLAUSE%SH3N(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELTG > 0)
+
+!
+      !  TRIA
+      IF (NUMELTRIA > 0) THEN
+        CLAUSE%NB_TRIA = NUMELTRIA
+        call my_alloc(CLAUSE%TRIA, NUMELTRIA, "CLAUSE%TRIA")
+        DO I=1,NUMELTRIA
+          CLAUSE%TRIA(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELTRIA > 0)
+!
+      !  TRUSS
+      IF (NUMELT > 0) THEN
+        CLAUSE%NB_TRUSS = NUMELT
+        call my_alloc(CLAUSE%TRUSS, NUMELT, "CLAUSE%TRUSS")
+        DO I=1,NUMELT
+          CLAUSE%TRUSS(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELT > 0)
+
+!
+      !  BEAM
+      IF (NUMELP > 0) THEN
+        CLAUSE%NB_BEAM = NUMELP
+        call my_alloc(CLAUSE%BEAM, NUMELP, "CLAUSE%BEAM")
+        DO I=1,NUMELP
+          CLAUSE%BEAM(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELP > 0)
+!
+      !  SPRING
+      IF (NUMELR > 0) THEN
+        CLAUSE%NB_SPRING = NUMELR
+        call my_alloc(CLAUSE%SPRING, NUMELR, "CLAUSE%SPRING")
+        DO I=1,NUMELR
+          CLAUSE%SPRING(I) = I
+        ENDDO
+      ENDIF ! IF (NUMELR > 0)
+!
+C-------------------------
+      RETURN
+      END

@@ -1,0 +1,445 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C  |         I10XSAVE                        /intsort/i10xsave.F
+!||====================================================================
+!||    i11main_tri                  ../engine/source/interfaces/intsort/i11main_tri.F
+!||--- called by ------------------------------------------------------
+!||    imp_tripi                    ../engine/source/implicit/imp_int_k.F
+!||    inttri                       ../engine/source/interfaces/intsort/inttri.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                       ../engine/source/output/message/message.F
+!||    arret                        ../engine/source/system/arret.F
+!||    check_sorting_criteria       ../engine/source/interfaces/intsort/check_sorting_criteria.F90
+!||    i10xsave                     ../engine/source/interfaces/intsort/i10xsave.F
+!||    i11buce_vox                  ../engine/source/interfaces/intsort/i11buce.F
+!||    i11trc                       ../engine/source/interfaces/intsort/i11trc.F
+!||    my_barrier                   ../engine/source/system/machine.F
+!||    spmd_rnumcd11                ../engine/source/mpi/interfaces/spmd_i7tool.F
+!||    spmd_tri11gat                ../engine/source/mpi/interfaces/spmd_int.F
+!||    spmd_tri11vox                ../engine/source/mpi/interfaces/spmd_int.F
+!||    spmd_tri11vox0               ../engine/source/mpi/interfaces/spmd_int.F
+!||    startime                     ../engine/source/system/timer_mod.F90
+!||    stoptime                     ../engine/source/system/timer_mod.F90
+!||    upgrade_multimp              ../common_source/interf/upgrade_multimp.F
+!||--- uses       -----------------------------------------------------
+!||    check_sorting_criteria_mod   ../engine/source/interfaces/intsort/check_sorting_criteria.F90
+!||    intbufdef_mod                ../common_source/modules/interfaces/intbufdef_mod.F90
+!||    message_mod                  ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod                 ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod               ../common_source/tools/memory/my_dealloc.F90
+!||    timer_mod                    ../engine/source/system/timer_mod.F90
+!||    tri7box                      ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE I11MAIN_TRI(TIMERS,
+     1                  IPARI   ,X       ,V       ,
+     2                  MS      ,NIN   ,ITASK   ,WEIGHT  ,ISENDTO ,
+     3                  IRCVFROM,RETRI ,IAD_ELEM,FR_ELEM ,ITAB    ,
+     4                  NRTM_T  ,ESHIFT,NODNX_SMS,RENUM,NSNFIOLD  ,
+     5                  INTBUF_TAB,TEMP,NODADT_THERM)
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE TIMER_MOD
+      USE MESSAGE_MOD
+      USE TRI7BOX
+      USE INTBUFDEF_MOD
+      use check_sorting_criteria_mod , only : check_sorting_criteria
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com08_c.inc"
+#include      "param_c.inc"
+#include      "task_c.inc"
+#include      "timeri_c.inc"
+      COMMON /I11MAINC/BMINMA,RESULT,NRTSR,I_MEMG,NSNROLD
+      INTEGER RESULT,NRTSR,I_MEMG,NSNROLD
+      my_real 
+     .        BMINMA(6)
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(TIMER_), INTENT(INOUT) :: TIMERS
+      INTEGER, INTENT(IN) :: ITASK
+      INTEGER NIN , RETRI, NRTM_T, ESHIFT
+      INTEGER IPARI(NPARI,NINTER),  ITAB(*),
+     .        WEIGHT(*), IAD_ELEM(2,*) ,FR_ELEM(*),
+     .        ISENDTO(NINTER+1,*),IRCVFROM(NINTER+1,*),NODNX_SMS(*), 
+     .        RENUM(*),NSNFIOLD(NSPMD)
+      INTEGER ,INTENT(IN) :: NODADT_THERM
+C     REAL
+      my_real 
+     .   X(*), V(3,*), MS(*),TEMP(*)
+
+      TYPE(INTBUF_STRUCT_) INTBUF_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER   MULTIMP,
+     .        I, ILD, I_SK_OLD, 
+     .         NB_N_B, NOINT,
+     .        NCONT, NCONTACT,I_MEM,CAND_N_OLD,
+     .        LOC_PROC,I_SK_NEW,NFT,JLT,I_STOK,IFORM
+      INTEGER, DIMENSION(:), ALLOCATABLE :: OLDINBUF1, OLDINBUF2
+C     REAL
+      my_real
+     .   GAP, MAXBOX, MINBOX, TZINF,
+     .   XMAXL, YMAXL, ZMAXL, XMINL, YMINL, ZMINL, INACTI,DRAD,DGAPLOAD
+      INTEGER :: NMN, NSN,NTY,NRTS,NRTM
+      logical :: need_computation
+C-----------------------------------------------
+
+      ! --------------
+      ! check if the current interface needs to be sorted
+      call check_sorting_criteria( need_computation,nin,npari,nspmd,  
+     .                             itask,ipari(1,nin),tt,intbuf_tab )
+      if( .not.need_computation ) return
+      ! --------------
+
+      I_MEM = 0
+      I_MEMG = 0
+C
+      LOC_PROC=ISPMD+1
+      NRTS    =IPARI(3,NIN)
+      NRTM    =IPARI(4,NIN)
+      NSN     =IPARI(5,NIN)
+      NMN     =IPARI(6,NIN)
+      NTY     =IPARI(7,NIN)
+      NOINT   =IPARI(15,NIN)
+      MULTIMP =IPARI(23,NIN)
+      NCONT   =IPARI(18,NIN)
+      IFORM   =IPARI(30,NIN)
+      NCONTACT=MULTIMP*NCONT
+C
+      IF(IFORM == 2)THEN
+        NSNROLD = IPARI(24,NIN)
+      ELSE
+        NSNROLD = 0
+      ENDIF
+C
+      GAP  = INTBUF_TAB%VARIABLES(2)
+      DRAD =INTBUF_TAB%VARIABLES(24)
+      DGAPLOAD =INTBUF_TAB%VARIABLES(46)
+      RETRI=1
+C -------------------------------------------------------------
+C
+      MAXBOX = INTBUF_TAB%VARIABLES(9)
+      MINBOX = INTBUF_TAB%VARIABLES(12)
+      TZINF  = INTBUF_TAB%VARIABLES(8)
+      BMINMA(1)=-EP30
+      BMINMA(2)=-EP30
+      BMINMA(3)=-EP30
+      BMINMA(4)=EP30
+      BMINMA(5)=EP30
+      BMINMA(6)=EP30
+C no modification of INACTI: so no comm
+C
+      CALL MY_BARRIER
+      IF (ITASK == 0) THEN
+        IF(IFORM == 2)THEN
+          IF(SIZE(INTBUF_TAB%ADCCM) < NRTM) THEN
+            call my_dealloc(INTBUF_TAB%ADCCM)
+            call my_alloc(INTBUF_TAB%ADCCM, NRTM, "INTBUF_TAB%ADCCM")
+          ENDIF
+          DO I=1,NRTM
+            INTBUF_TAB%ADCCM(I) = 0
+          ENDDO
+          DO I=1,2*NCONTACT
+            INTBUF_TAB%CHAIN(I) = 0
+          ENDDO
+        ENDIF
+      ENDIF
+C
+      CALL MY_BARRIER
+      IF (ITASK == 0) THEN
+        I_STOK = INTBUF_TAB%I_STOK(1)
+        I_SK_NEW = 0
+        I_SK_OLD = I_STOK
+        INTBUF_TAB%I_STOK(1)=0
+C
+        IF(IFORM == 2)THEN
+          DO NFT=0, I_SK_OLD - 1 , NVSIZ
+            JLT = MIN( NVSIZ, I_SK_OLD - NFT )
+
+            CALL I11TRC(
+     1        I_SK_NEW         ,INTBUF_TAB%CAND_N, INTBUF_TAB%CAND_E, INTBUF_TAB%FTSAVX, INTBUF_TAB%FTSAVY,
+     2        INTBUF_TAB%FTSAVZ,IFORM            , INTBUF_TAB%ADCCM , INTBUF_TAB%CHAIN , NCONTACT,
+     .        ITAB,JLT, NFT,INTBUF_TAB%IFPEN,INTBUF_TAB%STFS,NIN,NRTS)
+
+          ENDDO
+          INTBUF_TAB%I_STOK(1) = I_SK_NEW
+        ELSE
+          I_SK_OLD=0
+        ENDIF
+      ENDIF
+C BARRIER BMINMA
+      CALL MY_BARRIER
+C -------------------------------------------------------------
+C     CALCULATION BORNE DOMAINE REMONTE IN I7XSAVE
+C -------------------------------------------------------------
+C Backup of XSAV (BUFIN Table (JD (19)))
+      CALL I10XSAVE(
+     1       X     ,INTBUF_TAB%NSV ,INTBUF_TAB%MSR,NSN   ,NMN   ,
+     2       ITASK ,INTBUF_TAB%XSAV,XMINL         ,YMINL ,ZMINL ,
+     3       XMAXL ,YMAXL          ,ZMAXL        )
+#include "lockon.inc"
+      BMINMA(1) = MAX(BMINMA(1),XMAXL)
+      BMINMA(2) = MAX(BMINMA(2),YMAXL)
+      BMINMA(3) = MAX(BMINMA(3),ZMAXL)
+      BMINMA(4) = MIN(BMINMA(4),XMINL)
+      BMINMA(5) = MIN(BMINMA(5),YMINL)
+      BMINMA(6) = MIN(BMINMA(6),ZMINL)
+#include "lockoff.inc"
+      RESULT = 0
+C barrier II_STOK and RESULT
+      CALL MY_BARRIER
+C -------------------------------------------------------------
+C to keep for case where inacti is modified on p0
+      INACTI=IPARI(22,NIN)
+      IF(ITASK==0)THEN
+        IF(ABS(BMINMA(6)-BMINMA(3))>2*EP30.OR.
+     +     ABS(BMINMA(5)-BMINMA(2))>2*EP30.OR.
+     +     ABS(BMINMA(4)-BMINMA(1))>2*EP30)THEN
+          CALL ANCMSG(MSGID=87,ANMODE=ANINFO,
+     .                I1=NOINT,C1='(I7BUCE)')
+          CALL ARRET(2)
+        END IF
+C
+        BMINMA(1)=BMINMA(1)+TZINF
+        BMINMA(2)=BMINMA(2)+TZINF
+        BMINMA(3)=BMINMA(3)+TZINF
+        BMINMA(4)=BMINMA(4)-TZINF
+        BMINMA(5)=BMINMA(5)-TZINF
+        BMINMA(6)=BMINMA(6)-TZINF
+
+        IF(NSPMD > LRVOXELP)THEN
+          CALL ANCMSG(MSGID=36,ANMODE=ANINFO,
+     .            C1='(I11MAINTRI)')
+          CALL ARRET(2)
+        END IF
+
+      END IF
+
+        NRTSR = 0
+
+      IF(NSPMD > 1) THEN
+
+        IF(ITASK==0) CRVOXEL(0:LRVOXEL,0:LRVOXEL,LOC_PROC)=0
+
+        CALL MY_BARRIER
+
+        IF (IMONM > 0 .AND. ITASK == 0) CALL STARTIME(TIMERS,26)
+        CALL SPMD_TRI11VOX0(
+     1      X        ,BMINMA  ,IPARI(21,NIN),NRTM_T  , INTBUF_TAB%STFM(1+ESHIFT),
+     2      TZINF    ,INTBUF_TAB%IRECTM(1+2*ESHIFT),GAP,INTBUF_TAB%GAP_M(1+ESHIFT),
+     3      INTBUF_TAB%VARIABLES(13) ,INTBUF_TAB%VARIABLES(7),DRAD,DGAPLOAD)
+ 
+        CALL MY_BARRIER
+        IF (IMONM > 0 .AND. ITASK == 0) CALL STOPTIME(TIMERS,26)
+        IF(ITASK==0)THEN
+C
+C recovery of remote nodes NSNR stored in XREM
+C    
+        IF (IMONM > 0 .AND. ITASK == 0) CALL STARTIME(TIMERS,25)
+          CALL SPMD_TRI11VOX(
+     1 INTBUF_TAB%IRECTS,NRTS     ,X              ,V         ,MS           ,
+     2 BMINMA           ,WEIGHT   ,INTBUF_TAB%STFS,NIN       ,ISENDTO      ,
+     3 IRCVFROM         ,IAD_ELEM ,FR_ELEM        ,NRTSR     ,IPARI(22,NIN),
+     4 INTBUF_TAB%GAP_S ,INTBUF_TAB%PENIS ,  ITAB  ,IPARI(21,NIN),TZINF    ,
+     5 NODNX_SMS        ,INTBUF_TAB%GAP_SL,NSNFIOLD,IFORM        ,IPARI(47,NIN),
+     6 INTBUF_TAB%IELEC,INTBUF_TAB%AREAS ,TEMP     ,IPARI(36,NIN),INTBUF_TAB%ADDSUBS,
+     7 INTBUF_TAB%LISUBS,IPARI(72,NIN),INTBUF_TAB%IPARTFRICS,INTBUF_TAB%INFLG_SUBS)
+        IF (IMONM > 0 .AND. ITASK == 0) CALL STOPTIME(TIMERS,25)
+
+
+c 300      continue
+C
+C Local renumeration of former candidates
+C
+          IF(IFORM == 2) THEN
+            CALL SPMD_RNUMCD11(
+     1        INTBUF_TAB%CAND_N,RENUM   ,INTBUF_TAB%I_STOK(1), NIN, NRTS,
+     2        NSNFIOLD         ,NSNROLD ,INTBUF_TAB%ADCCM,INTBUF_TAB%CHAIN,
+     3        INTBUF_TAB%CAND_E,NCONTACT,NRTM)
+              
+          ENDIF
+        END IF
+      END IF
+C -------------------------------------------------------------
+
+C -------------------------------------------------------------
+      CAND_N_OLD = INTBUF_TAB%I_STOK(1)
+ 40   CONTINUE
+
+      IF(ITASK==0)THEN
+        IF(IFORM == 2) THEN
+          IF (ALLOCATED(OLDINBUF1)) call my_dealloc(OLDINBUF1)
+          IF (ALLOCATED(OLDINBUF2)) call my_dealloc(OLDINBUF2)
+
+          call my_alloc(OLDINBUF1, NRTM, "OLDINBUF1")
+          call my_alloc(OLDINBUF2, 2*NCONTACT, "OLDINBUF2")
+
+          OLDINBUF1(1:NRTM) = 0
+          OLDINBUF2(1:2*NCONTACT) = 0
+
+          DO I=1,NRTM
+             OLDINBUF1(I) = INTBUF_TAB%ADCCM(I)
+          ENDDO
+          DO I=1,2*NCONTACT
+             OLDINBUF2(I) = INTBUF_TAB%CHAIN(I)
+          ENDDO
+        ENDIF
+      ENDIF
+      ILD = 0
+      NB_N_B = 1
+C
+C Barrier Commp SPMD_TRI11BOX + BMINMA + RETURN I7BUCE
+C      
+ 50   CALL MY_BARRIER
+      !IF(NRTM_T/=0.OR.ITASK==0)
+c      CALL I11BUCE(
+c    1   X     ,INTBUF_TAB%IRECTS   ,INTBUF_TAB%IRECTM(1+2*ESHIFT) ,NRTS ,NMN  ,
+c    2   NRTM_T,NSN                 ,INTBUF_TAB%CAND_E,INTBUF_TAB%CAND_N,GAP  ,
+c    3   NOINT ,INTBUF_TAB%I_STOK(1),TZINF         ,MAXBOX      ,MINBOX       ,
+c    4   NB_N_B,ESHIFT              ,ILD           ,BMINMA     ,NCONTACT      ,
+c    6   INTBUF_TAB%ADCCM(1+ESHIFT) ,INTBUF_TAB%CHAIN,NIN          ,ITAB   ,NRTSR  ,
+c    7   NCONT ,INTBUF_TAB%GAP_S    ,INTBUF_TAB%STFS,INTBUF_TAB%PENIS,IPARI(21,NIN),
+c    8   INTBUF_TAB%STFM(1+ESHIFT),IPARI(42,NIN),I_MEM  , ITASK       ,IFORM       ,
+c    9   INTBUF_TAB%IFPEN         ,DRAD)
+       CALL I11BUCE_VOX(
+     1   X     ,INTBUF_TAB%IRECTS   ,INTBUF_TAB%IRECTM(1+2*ESHIFT) ,NRTS ,NMN  ,
+     2   NRTM_T,NSN                 ,INTBUF_TAB%CAND_E,INTBUF_TAB%CAND_N,GAP  ,
+     3   NOINT ,INTBUF_TAB%I_STOK(1),TZINF         ,MAXBOX      ,MINBOX       ,
+     4   NB_N_B,ESHIFT              ,ILD           ,BMINMA     ,NCONTACT      ,
+     6   INTBUF_TAB%ADCCM(1+ESHIFT) ,INTBUF_TAB%CHAIN,NIN          ,ITAB   ,NRTSR  ,
+     7   NCONT ,INTBUF_TAB%GAP_S    ,INTBUF_TAB%STFS,INTBUF_TAB%PENIS,IPARI(21,NIN),
+     8   INTBUF_TAB%STFM(1+ESHIFT),IPARI(42,NIN),I_MEM  , ITASK       ,IFORM       ,
+     9   INTBUF_TAB%IFPEN         ,DRAD, INTBUF_TAB%GAP_M(1+ESHIFT), INTBUF_TAB%GAP_SL,
+     1   INTBUF_TAB%GAP_ML(1+ESHIFT),INTBUF_TAB%VARIABLES(13),INTBUF_TAB%VARIABLES(7), GAP,
+     2   IPARI(63,NIN),INTBUF_TAB%KREMNODE(1+2*ESHIFT),INTBUF_TAB%REMNODE,DGAPLOAD)
+
+C Upgrade MultiMP
+      IF (I_MEM == 2)THEN
+#include "lockon.inc"
+         I_MEMG = I_MEM
+#include "lockoff.inc"
+      ENDIF
+
+C New barrier needed for Dynamic MultiMP
+      CALL MY_BARRIER
+
+      IF(I_MEMG /=0)THEN
+        IF (IFORM == 2)THEN
+          IF(ITASK == 0) THEN
+            DO I=1,NRTM
+              INTBUF_TAB%ADCCM(I)= OLDINBUF1(I)
+            ENDDO
+            DO I=1,2*NCONTACT
+              INTBUF_TAB%CHAIN(I)= OLDINBUF2(I)
+            ENDDO
+            call my_dealloc(OLDINBUF1)
+            call my_dealloc(OLDINBUF2)
+          ENDIF
+c         /---------------/
+          CALL MY_BARRIER
+c         /---------------/
+        ENDIF
+C CARE : JINBUF & JBUFIN array are reallocated in
+C        UPGRADE_MULTIMP routine !!!!
+!$OMP SINGLE
+        !    I                             increase > 4 for small interfaces
+        MULTIMP = MAX(IPARI(23,NIN) +4,IPARI(23,NIN)+MIN(20,(250000/NCONT)))
+        CALL UPGRADE_MULTIMP(NIN,MULTIMP,INTBUF_TAB)
+C        WRITE(6,*) "UPGRADE_MULTIMP",ISPMD,NOINT                              
+c       WRITE(6,*) ISPMD,NOINT,"NMN,NSN=",NMN,NSN
+c       WRITE(6,*) ISPMD,NOINT,"NRTS,NRTSR=", NRTS,NRTSR
+c       WRITE(6,*) ISPMD,NOINT,"NSNROLD=",NSNROLD
+c       WRITE(6,*) ISPMD,NOINT,"NCONT=",NCONT
+c       WRITE(6,*) ISPMD,NOINT,"I_STOK=",INTBUF_TAB%I_STOK(1)
+c       CALL FLUSH(6)
+c       IF(MULTIMP > 200) STOP
+!$OMP END SINGLE
+        I_MEM = 0
+        I_MEMG = 0
+        INTBUF_TAB%I_STOK(1)=CAND_N_OLD
+        MULTIMP=IPARI(23,NIN)
+        NCONTACT=MULTIMP*NCONT
+        GOTO 40
+      ENDIF
+
+#include "lockon.inc"
+      INTBUF_TAB%VARIABLES(9)  = MIN(MAXBOX,INTBUF_TAB%VARIABLES(9))
+      INTBUF_TAB%VARIABLES(12) = MIN(MINBOX,INTBUF_TAB%VARIABLES(12))
+      INTBUF_TAB%VARIABLES(8)  = MIN(TZINF,INTBUF_TAB%VARIABLES(8))
+      INTBUF_TAB%VARIABLES(5)  = INTBUF_TAB%VARIABLES(8)-GAP
+      RESULT        = RESULT + ILD
+#include "lockoff.inc"
+C--------------------------------------------------------------
+C--------------------------------------------------------------
+      CALL MY_BARRIER
+      IF (RESULT/=0) THEN
+        CALL MY_BARRIER
+        IF (ITASK==0) THEN
+          INTBUF_TAB%I_STOK(1) = I_SK_OLD
+          RESULT = 0
+        ENDIF
+        CALL MY_BARRIER
+        ILD    = 0         
+        MAXBOX = INTBUF_TAB%VARIABLES(9)
+        MINBOX = INTBUF_TAB%VARIABLES(12)
+        TZINF  = INTBUF_TAB%VARIABLES(8)
+        GOTO 50
+      ENDIF
+      IF(NSPMD>1)THEN
+C mono tache
+!$OMP SINGLE
+        IF (IMONM > 0) CALL STARTIME(TIMERS,26)
+C
+        INTBUF_TAB%VARIABLES(5) = -INTBUF_TAB%VARIABLES(5)
+        CALL SPMD_TRI11GAT(
+     1    RESULT       ,NRTS ,INTBUF_TAB%CAND_N,INTBUF_TAB%I_STOK(1),NIN,
+     2    IPARI(22,NIN),NRTSR,MULTIMP          ,IPARI(21,NIN),IPARI(47,NIN),
+     2    IPARI(36,NIN),IPARI(72,NIN),NODADT_THERM)
+
+C save additional candidates in IPARI(24)
+        IPARI(24,NIN) = NRTSR
+C
+        IF (IMONM > 0) CALL STOPTIME(TIMERS,26)
+!$OMP END SINGLE
+      ENDIF
+
+      IF (ALLOCATED(OLDINBUF1)) call my_dealloc(OLDINBUF1)
+      IF (ALLOCATED(OLDINBUF2)) call my_dealloc(OLDINBUF2)
+C
+      RETURN
+      END

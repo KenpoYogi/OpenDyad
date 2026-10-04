@@ -1,0 +1,195 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    initnoise     ../engine/source/general_controls/computation/initnoise.F
+!||--- called by ------------------------------------------------------
+!||    noise         ../engine/source/general_controls/computation/noise.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod   ../common_source/modules/elements/element_mod.F90
+!||====================================================================
+      SUBROUTINE INITNOISE(IN,NOIADD,IXS,IWA,LENGTH,IXQ)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------        
+      use element_mod , only : nixs,nixq
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scrnoi_c.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IN(*),IXS(NIXS,*),IWA(0:*),IXQ(NIXQ,*)
+      INTEGER NOIADD(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,LENGTH,K
+C-----------------------------------------------
+C
+C ADDRESS DES NODES SAUVES DS NOISE
+C
+      DO I=0,NUMNOD
+       IWA(I)=0
+      ENDDO
+      DO I=1,NNOISE
+       IWA(IN(I))=I                 ! In (i) = 0 if not present in SPMD
+       NOIADD(I)=0
+      ENDDO
+      NOIADD(NNOISE+1)=0
+C
+C STOCKE IN NOIADD(K) LE NUMBER d'ELEMENTS CONNECTES AU NODE K-1
+C
+      IF(N2D==0)THEN
+        DO I=1,NUMELS
+         DO J=2,9
+          K=IWA(IXS(J,I))
+          IF(K/=0)
+     .       NOIADD(K+1)=NOIADD(K+1)+1
+         ENDDO
+        ENDDO
+      ELSE
+        DO I=1,NUMELQ
+         DO J=2,5
+          K=IWA(IXQ(J,I))
+          IF(K/=0)
+     .       NOIADD(K+1)=NOIADD(K+1)+1
+         ENDDO
+        ENDDO
+      ENDIF      
+C
+C address per node in the array of elements to be saved in nodes
+C
+      NOIADD(1)=1
+      DO I=2,NNOISE+1
+       NOIADD(I)=NOIADD(I)+NOIADD(I-1)
+      ENDDO
+      LENGTH=NOIADD(NNOISE+1)-1
+c-----------
+      RETURN
+      END
+
+!||====================================================================
+!||    initnoise2       ../engine/source/general_controls/computation/initnoise.F
+!||--- called by ------------------------------------------------------
+!||    noise            ../engine/source/general_controls/computation/noise.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    element_mod      ../common_source/modules/elements/element_mod.F90
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE INITNOISE2(IN,ELNOI,ELG,NOIADD,IXS,IWA,IPARG,IXQ)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------        
+      use element_mod , only : nixs,nixq
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scrnoi_c.inc"
+#include      "com01_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IN(*),IXS(NIXS,*),IXQ(NIXQ,*),IWA(*),IPARG(NPARG,*),
+     .   ELNOI(*),ELG(*),NOIADD(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER , DIMENSION (:), ALLOCATABLE :: KN
+      INTEGER I,J,K,II
+      INTEGER NG,NEL,ITY,NB2,NFT
+C-----------------------------------------------
+      IF(NNOISE>0)THEN
+        call my_alloc(KN, NNOISE, "KN")
+      ENDIF
+      DO I=1,NNOISE
+        KN(I)=0
+      ENDDO
+C
+C filling elnoi with the addresses from elbuf
+C
+      DO NG=1,NGROUP
+        ITY   =IPARG(5,NG)
+        IF(ITY==1)THEN
+         NEL   =IPARG(2,NG)
+         NB2   =IPARG(4,NG) + NEL
+         NFT   =IPARG(3,NG)
+         DO I=1,NEL
+          II=I+NFT
+          DO J=2,9
+            K=IWA(IXS(J,II))
+            IF(K /=0)THEN
+              ELNOI(NOIADD(K)+KN(K))=I
+              ELG(NOIADD(K)+KN(K))=NG
+              KN(K)=KN(K)+1
+            ENDIF
+          ENDDO
+         ENDDO
+        ELSEIF(ITY==2)THEN
+         NEL   =IPARG(2,NG)
+         NB2   =IPARG(4,NG) + NEL
+         NFT   =IPARG(3,NG)
+         DO I=1,NEL
+          II=I+NFT
+          DO J=2,5
+            K=IWA(IXQ(J,II))
+            IF(K /=0)THEN
+              ELNOI(NOIADD(K)+KN(K))=(I-1)*6
+              ELG(NOIADD(K)+KN(K))=NG
+              KN(K)=KN(K)+1
+            ENDIF
+          ENDDO
+         ENDDO
+        ENDIF
+        
+      ENDDO
+C
+      IF(NNOISE>0)THEN
+        call my_dealloc(KN)
+      ENDIF
+C-----------
+      RETURN
+      END
+
+
+
+
+
+
+         

@@ -1,0 +1,384 @@
+#------------------------------------------------------------------------------
+# 100001 - 100100: File handling:
+
+/MESSAGE/100001/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100001/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Model file %s not found
+
+/MESSAGE/100002/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100002/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Include file %s not found
+
+
+#------------------------------------------------------------------------------
+# 100101 - 100200: Parsing:
+
+/MESSAGE/100101/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100101/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+STRING "%s" found instead of an integer
+/MESSAGE/100101/SOLUTION
+Please check input format and fields description defined in the Reference Guide.
+
+/MESSAGE/100102/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100102/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+STRING "%s" found instead of a floating point value
+/MESSAGE/100102/SOLUTION
+Please check input format and fields description defined in the Reference Guide.
+
+/MESSAGE/100103/TITLE
+** ERROR IN INPUT OPTIONS
+/MESSAGE/100103/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Cannot read an integer value
+/MESSAGE/100103/SOLUTION
+Please check input format and fields description defined in the Reference Guide.
+   
+/MESSAGE/100104/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100104/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Cannot read a floating point value
+/MESSAGE/100104/SOLUTION
+Please check input format and fields description defined in the Reference Guide.
+
+/MESSAGE/100105/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100105/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+PARAMETER spans over more than one cell and is not found.
+
+/MESSAGE/100106/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100106/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+PARAMETER %s used in this card has to be defined before it is used.
+/MESSAGE/100106/SOLUTION
+Move PARAMETER definition before the option which uses it.
+
+/MESSAGE/100107/TITLE
+** WARNING IN INPUT FORMAT
+/MESSAGE/100107/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+PARAMETER in text field is not found. The parameter is not replaced.
+
+#------------------------------------------------------------------------------
+# 100201 - 100300: Global model problems:
+   
+/MESSAGE/100201/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100201/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+File is not a valid deck, mandatory first card "#RADIOSS STARTER" missing.
+
+/MESSAGE/100202/TITLE
+** ERROR IN INPUT FORMAT
+/MESSAGE/100202/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+INPUT FORMAT %d NOT SUPPORTED
+
+/MESSAGE/100210/TITLE
+** ERROR IN INPUT OPTIONS
+/MESSAGE/100210/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Unrecognized option:
+%s
+
+/MESSAGE/100211/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100211/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Unsupported option %s in format < %s
+
+/MESSAGE/100212/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100212/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Card cannot be read. Object might be incomplete
+
+/MESSAGE/100213/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100213/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+unsupported field exists at the end of line
+/MESSAGE/100213/SOLUTION
+    Please check input format and fields description defined in the Reference Guide.
+
+/MESSAGE/100214/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100214/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+unsupported field exists
+/MESSAGE/100214/SOLUTION
+    Please check input format and fields description defined in the Reference Guide.
+
+/MESSAGE/100215/TITLE
+** ERROR IN INPUT OPTIONS
+/MESSAGE/100215/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+End of file reached
+
+/MESSAGE/100216/TITLE
+** ERROR IN INPUT OPTIONS
+/MESSAGE/100216/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Unable to read this line
+
+/MESSAGE/100217/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100217/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+card is missing
+/MESSAGE/100217/SOLUTION
+Please check input format and fields description defined in the Reference Guide.
+
+
+/MESSAGE/100218/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100218/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Card missing. Object might be incomplete.
+
+/MESSAGE/100219/TITLE
+** WARNING IN INPUT OPTIONS
+/MESSAGE/100219/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+Unexpected card, will be ignored:
+%s
+
+#------------------------------------------------------------------------------
+# 109001 - 109100: Internal errors:
+
+/MESSAGE/109001/TITLE
+** ERROR IN CFG-FILE ENVIRONMENT
+/MESSAGE/109001/DESCRIPTION
+%s
+
+/MESSAGE/109002/TITLE
+** ERROR IN ENVIRONMENT
+/MESSAGE/109002/DESCRIPTION
+Cannot open message file %s
+
+#------------------------------------------------------------------------------
+# 109997: Unknown:
+
+/MESSAGE/109997/TITLE
+** INFO WITHOUT ID
+/MESSAGE/109997/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+%s
+
+/MESSAGE/109998/TITLE
+** WARNING WITHOUT ID
+/MESSAGE/109998/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+%s
+
+/MESSAGE/109999/TITLE
+** ERROR WITHOUT ID
+/MESSAGE/109999/DESCRIPTION
+-- BLOCK: %s
+-- LINE: %s
+%s
+
+#------------------------------------------------------------------------------
+# 200001 -        : Dyna import:
+
+/MESSAGE/200001/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200001/DESCRIPTION
+%s (id: %u, name: %s) is not supported
+
+/MESSAGE/200002/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200002/DESCRIPTION
+%s (id: %u, name: %s) VAD=3 - motion will not be correct - the function needs to be manually converted
+
+/MESSAGE/200003/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200003/DESCRIPTION
+%s (id: %u, name: %s) G0=GI 
+
+/MESSAGE/200004/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200004/DESCRIPTION
+%s (id: %u, name: %s) Failure in forces/moments not taken into account
+
+/MESSAGE/200011/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200011/DESCRIPTION
+%s (id: %u, name: %s): Field %s not supported
+
+/MESSAGE/200012/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200012/DESCRIPTION
+%s (name: %s): Field %s not supported
+
+/MESSAGE/200021/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200021/DESCRIPTION
+%s (id: %u, name: %s): Field %s not supported
+
+/MESSAGE/200022/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200022/DESCRIPTION
+%s (name: %s): Field %s not supported
+
+/MESSAGE/200023/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200023/DESCRIPTION
+duplicate %s id %d
+
+/MESSAGE/200024/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200024/DESCRIPTION
+%s (id: %u, name: %s) : IRID<0 is not supported
+
+/MESSAGE/200025/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200025/DESCRIPTION
+%s (id: %u, name: %s) : TYPE=3 is not supported
+
+/MESSAGE/200026/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200026/DESCRIPTION
+%s (id: %u, name: %s) : ELFORM=%d is not supported
+
+/MESSAGE/200027/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200027/DESCRIPTION
+%s (id: %u, name: %s) : First LCID function of *DEFINE_TABLE is used
+
+/MESSAGE/200028/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200028/DESCRIPTION
+%s (id: %u, name: %s) : The Mullins effect is not taken into account
+
+/MESSAGE/200029/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200029/DESCRIPTION
+%s (id: %u, name: %s) : Friction card for contact is not defined, friction is set to 0
+
+/MESSAGE/200030/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200030/DESCRIPTION
+%s (id: %u, name: %s) : Negative FAIL parameter is not supported
+
+/MESSAGE/200031/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200031/DESCRIPTION
+Only one %s card is allowed
+
+/MESSAGE/200032/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200032/DESCRIPTION
+%s (id: %u, name: %s) : OPTION DAMAGE-FAILURE is ignored
+
+/MESSAGE/200033/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200033/DESCRIPTION
+%s (id: %u, name: %s) : Positive LCID function is expected
+
+/MESSAGE/200034/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200034/DESCRIPTION
+%s (id: %u, name: %s) : Load applied to non-rigid component
+
+/MESSAGE/200035/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200035/DESCRIPTION
+%s (id: %u, name: %s) : Inflator nozzles can be defined only by shells VID=-1 or VID=-2
+
+/MESSAGE/200036/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200036/DESCRIPTION
+%s (id: %u, name: %s) : Not existing node(s) used
+
+/MESSAGE/200037/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200037/DESCRIPTION
+%s (id: %u, name: %s) :  NSID is not defined, Radioss BCS will not be created
+
+/MESSAGE/200038/TITLE
+** WARNING IN LS-DYNA IMPORT
+/MESSAGE/200038/DESCRIPTION
+%s : SET id: %u,  with "_ADD" option is not supported. Use SET without "_ADD" option.
+
+/MESSAGE/200039/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200039/DESCRIPTION
+%s : CURVE id: %u,  At least one of the input parameters must be non zero: VMAX, TEND.
+#------------------------------------------------------------------------------
+
+/MESSAGE/200040/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200040/DESCRIPTION
+%s (id: %u, name: %s), *CONTROL_UNITS card is mandatory for conversion of *MAT_SPOTWELD used with 1D elements.
+#------------------------------------------------------------------------------
+
+/MESSAGE/200041/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200041/DESCRIPTION
+%s (id: %u, name: %s), *CONTROL_UNITS card is mandatory for conversion of this card.
+#------------------------------------------------------------------------------
+
+/MESSAGE/200042/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200042/DESCRIPTION
+%s (id: %u, name: %s), Curve LCSS is defined in the material but is not existing in the model.
+#------------------------------------------------------------------------------
+
+/MESSAGE/200043/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200043/DESCRIPTION
+%s , Only total number of integration points = 1 is supported for *INITIAL_STRAIN_SOLID.
+#------------------------------------------------------------------------------
+
+/MESSAGE/200044/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200044/DESCRIPTION
+%s (id: %u, name: %s) : For hardening type HR = %f conversion is not supported
+#------------------------------------------------------------------------------
+
+/MESSAGE/200045/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200045/DESCRIPTION
+%s (id: %u, name: %s) :
+For this material, in *SECTION_BEAM definition, ELFORM = 6 and  CA > 0 are obligatory.
+#------------------------------------------------------------------------------
+
+/MESSAGE/200046/TITLE
+** ERROR IN LS-DYNA IMPORT
+/MESSAGE/200046/DESCRIPTION
+%s (id: %u, name: %s): Part id=%u does not exist
+#------------------------------------------------------------------------------

@@ -1,0 +1,982 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_mat125_mod   ../starter/source/materials/mat/mat125/hm_read_mat125.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_mat          ../starter/source/materials/mat/hm_read_mat.F90
+!||====================================================================
+      module hm_read_mat125_mod
+        implicit none
+      contains
+! ======================================================================================================================
+! \brief Reading material parameters of /MAT/LAW125
+! \details Reading material parameters of /MAT/LAW125
+! ======================================================================================================================
+!||====================================================================
+!||    hm_read_mat125           ../starter/source/materials/mat/mat125/hm_read_mat125.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_mat              ../starter/source/materials/mat/hm_read_mat.F90
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                   ../starter/source/output/message/message.F
+!||    func_table_copy          ../starter/source/materials/tools/func_table_copy.F90
+!||    hm_get_floatv            ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_get_floatv_dim        ../starter/source/devtools/hm_reader/hm_get_floatv_dim.F
+!||    hm_get_intv              ../starter/source/devtools/hm_reader/hm_get_intv.F
+!||    hm_option_is_encrypted   ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||    init_mat_keyword         ../starter/source/materials/mat/init_mat_keyword.F
+!||--- uses       -----------------------------------------------------
+!||    elbuftag_mod             ../starter/share/modules1/elbuftag_mod.F
+!||    func_table_copy_mod      ../starter/source/materials/tools/func_table_copy.F90
+!||    mat_table_copy_mod       ../starter/source/materials/tools/mat_table_copy.F90
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    submodel_mod             ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+        subroutine hm_read_mat125(                                      &
+          nuvar    ,maxfunc  ,npropm   ,iout,                    &
+          mtag     ,parmat   ,unitab   , ntable   ,table     ,    &
+          pm       ,lsubmodel,israte   ,mat_id   ,titr     ,     &
+          matparam ,nvartmp ,iunit )
+          !-----------------------------------------------
+          !   M o d u l e s
+          !-----------------------------------------------
+          use unitab_mod
+          use message_mod
+          use submodel_mod
+          use matparam_def_mod
+          use func_table_copy_mod
+          use mat_table_copy_mod
+          use elbuftag_mod
+          use constant_mod
+          use MY_ALLOC_MOD
+          use precision_mod, only : WP
+          !-----------------------------------------------
+          !   I m p l i c i t   T y p e sXM
+          !-----------------------------------------------
+          implicit none
+          !-----------------------------------------------
+          !   D u m m y   A r g u m e n t s
+          !-----------------------------------------------
+          integer, intent(in)                                 :: mat_id,maxfunc,npropm,iout
+          integer, intent(inout)                              :: nuvar,nvartmp
+          integer, intent(inout)                              :: israte
+          type(mlaw_tag_), intent(inout)                      :: mtag
+          real(kind=WP) , dimension(100),intent(inout)        :: parmat
+          type (unit_type_),intent(in)                        :: unitab
+          real(kind=WP) , dimension(npropm) ,intent(inout)    :: pm
+          type(submodel_data), dimension(*),intent(in) :: lsubmodel
+          character(len=nchartitle),intent(in)         :: titr
+          type(matparam_struct_) ,intent(inout)        :: matparam
+          integer, intent(in)                               :: ntable    !< Number of tables
+          type(ttable), dimension(ntable), intent(in)       :: table     !< Tables
+          integer,                intent(in)    :: iunit             !< material table unit number
+          !-----------------------------------------------
+          !   L o c a l   V a r i a b l e s
+          !-----------------------------------------------
+          integer :: fs, ifem11t,ifxc,ifem11c,ifxt,ifem22t,ifyc,ifyt,      &
+            ifzt,ifzc,ifem33t,ifem33c, ifems, ifems13,ifsc13,            &
+            ifsc23,ifsc,ifgamma,iferods,ifgamma2,ifgamma3,       &
+            iftau, iftau2,iftau3,ifem22c,ifems23,ilaw,nfunc,i
+          integer  :: ifunc(maxfunc),func(1)
+          real(kind=WP) :: scale(maxfunc),yscale(1),x1scale,x2scale,            &
+            x2vect(maxfunc)
+          real(kind=WP)                                                         &
+            :: rho0,e1,e2,e3,g12,g23,g13,nu12,nu21,nu23,nu31,nu13,      &
+            em11t,em22t,em33t,em11c,em22c,em33c,ems,ems13,ems23,         &
+            xc,xt,yc,yt,zc,zt,sc, sc23,sc13,gamma,tau,gamma2,tau2,       &
+            tau3,gamma3, erods,tsdm, gammar,gammaf,nu32,                 &
+            slimt1,slimc1,slimt2,slimc2,slimt3,slimc3,slims,             &
+            slims13,slims23, a11,a22,a12,c11,c22,c33,c12,c13,c23,        &
+            detc, d11,d22,d33,d12,d13,d23,dmn,dmx,al1c,al1t,al2c,        &
+            al2t,al3c,al3t,m1t,m2t,m1c,m2c,m3c,m3t,ef11t,ef11c,          &
+            ef22t,ef22c,ef33t,ef33c,fac,fcut,efs,ms,als,  x,             &
+            c1,gmax,ssp,nu,young,asrate,ms13,efs13,als13,ms23,           &
+            efs23,als23,unit_stress,unit_time
+          logical :: is_available,is_encrypted
+          !=======================================================================
+          is_encrypted = .false.
+          is_available = .false.
+          ilaw         = 125
+          !------------------------------------------
+          call hm_option_is_encrypted(is_encrypted)
+          !------------------------------------------
+!card1 - Density
+          call hm_get_floatv("MAT_RHO"   ,rho0     ,is_available, lsubmodel, unitab)
+!card2 - young's moduli + shear moduli
+          call hm_get_floatv("LSD_MAT_EA"    ,e1       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv("LSD_MAT_EB"    ,e2       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv("LSD_MAT_EC"    ,e3       ,is_available, lsubmodel, unitab)
+          call hm_get_intv("LSD_FS" ,fs      ,is_available, lsubmodel)
+!card3 - shear modulus +
+          call hm_get_floatv("LSD_MAT_GAB"   ,g12      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv("LSD_MAT_GBC"   ,g23      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv("LSD_MAT_GCA"   ,g13      ,is_available, lsubmodel, unitab)
+!card4 - poisson's ratio
+          call hm_get_floatv("LSD_MAT_PRBA"  ,nu21     ,is_available, lsubmodel, unitab)
+          call hm_get_floatv("LSDYNA_PRCB"   ,nu32     ,is_available, lsubmodel, unitab)
+          call hm_get_floatv("LSDYNA_PRCA"   ,nu31     ,is_available, lsubmodel, unitab)
+!card5 - dir 11 tension
+          call hm_get_floatv  ("LSD_M11T"        ,em11t      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_XT"      ,xt         ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("MATL58_SLIMT1"   ,slimt1     ,is_available, lsubmodel, unitab)
+          call hm_get_intv ("LSD_LCID12"  ,ifem11t    ,is_available, lsubmodel)
+          call hm_get_intv ("LSD_LCID2"   ,ifxt       ,is_available, lsubmodel)
+!card6 - dir 11 compression
+          call hm_get_floatv  ("LSD_M11C"         ,em11c      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_XC"       ,xc         ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("MATL58_SLIMC1"    ,slimc1     ,is_available, lsubmodel, unitab)
+          call hm_get_intv  ("LSD_LCID11"  ,ifem11c  ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_LCID"    ,ifxc     ,is_available, lsubmodel)
+!card7 - dir 22 tension
+          call hm_get_floatv  ("LSD_M22T"         ,em22t      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_YT"       ,yt         ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("MATL58_SLIMT2"    ,slimt2     ,is_available, lsubmodel, unitab)
+          call hm_get_intv ("LSD_LCID14"  ,ifem22t     ,is_available, lsubmodel)
+          call hm_get_intv ("LSD_LCID4"   ,ifyt       ,is_available, lsubmodel)
+!card8 - dir 22 compression
+          call hm_get_floatv  ("LSD_M22C"         ,em22c      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_YC"       ,yc         ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("MATL58_SLIMC2"    ,slimc2     ,is_available, lsubmodel, unitab)
+          call hm_get_intv  ("LSD_LCID13"  ,ifem22c  ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_LCID3"   ,ifyc     ,is_available, lsubmodel)
+!card9 - dir 33 tension only for solid
+          call hm_get_floatv  ("LSD_MAT_E33T"         ,em33t      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_157_ZT"       ,zt         ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SLIMT3"       ,slimt3     ,is_available, lsubmodel, unitab)
+          call hm_get_intv ("LSD_MAT_LCE33T"   ,ifem33t     ,is_available, lsubmodel)
+          call hm_get_intv ("LSD_MAT_LCZT"     ,ifzt       ,is_available, lsubmodel)
+!card10 - dir 33 compression only for solid
+          call hm_get_floatv  ("LSD_MAT_E33C"     ,em33c      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_157_ZC"   ,zc         ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SLIMC3"    ,slimc3     ,is_available, lsubmodel, unitab)
+          call hm_get_intv  ("LSD_MAT_LCE33C"  ,ifem33c   ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCZC"    ,ifzc     ,is_available, lsubmodel)
+!card11 - shear 12
+          call hm_get_floatv  ("MATL58_GAMMA1"   ,gamma     ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("MATL58_TAU1"     ,tau       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MS"          ,ems       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SC"      ,sc        ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("MATL58_SLIMS"    ,slims     ,is_available, lsubmodel, unitab)
+!card12 - strain rate dependency (optional)
+          call hm_get_intv  ("LSD_LCID7"    ,ifgamma   ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_LCID6"    ,iftau     ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_LCID15"   ,ifems     ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_LCID5"    ,ifsc     ,is_available, lsubmodel)
+!card13 - shear 13 for solid
+          call hm_get_floatv  ("LSD_MAT_GAMMA2"   ,gamma2     ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_TAU2"     ,tau2       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_GMS31"    ,ems13      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SC31"     ,sc13       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SLIMS31"  ,slims13    ,is_available, lsubmodel, unitab)
+!card14 - strain rate dependency (optional)
+          call hm_get_intv  ("LSD_MAT_LCGAM2"      ,ifgamma2   ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCTAU2"      ,iftau2     ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCGMS31"     ,ifems13     ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCSC31"       ,ifsc13      ,is_available, lsubmodel)
+!card15- shear 13 for solid
+          call hm_get_floatv  ("LSD_MAT_GAMMA3"   ,gamma3     ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_TAU3"     ,tau3       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_GMS23"    ,ems23      ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SC23"     ,sc23       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_SLIMS23"  ,slims23    ,is_available, lsubmodel, unitab)
+!card16 - strain rate dependency (optional)
+          call hm_get_intv  ("LSD_MAT_LCGAM3"      ,ifgamma3   ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCTAU3"      ,iftau3      ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCGMS23"     ,ifems23     ,is_available, lsubmodel)
+          call hm_get_intv  ("LSD_MAT_LCSC23"      ,ifsc23      ,is_available, lsubmodel)
+!card17
+          call hm_get_floatv  ("LSD_MAT_EPSF"       ,gammaf     ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_EPSR"       ,gammar       ,is_available, lsubmodel, unitab)
+          call hm_get_floatv  ("LSD_MAT_TSMD"       ,tsdm      ,is_available, lsubmodel, unitab)
+!card18
+          call hm_get_intv  ("LSD_LCID16"        ,iferods  ,is_available, lsubmodel)
+          call hm_get_floatv  ("MATL58_ERODS"    ,erods       ,is_available, lsubmodel, unitab)
+!card? - equivalent strain rate cutoff frequency
+          call hm_get_floatv("FCUT"      ,fcut     ,is_available, lsubmodel, unitab)
+          !
+          CALL HM_GET_FLOATV_DIM('LSD_MAT_XT' ,unit_stress    ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+          unit_time = one
+          if(iunit > 0 ) unit_time = unitab%fac_t(iunit)
+
+          ! young modulus initialization
+          if (e2 == zero)  e2  = e1
+          if (e3 == zero)  e3  = e2
+          ! shear modulus
+          if (g13 == zero) g13 = g12
+          if (g23 == zero) g23 = g13
+
+          if(nu31 == zero) nu31 = nu21
+          if(nu32 == zero) nu32 = nu21
+          if(fs /= -1) fs = -1  ! only this formulation implemented
+          ! func  for strainrate dependency
+          ! copy fonction in table
+          matparam%nfunc  = 0
+          matparam%ntable = 25
+          allocate (matparam%table(matparam%ntable))           ! allocate material table array
+          ifunc = 0 ! default value for function number (0 means no function)
+          if(ifxt == 0 .or. ifem11t == 0) then
+            ifxt = 0
+            ifem11t = 0
+          else
+            ifunc(1)   = ifem11t
+            ifunc(2)   = ifxt
+            scale(1) = em11t
+            scale(2) = xt
+            if(scale(1) == zero) scale(1) = one
+            if(scale(2) == zero) scale(2) = unit_stress
+          endif
+          if(ifxc == 0 .or. ifem11c == 0) then
+            ifxc=0
+            ifem11c=0
+          else
+            ifunc(3) = ifem11c
+            ifunc(4)  = ifxc
+            scale(3) = em11c
+            scale(4) = xc
+            if(scale(3) == zero) scale(3) = one
+            if(scale(4) == zero) scale(4) = unit_stress
+          endif
+          if(ifyt == 0 .or. ifem22t == 0) then
+            ifyt = 0
+            ifem22t = 0
+          else
+            ifunc(5) = ifem22t
+            ifunc(6) = ifyt
+            scale(5) = em22t
+            scale(6) = yt
+            if(scale(5) == zero) scale(5) = one
+            if(scale(6) == zero) scale(6) = unit_stress
+          endif
+          if(ifyc == 0 .or. ifem22c == 0) then
+            ifyc=0
+            ifem22c=0
+          else
+            ifunc(7)  = ifem22c
+            ifunc(8)  = ifyc
+            scale(7) = em22c
+            scale(8) = yc
+            if(scale(7) == zero) scale(7) = one
+            if(scale(8) == zero) scale(8) = unit_stress
+          endif
+          if(ifzt == 0 .or. ifem33t == 0) then
+            ifzt = 0
+            ifem33t = 0
+          else
+            ifunc(9)  = ifem33t
+            ifunc(10)  = ifzt
+            scale(9) = em33t
+            scale(10) = zt
+            if(scale(9) == zero) scale(9) = one
+            if(scale(10) == zero) scale(10) = unit_stress
+
+          endif
+          if(ifzc == 0 .or. ifem33c == 0) then
+            ifzc   =0
+            ifem33c=0
+          else
+            ifunc(11)  = ifem33c
+            ifunc(12)  = ifzc
+            scale(11) = em33c
+            scale(12) = zc
+            if(scale(11) == zero) scale(11) = one
+            if(scale(12) == zero) scale(12) = unit_stress
+          endif
+          if(iftau == 0 .or. ifgamma == 0) then
+            iftau   = 0
+            ifgamma = 0
+            if(tau == zero ) tau = sc
+            if(gamma == zero ) gamma = ems
+          else
+            ifunc(13)  = ifgamma
+            ifunc(14)  = iftau
+            scale(13) = gamma
+            scale(14) = tau
+            if(scale(13) == zero) scale(13) = one
+            if(scale(14) == zero) scale(14) = unit_stress
+          endif
+          if(ifems == 0 .and. ifsc == 0) then
+            ifems = 0
+            ifsc  = 0
+            if(ems <= gamma) ems = two*gamma
+            if(sc <= tau) sc = two*tau
+          else
+            ifunc(15)  = ifems
+            ifunc(16)  = ifsc
+            scale(15) = ems
+            scale(16) = sc
+            if(scale(15) == zero) scale(15) = one
+            if(scale(16) == zero) scale(16) = unit_stress
+
+          endif
+          if(iftau2 == 0 .and. ifgamma2 == 0) then
+            iftau2   = 0
+            ifgamma2 = 0
+            if(tau2 == zero ) tau2 = sc13
+            if(gamma2 == zero ) gamma2 = ems13
+          else
+            ifunc(17)  = ifgamma2
+            ifunc(18)  = iftau2
+            scale(17) = gamma2
+            scale(18) = tau2
+            if(scale(17) == zero) scale(17) = one
+            if(scale(18) == zero) scale(18) = unit_stress
+          endif
+          if(ifems13 == 0 .and. ifsc13 == 0) then
+            ifems13 = 0
+            ifsc13  = 0
+            if(ems13 <= gamma2) ems13 = two*gamma2
+            if(sc13 <= tau2) sc13 = two*tau2
+          else
+            ifunc(19)  = ifems13
+            ifunc(20)  = ifsc13
+            scale(19) = ems13
+            scale(20) = sc13
+            if(scale(19) == zero) scale(19) = one
+            if(scale(20) == zero) scale(20) = unit_stress
+          endif
+          if(iftau3 == 0 .and. ifgamma3 == 0) then
+            iftau3   = 0
+            ifgamma3 = 0
+            if(tau3 == zero ) tau3 = sc23
+            if(gamma3 == zero ) gamma3 = ems23
+          else
+            ifunc(21)  = ifgamma3
+            ifunc(22)  = iftau3
+            scale(21) = gamma3
+            scale(22) = tau3
+            if(scale(21) == zero) scale(21) = one
+            if(scale(22) == zero) scale(22) = unit_stress
+          endif
+          if(ifems23 == 0 .and. ifsc23 == 0) then
+            ifems23 = 0
+            ifsc23  = 0
+            if(ems23 <= gamma3) ems23 = two*gamma3
+            if(sc23 <= tau3) sc23 = two*tau3
+          else
+            ifunc(23)  = ifems23
+            ifunc(24)  = ifsc23
+            scale(23) = ems23
+            scale(24) = sc23
+            if(scale(23) == zero) scale(23) = one
+            if(scale(24) == zero) scale(24) = unit_stress
+          endif
+          if(iferods > 0) then
+            ifunc(25)  = iferods
+            scale(25) = erods
+            if(scale(25) == zero) scale(25) = one
+          endif
+          if(erods == zero) erods= ep10
+          if(gammar <= zero) gammar = ep10
+          if(gammaf <= zero) gammaf = two*ep10
+          ! out of plane damage used in shell
+          if(tsdm <= zero ) tsdm = zep9
+!
+          ! default strain rate cutoff frequency
+          if (fcut == zero) fcut = 5000.0d0*unitab%fac_t_work
+! ----------------------------------------------------------------------------------------------------------------------
+          !     check and default values
+          !-----------------------------
+          ! poisson's ratio
+          nu12 = nu21*e1/e2
+          nu23 = nu32*e2/e3
+          nu13 = nu31*e1/e3
+          ! checking poisson's ratio
+          if(nu12*nu21 >= one ) then
+            call ancmsg(msgid=3068,                        &
+              msgtype=msgerror,                    &
+              anmode=aninfo_blind_2,               &
+              i1=mat_id,                           &
+              c1=titr)
+          else if (nu13*nu31 >= one ) then
+            call ancmsg(msgid=3069,                        &
+              msgtype=msgerror,                    &
+              anmode=aninfo_blind_2,               &
+              i1=mat_id,                           &
+              c1=titr)
+          else if( nu23*nu32 >= one)then
+            call ancmsg(msgid=3070,                        &
+              msgtype=msgerror,                    &
+              anmode=aninfo_blind_2,               &
+              i1=mat_id,                           &
+              c1=titr)
+          end if
+          !
+          detc = one - nu12*nu21
+          if (detc <= zero) then
+            call ancmsg(msgid=307,                        &
+              msgtype=msgerror,                 &
+              anmode=aninfo,                    &
+              i1=mat_id,                        &
+              c1=titr)
+          end if
+          ! elasticity matrix for 2d plane stress
+          fac = one/(one - nu12*nu21)
+          a11 = e1*fac
+          a12 = nu21*a11
+          a22 = e2*fac
+          ! compliance matrix for 3d
+          c11 = one/e1
+          c22 = one/e2
+          c33 = one/e3
+          c12 =-nu12/e1
+          c13 =-nu31/e3
+          c23 =-nu23/e2
+          ! checking input
+          detc= c11*c22*c33-c11*c23*c23-c12*c12*c33+c12*c13*c23      &
+            +c13*c12*c23-c13*c22*c13
+          if(detc <= zero) then
+            call ancmsg(msgid=307,                                  &
+              msgtype=msgerror,                            &
+              anmode=aninfo,                               &
+              i1=mat_id,                                   &
+              c1=titr)
+          end if
+          ! 3d elastic matrix
+          d11  = (c22*c33-c23*c23)/detc
+          d12  =-(c12*c33-c13*c23)/detc
+          d13  = (c12*c23-c13*c22)/detc
+          d22  = (c11*c33-c13*c13)/detc
+          d23  =-(c11*c23-c13*c12)/detc
+          d33  = (c11*c22-c12*c12)/detc
+          dmn  = min(d11*d22 -d12**2, d11*d33 - d13**2, d22*d33 - d23**2 )
+          dmx  = max(d11,d22,d33)
+!
+          !--------------------------
+          !     filling buffer tables
+          !--------------------------
+          ! number of material parameters
+          matparam%nuparam = 86
+          call my_alloc(matparam%uparam, matparam%nuparam, "matparam%uparam")
+          matparam%uparam(1:matparam%nuparam) = zero
+          ! number of functions
+          nfunc   = 0
+          ! number of user variables
+          nuvar   = 2
+          ! number of temporary variable for interpolation
+          nvartmp = 25
+!
+          ! computing alpha and m for each direction
+          ! dir 11 (tension - compression)
+          al1t = ep20
+          m1t = one
+          al1c = ep20
+          m1c = one
+          ef11t = ep10
+          ef11c = ep10
+          if(e1 > zero ) then
+            if(ifxt == 0 .and. ifem11t == 0 ) then
+              if(xt > zero )then
+                ef11t  = xt/e1
+                em11t = max(em11t, onep1*ef11t)
+                m1t = -one/log(ef11t/em11t)
+                al1t = m1t*(em11t/ef11t)**m1t
+              end if
+            endif
+            !
+            if(ifxc == 0 .and. ifem11c == 0) then
+              if(xc > zero  )then
+                ef11c  = xc/e1
+                em11c = max(em11c, onep1*ef11c)
+                m1c = -one/log(ef11c/em11c)
+                al1c = m1c*(em11c/ef11c)**m1c
+              end if
+            endif
+          end if
+
+          al2c = ep20
+          m2t = one
+          al2c = ep20
+          m2c = one
+          ef22t = ep10
+          ef22c = ep10
+          al2t = ep20
+          if(e2 > zero) then
+            if(ifyt == 0 .and. ifem22t == 0) then
+              if(yt > zero )then
+                ef22t  = yt/e2
+                em22t = max(em22t, ONEP1*ef22t)
+                m2t = -one/log(ef22t/em22t)
+                al2t = m2t*(em22t/ef22t)**m2t
+              end if
+            endif
+            !
+            if(ifyc == 0 .and. ifem22c == 0) then
+              if(yc  > zero  )then
+                ef22c  = yc/e2
+                em22c = max(em22c, ONEP1*ef22c)
+                m2c = -one/log(ef22c/em22c)
+                al2c = m2c*(em22c/ef22c)**m2c
+              end if
+            endif
+          end if
+          al3c = ep20
+          m3t = one
+          al3c = ep20
+          m3c = one
+          ef33t = ep10
+          al3t = ep20
+          ef33c = ep10
+          if(e3 > zero) then
+            if(ifzt == 0 .and. ifem33t == 0) then
+              if(zt  > zero )then
+                ef33t  = zt/e3
+                if(em33t == zero .or. em33t < ef33t )em33t = ONEP1*ef33t
+                m3t = -one/log(ef33t/em33t)
+                al3t = m3t*(em33t/ef33t)**m3t
+              end if
+            endif
+            if(ifzt > 0 .and. zt == zero) zt = one  ! scale for function
+            if(ifem33t > 0 .and. em33t == zero) em33t = one ! scafe function
+            !
+            if(ifzc == 0 .and. ifem33c == 0) then
+              if(zc > zero )then
+                ef33c  = zc/e3
+                if(em33c == zero  .or. em33c < ef33c )em33c = ONEP1*ef33c
+                m3c = -one/log(ef33c/em33c)
+                al3c = m3c*(em33c/ef33c)**m3c
+              end if
+            endif
+          end if
+          ms = one
+          als = ep20
+          efs = ep10
+          ms13 = one
+          als13 = ep20
+          efs13 = ep10
+          ms23 = one
+          als23 = ep20
+          efs23 = ep10
+          !!  if(tau == zero) tau = sc
+          !!  if(gamma == zero) gamma = ems
+          if(fs == -1) then
+            ! plane shear
+            if(g12 > zero ) then
+              if(iftau == 0 .and. ifgamma == 0) then
+                if( tau > zero  ) then
+                  ! to ensure the continuity of the function at the point (gamma,ems)
+                  ! tau(gama) = tau
+                  ! dtau/dgamma(gamma) = zero
+                  efs = tau/g12
+                  gamma = max(gamma, onep1*efs)
+                  x = gamma/efs
+                  ms = one/log(x)
+                  als = x**ms/log(x)
+                end if
+              endif
+            end if
+
+            ! transverse shear 13 (only for solid)
+            ms13 = one
+            als13 = ep20
+            efs13 = ep10
+            if(g13 > zero ) then
+              if(iftau2 == 0 .and. ifgamma2 == 0) then
+                if( tau2 > zero ) then
+                  ! to ensure the continuity of the function at the point (gamma,ems)
+                  ! tau(gamma2) = tau2
+                  ! dtau/dgamma(gamma2) = zero
+                  efs13 = tau2/g13
+                  gamma2 = max(gamma2, onep1*efs13)
+                  x = gamma2/efs13
+                  ms13 = one/log(x)
+                  als13 = x**ms13/log(x)
+                end if
+              endif
+            end if
+            ! transverse shear 23 (only for solid)
+            ms23 = one
+            als23 = ep20
+            efs23 = ep10
+            if(g23 > zero ) then
+              if(iftau3 == 0 .and. ifgamma3 == 0) then
+                if(tau3 > zero  ) then
+                  ! to ensure the continuity of the function at the point (gamma,ems)
+                  ! tau(gamma2) = tau2
+                  ! dtau/dgamma(gamma2) = g_p2
+                  efs23 = tau3/g23
+                  gamma3 = max(gamma3, onep1*efs23)
+                  x = gamma3/efs23
+                  ms23 = one/log(x)
+                  als23 = x**ms23/log(x)
+                end if
+              endif
+            end if
+
+          end if ! fs = -1
+          !
+          ! material parameters
+          matparam%uparam(1)  = e1
+          matparam%uparam(2)  = e2
+          matparam%uparam(3)  = e3
+          matparam%uparam(4)  = g12
+          matparam%uparam(5)  = g13
+          matparam%uparam(6)  = g23
+          !
+          matparam%uparam(8)  = nu12
+          matparam%uparam(9)  = nu13
+          matparam%uparam(10) = nu23
+          !
+          matparam%uparam(11)  = em11t
+          matparam%uparam(12)  = xt
+          matparam%uparam(13)  = slimt1
+          matparam%uparam(14)  = em11c
+          matparam%uparam(15)  = xc
+          matparam%uparam(16) = slimc1
+          !
+          matparam%uparam(17)  = em22t
+          matparam%uparam(18)  = yt
+          matparam%uparam(19) = slimt2
+          matparam%uparam(20)  = em22c
+          matparam%uparam(21)  = yc
+          matparam%uparam(22) = slimc2
+          !
+          matparam%uparam(23)  = gamma
+          matparam%uparam(24)  = tau
+          matparam%uparam(25)  = ems
+          matparam%uparam(26)  = sc
+          matparam%uparam(27)  = slims
+          !
+          matparam%uparam(28)  = em33t
+          matparam%uparam(29)  = zt
+          matparam%uparam(30)  = slimt3
+          matparam%uparam(31)  = em33c
+          matparam%uparam(32)  = zc
+          matparam%uparam(33)  = slimc3
+          !
+          matparam%uparam(34)  = gamma2
+          matparam%uparam(35)  = tau2
+          matparam%uparam(36)  = ems13
+          matparam%uparam(37)  = sc13
+          matparam%uparam(38)  = slims13
+          !
+          matparam%uparam(39)  = gamma3
+          matparam%uparam(40)  = tau3
+          matparam%uparam(41)  = ems23
+          matparam%uparam(42)  = sc23
+          matparam%uparam(43)  = slims23
+          !
+          matparam%uparam(44)  = gammaf
+          matparam%uparam(45)  = gammar
+          matparam%uparam(46)  = tsdm
+          !
+          matparam%uparam(47)  = erods
+          !
+          matparam%uparam(49) = ef11t
+          matparam%uparam(50) = m1t
+          matparam%uparam(51) = al1t
+          matparam%uparam(52) = ef11c
+          matparam%uparam(53) = m1c
+          matparam%uparam(54) = al1c
+
+          matparam%uparam(55) = ef22t
+          matparam%uparam(56) = m2t
+          matparam%uparam(57) = al2t
+          matparam%uparam(58) = ef22c
+          matparam%uparam(59) = m2c
+          matparam%uparam(60) = al2c
+
+          matparam%uparam(61) = ef33t
+          matparam%uparam(62) = m3t
+          matparam%uparam(63) = al3t
+          matparam%uparam(64) = ef33c
+          matparam%uparam(65) = m3c
+          matparam%uparam(66) = al3c
+
+          matparam%uparam(67) = efs
+          matparam%uparam(68) = ms
+          matparam%uparam(69) = als
+
+
+          matparam%uparam(70) = efs13
+          matparam%uparam(71) = ms13
+          matparam%uparam(72) = als13
+
+          matparam%uparam(73) = efs23
+          matparam%uparam(74) = ms23
+          matparam%uparam(75) = als23
+
+          matparam%uparam(76) = fs
+          !
+          matparam%uparam(78)  = nu21
+          matparam%uparam(79)  = nu31
+          matparam%uparam(80)  = nu32
+          ! 3D Orthotropic for Isolid=24
+          matparam%uparam(81)  = d11
+          matparam%uparam(82)  = d22
+          matparam%uparam(83)  = d33
+          matparam%uparam(84)  = d12
+          matparam%uparam(85)  = d13
+          matparam%uparam(86)  = d23
+          ! function ids
+          nfunc = 1
+          x1scale   = one/unit_time
+          x2scale   = one
+          x2vect(:) = zero
+          do i=1,matparam%ntable
+            matparam%table(i)%notable  = ifunc(i)
+            func(1)  = matparam%table(i)%notable
+            if(func(1) /= 0 ) then
+              yscale(1) = scale(i)   ! we should take care of the scale
+              call func_table_copy(matparam%table(i),matparam%title ,matparam%mat_id  ,     &
+                nfunc   ,func   ,x2vect  ,x1scale ,x2scale  ,yscale  ,     &
+                ntable  ,table   ,ierr    )
+              matparam%table(i)%notable  = ifunc(i)
+            endif
+          enddo
+          nu21   = nu12*e2/e1
+          nu    = sqrt(nu12*nu21)
+          detc  = one - nu12*nu21
+          young = max(e1,e2,e3)
+          c1    = third*young/(one - two*nu)
+          a11    = max(e1,e2,e3)/detc
+          gmax  = max(g12,g23,g13)
+          ssp   = sqrt(max(a11,gmax)/ rho0)
+          asrate = two*pi*fcut
+
+          ! mat_param%asrate = asrate
+          ! mat_param%young = c1
+          ! mat_param%nu = nu
+          ! mat_param%shear = gmax
+          ! mat_param%ssp  = sqrt(c1/rho0
+          ! mat_param%bulk = c1
+! ----------------------------------------------------------------------------------------------------------------------
+          ! parameters used outside the law
+! ----------------------------------------------------------------------------------------------------------------------
+          pm(9)  = asrate            !  mat_param%asrate
+          pm(20) = young             !  mat_param%young
+          pm(21) = nu                !  mat_param%nu
+          pm(22) = max(g12,g12,g23)  !  mat_param%shear
+          pm(24) = a11
+          pm(26) = five_over_6
+          pm(27) = ssp     !  mat_param%ssp
+          pm(32) = c1                !  mat_param%bulk
+
+          ! still used in elements
+          pm(33) = e1                !  mat_param%e11
+          pm(34) = e2                !  mat_param%e22
+          pm(186)= e2                !  mat_param%e33
+          pm(35) = nu12              !  mat_param%n12
+          pm(36) = nu21              !  mat_param%n21
+          pm(37) = g12               !  mat_param%g12
+          pm(38) = g23               !  mat_param%g23
+          pm(39) = g13               !  mat_param%g13
+
+          ! parmat table
+          israte     = 1
+          parmat(1)  = c1
+          parmat(2)  = young
+          parmat(3)  = nu
+          parmat(4)  = israte
+          parmat(5)  = fcut
+          parmat(16) = 1
+!
+          ! pm table
+          pm(1)  = rho0
+          pm(89) = rho0
+
+!
+          ! mtag variable activation
+          mtag%g_pla  = 1
+          mtag%l_pla  = 1
+          mtag%g_epsd = 1
+          mtag%l_epsd = 1
+          mtag%g_seq  = 1
+          mtag%l_seq  = 1
+          mtag%g_dmg  = 1
+          mtag%l_dmg  = 13
+          ! number of output mod
+          ! matparam%nmod = 3
+          ! allocate(matparam%mode(matparam%nmod))
+          !matparam%mode(1) = "fiber damage"
+          !matparam%mode(2) = "matrix damage"
+          !matparam%mode(3) = "shear matrix damage"
+!         !
+          call init_mat_keyword(matparam ,"TOTAL"   )
+          call init_mat_keyword(matparam ,"LARGE_STRAIN"  )
+          call init_mat_keyword(matparam ,"HOOK")
+          call init_mat_keyword(matparam ,"ORTHOTROPIC")
+          ! properties compatibility
+          call init_mat_keyword(matparam,"SOLID_ORTHOTROPIC")
+          call init_mat_keyword(matparam,"SHELL_ORTHOTROPIC")
+! ----------------------------------------------------------------------------------------------------------------------
+!     parameters printout
+! ----------------------------------------------------------------------------------------------------------------------
+          write(iout,1000) trim(titr),mat_id,ilaw
+          write(iout,1050)
+          if (is_encrypted) then
+            write(iout,"(5x,a,//)")"confidential data"
+          else
+            write(iout,1200) rho0
+            write(iout,1300) e1,e2,e3,g12,g23,g13,nu21,nu32,nu31
+            write(iout,1400)  em11t, xt,slimt1,em11c,xc,slimc1
+            write(iout,1500)  em22t, yt,slimt2,em22c,yc,slimc2
+            write(iout,1600)  em33t, zt,slimt3,em33c,zc,slimc3
+            write(iout,1700) gamma,tau, ems,sc, slims
+            write(iout,1800) gamma2,tau2, ems13,sc13, slims13
+            write(iout,1900) gamma3,tau3, ems23,sc23, slims23
+
+            write(iout,2000) ifem11t, ifxt,ifem11c, ifxc
+            write(iout,2100) ifem22t, ifyt,ifem22c, ifyc
+            write(iout,2200) ifem33t, ifzt,ifem33c, ifzc
+
+            write(iout,2300) ifgamma, iftau,ifems, ifsc
+            write(iout,2400) ifgamma2, iftau2,ifems13, ifsc13
+            write(iout,2500) ifgamma3, iftau3,ifems23, ifsc23
+            write(iout,2600) gammaf, gammar, tsdm, erods, iferods
+
+            write(iout,2800) fcut
+          end if
+! ----------------------------------------------------------------------------------------------------------------------
+1000      format(/                                                               &
+            5x,a,/,                                                               &
+            5x,"material number. . . . . . . . . . . . =",i10/,                   &
+            5x,"material law . . . . . . . . . . . . . =",i10/)
+1050      format                                                                 &
+            (5x,"material model : laminated composite ",/,                         &
+            5x,"----------------------------------",/)
+1200      format(                                                                &
+            5x,"initial density . . . . . . . . . . . . . . . . .=",1pg20.13/)
+1300      format(                                                                &
+            5x,"elasticity parameters:                            ",/             &
+            5x,"----------------------                            ",/             &
+            5x,"young modulus in dir. 1 (fiber)  e1 . . . . . . .=",1pg20.13/     &
+            5x,"young modulus in dir. 2 (matrix) e2 . . . . . . .=",1pg20.13/     &
+            5x,"young modulus in dir. 3 (matrix) e3 . . . . . . .=",1pg20.13/     &
+            5x,"shear modulus in plane 12 g12 . . . . . . . . . .=",1pg20.13/     &
+            5x,"shear modulus in plane 23 g23 . . . . . . . . . .=",1pg20.13/     &
+            5x,"shear modulus in plane 31 g31 . . . . . . . . . .=",1pg20.13/     &
+            5x,"poisson ratio in plane 21 nu21. . . . . . . . . .=",1pg20.13/     &
+            5x,"poisson ratio in plane 32 nu32. . . . . . . . . .=",1pg20.13/     &
+            5x,"poisson ratio in plane 31 nu31. . . . . . . . . .=",1pg20.13)
+1400      format(                                                                     &
+            5x," fiber (dir. 1) parameters   :                            ",/          &
+            5x,"---------------------------                               ",/          &
+            7x,"strain at longitudinal tensile strength . . . . . . . . =",1pg20.13/   &
+            7x,"longitudinal tensile strength  . . . .  . . . . . . . . =",1pg20.13/   &
+            7x,"scale for minimum longitudinal tensile stress limit. . .=",1pg20.13/   &
+            7x,"strain at longitudinal compressive strength . . . . . . =",1pg20.13/   &
+            7x,"longitudinal compressive strength  . . . .  . . . . . . =",1pg20.13/   &
+            7x,"scale for minimum compressive tensile stress limit. . . =",1pg20.13/ )
+
+1500      format(                                                                     &
+            5x,"matrix (dir. 2) parameters   :                            ",/          &
+            5x,"---------------------------                               ",/          &
+            7x,"strain at transverse  tensile strength . . . . . . . . =",1pg20.13/    &
+            7x,"transverse tensile strength  . . . .  . . . . . . . . =",1pg20.13/     &
+            7x,"scale for minimum transverse tensile stress limit. . .=",1pg20.13/     &
+            7x,"strain at transverse compressive strength . . . . . . =",1pg20.13/     &
+            7x,"transverse compressive strength  . . . .  . . . . . . =",1pg20.13/     &
+            7x,"scale for minimum compressive tensile stress limit. . . =",1pg20.13/ )
+
+1600      format(                                                                     &
+            5x,"matrix (dir. 3) parameters   :                            ",/          &
+            5x,"---------------------------                               ",/          &
+            5x,"strain at transverse  tensile strength . . . . . . . . =",1pg20.13/    &
+            5x,"transverse tensile strength  . . . .  . . . . . . . . =",1pg20.13/     &
+            5x,"scale for minimum transverse tensile stress limit. . .=",1pg20.13/     &
+            5x,"strain at transverse compressive strength . . . . . . =",1pg20.13/     &
+            5x,"transverse compressive strength  . . . .  . . . . . . =",1pg20.13/     &
+            5x,"scale for minimum compressive tensile stress limit. . . =",1pg20.13/ )
+1700      format(                                                                    &
+            5x," shear (12) parameters   :                            ",/               &
+            5x,"---------------------------                               ",/           &
+            7x,"shear strain limit in direction 12 . . . . . . . . . . =",1pg20.13/     &
+            7x,"shear stress limit in direction 12  . . . .  . . . . . =",1pg20.13/     &
+            7x,"engineering shear strain at shear strength 12 . . . . .=",1pg20.13/     &
+            7x,"shear strength 12 . . . . . . . . . . . . . . . . . . . =",1pg20.13/    &
+            7x,"scale for minimum shear stress limit 12 . . . . .. . . =",1pg20.13/ )
+1800      format(                                                                     &
+            5x," shear (13) parameters   :                            ",/              &
+            5x,"---------------------------                               ",/          &
+            7x,"shear strain limit in direction 13 . . . . . . . . . . =",1pg20.13/    &
+            7x,"shear stress limit in direction 13  . . . .  . . . . . =",1pg20.13/    &
+            7x,"engineering shear strain at shear strength 13 . . . . .=",1pg20.13/    &
+            7x,"shear strength 13 . . . . . . . . . . . . . . . . . . . =",1pg20.13/   &
+            7x,"scale for minimum shear stress limit 13 . . . . .. . . =",1pg20.13/ )
+1900      format(                                                                     &
+            5x," shear (23) parameters   :                            ",/                &
+            5x,"---------------------------                               ",/            &
+            7x,"shear strain limit in direction 23 . . . . . . . . . . =",1pg20.13/      &
+            7x,"shear stress limit in direction 23  . . . .  . . . . . =",1pg20.13/      &
+            7x,"engineering shear strain at shear strength 23 . . . . .=",1pg20.13/      &
+            7x,"shear strength 23 . . . . . . . . . . . . . . . . . . . =",1pg20.13/     &
+            7x,"scale for minimum shear stress limit 23 . . . . .. . . =",1pg20.13/ )
+2000      format(                                                                   &
+            5x," fiber (dir. 1) strain rate dependency  :                 ",/        &
+            5x,"---------------------------                               ",/        &
+            7x,"curve id defining em11t  . . . .  . . . . . . . . . . . . =",i10/    &
+            7x,"curve id defining longitudinal tensile strength xt . . .  =",i10/    &
+            7x,"curve id defining em11c  . . . .  . . . . . . . . . . . . =",i10/    &
+            7x,"curve id defining longitudinal compresssive strength xc . =",i10/  )
+2100      format(                                                                   &
+            5x," matrix (dir. 2) strain rate dependency  :                ",/        &
+            5x,"---------------------------                               ",/        &
+            7x,"curve id defining em22t  . . . .  . . . . . . . . . . . . =",i10/    &
+            7x,"curve id defining longitudinal tensile strength yt . . .  =",i10/    &
+            7x,"curve id defining em22c  . . . .  . . . . . . . . . . . . =",i10/    &
+            7x,"curve id defining longitudinal compresssive strength xc . =",i10/  )
+2200      format(                                                                   &
+            5x," matrix (dir. 3) strain rate dependency  :                ",/        &
+            5x,"---------------------------                               ",/        &
+            7x,"curve id defining em33t  . . . .  . . . . . . . . . . . . =",i10/    &
+            7x,"curve id defining longitudinal tensile strength yt . . .  =",i10/    &
+            7x,"curve id defining em33c  . . . .  . . . . . . . . . . . . =",i10/    &
+            7x,"curve id defining longitudinal compresssive strength yt . =",i10/ )
+2300      format(                                                                   &
+            5x," dir 12 - strain rate dependency  :                       ",/        &
+            5x,"---------------------------                               ",/        &
+            7x,"curve id defining shear strain gamma dir12 . . . . . . . .=",i10/    &
+            7x,"curve id defining shear stress tau dir12 . . . . .  . . . =",i10/    &
+            7x,"curve id defining shear strain ems dir12. . . . . . . . . =",i10/    &
+            7x,"curve id defining shear strength sc12 at ems strain . . . =",i10/  )
+2400      format(                                                                   &
+            5x," dir 13 - strain rate dependency  :                       ",/        &
+            5x,"---------------------------                               ",/        &
+            7x,"curve id defining shear strain gamma dir13 . . . . . . .. =",i10/    &
+            7x,"curve id defining shear stress tau dir13 . . . . .  . . . =",i10/    &
+            7x,"curve id defining shear strain ems dir13. . . . . . . . . =",i10/    &
+            7x,"curve id defining shear strength sc13 at ems strain . . . =",i10/  )
+
+2500      format(                                                                   &
+            5x," dir 23 - strain rate dependency  :                       ",/        &
+            5x,"---------------------------                               ",/        &
+            7x,"curve id defining shear strain gamma dir23 . . . . . . . .=",i10/    &
+            7x,"curve id defining shear stress tau dir23 . . . . .  . . . =",i10/    &
+            7x,"curve id defining shear strain ems dir23. . . . . . . . . =",i10/    &
+            7x,"curve id defining shear strength sc23 at ems strain . . . =",i10/  )
+
+2600      format(                                                                    &
+            5x," damage parameters:                               ",/                 &
+            5x,"---------------------------------                 ",/                 &
+            5x,"damage initiation transverse shear strain. . . . . . . =",1pg20.13/   &
+            5x,"final rupture transverse shear strain . .  . . . . . . =",1pg20.13/   &
+            5x,"transverse shear maximum damage . . . . . . . . . . . .=",1pg20.13/   &
+            5x,"maximum effective strain for ply failure erods  . . . .=",1pg20.13/   &
+            5x,"curve id defining erods for strain rate dependency. . .=",i10/ )
+
+2800      format(                                                                    &
+            5x,"strain rate filtering cutoff frequency fcut . . .=",1pg20.13/)
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine hm_read_mat125
+! ----------------------------------------------------------------------------------------------------------------------
+      end module hm_read_mat125_mod

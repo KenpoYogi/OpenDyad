@@ -1,0 +1,106 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    spmd_fxb_for          ../engine/source/mpi/kinematic_conditions/spmd_fxb_for.F
+!||--- called by ------------------------------------------------------
+!||    fxbyfor               ../engine/source/constraints/fxbody/fxbyfor.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod          ../common_source/tools/memory/my_alloc.F90
+!||    spmd_comm_world_mod   ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+      SUBROUTINE SPMD_FXB_FOR(FXBIPM, MFEXTP)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+        use my_alloc_mod
+
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "fxbcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER FXBIPM(NBIPM,*)
+      my_real
+     .        MFEXTP(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER NFX, NMOD, NME, LEN, AVAR, PMAIN, II, I, ITAG, MSGOFF,
+     .        REQ(NSPMD-1), STAT(MPI_STATUS_SIZE,NSPMD-1), IERR,
+     .        J
+      my_real
+     .       , DIMENSION(:,:), ALLOCATABLE :: FF
+C
+      DATA MSGOFF /196/
+C
+      DO NFX=1,NFXBODY
+         NMOD=FXBIPM(4,NFX)
+         NME=FXBIPM(17,NFX)
+         LEN=NME+NMOD
+         AVAR=FXBIPM(13,NFX)
+         PMAIN=FXBIPM(39,NFX)
+         IF (ISPMD==PMAIN) THEN
+            call my_alloc(FF, LEN, NSPMD-1, "FF")
+            II=0
+            DO I=1,NSPMD
+               IF (ISPMD==I-1) CYCLE
+               II=II+1
+               ITAG=MSGOFF
+               CALL MPI_IRECV(FF(1,II), LEN, REAL, IT_SPMD(I), ITAG,
+     .                        SPMD_COMM_WORLD, REQ(II), IERR)
+            ENDDO
+C
+            CALL MPI_WAITALL(NSPMD-1, REQ, STAT, IERR)
+            DO I=1,NSPMD-1
+               DO J=1,LEN
+                  MFEXTP(AVAR+J-1)=MFEXTP(AVAR+J-1)+FF(J,I)
+               ENDDO
+            ENDDO
+            call my_dealloc(FF)
+         ELSE
+            ITAG=MSGOFF
+            CALL MPI_ISEND(MFEXTP(AVAR), LEN, REAL, IT_SPMD(PMAIN+1),
+     .                     ITAG, SPMD_COMM_WORLD, REQ(1), IERR)
+C
+            CALL MPI_WAIT(REQ, STAT, IERR)
+         ENDIF
+      ENDDO
+C
+#endif
+      RETURN
+      END

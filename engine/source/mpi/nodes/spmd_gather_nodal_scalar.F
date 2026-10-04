@@ -1,0 +1,135 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_gather_nodal_scalar_mod   ../engine/source/mpi/nodes/spmd_gather_nodal_scalar.F
+!||--- called by ------------------------------------------------------
+!||    spmd_exch_output_noda_pext     ../engine/source/mpi/output/spmd_exch_output_noda_pext.F
+!||====================================================================
+      module spmd_gather_nodal_scalar_mod
+      contains
+! ======================================================================================================================
+!                                                   procedures
+! ======================================================================================================================
+!! \brief generic subroutine gather all domain array to domain 0 in a global array v_glob(num)
+!! \details
+!||====================================================================
+!||    spmd_gather_nodal_scalar     ../engine/source/mpi/nodes/spmd_gather_nodal_scalar.F
+!||--- called by ------------------------------------------------------
+!||    spmd_exch_output_noda_pext   ../engine/source/mpi/output/spmd_exch_output_noda_pext.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_get_count_int           ../engine/source/mpi/generic/spmd_get_count.F90
+!||--- uses       -----------------------------------------------------
+!||    constant_mod                 ../common_source/modules/constant_mod.F
+!||    precision_mod                ../common_source/modules/precision_mod.F90
+!||    spmd_mod                     ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       subroutine spmd_gather_nodal_scalar(v_glob,num,v,numnod,weight,nodglob)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+        use spmd_mod, only : spmd_send, spmd_recv, spmd_probe, spmd_get_count_int
+        use precision_mod , only : WP
+        use constant_mod , only : zero
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+#include "spmd.inc"
+#include "com01_c.inc"
+#include "spmd_c.inc"
+#include "task_c.inc"
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+       real(kind=WP) :: V(*)
+       INTEGER :: WEIGHT(*),NODGLOB(*),NUM
+       integer,intent(in) :: numnod
+       real(kind=WP) :: V_GLOB(NUM)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local Variables
+! ----------------------------------------------------------------------------------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),IERROR,MSGOFF
+      INTEGER SIZ,MSGTYP,I,K,NG,NREC,MSGOFF2
+
+      DATA MSGOFF/7014/
+      DATA MSGOFF2/7015/
+      real(kind=WP), DIMENSION(:) , ALLOCATABLE :: BUFSR
+      INTEGER, DIMENSION(:) , ALLOCATABLE :: IBUF
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+       ALLOCATE(BUFSR(NUMNODM), IBUF(NUMNODM))
+       bufsr = zero
+       IF (ISPMD /= 0) THEN
+         SIZ = 0
+         DO I=1,NUMNOD
+           IF (WEIGHT(I)==1) THEN
+             SIZ = SIZ + 1
+             IBUF(SIZ) = NODGLOB(I)
+             BUFSR(SIZ) = V(I) 
+           END IF
+         END DO 
+
+         MSGTYP = MSGOFF2
+         CALL spmd_send(IBUF(1:SIZ),SIZ,IT_SPMD(1),MSGTYP)
+         MSGTYP = MSGOFF 
+         CALL spmd_SEND(BUFSR(1:SIZ),SIZ,IT_SPMD(1),MSGTYP)
+
+       ELSE
+
+          siz = 0
+          DO I=1,NUMNOD
+            IF (WEIGHT(I)==1) THEN 
+              siz = siz +1
+              NG = NODGLOB(I)
+              V_GLOB(NG) = V(I)
+            ENDIF
+          ENDDO
+
+          DO I=2,NSPMD
+            !--- Receiving the full buffer of NODGLOB addresses
+            MSGTYP = MSGOFF2
+            CALL spmd_probe(IT_SPMD(I),MSGTYP,STATUS)
+            CALL spmd_get_count_int(STATUS,SIZ)
+            CALL spmd_RECV(IBUF(1:SIZ),SIZ,IT_SPMD(I),MSGTYP)
+            !--- Receiving the floating buffer of NODGLOB addresses
+            MSGTYP = MSGOFF 
+            CALL spmd_RECV(BUFSR(1:SIZ),SIZ,IT_SPMD(I),MSGTYP)
+            NREC = SIZ
+            DO K = 1, NREC
+              NG = IBUF(K)
+              V_GLOB(NG) = BUFSR(K)
+            ENDDO
+          ENDDO
+
+       ENDIF
+       DEALLOCATE(BUFSR,IBUF)
+#endif
+
+       end subroutine spmd_gather_nodal_scalar
+       end module spmd_gather_nodal_scalar_mod

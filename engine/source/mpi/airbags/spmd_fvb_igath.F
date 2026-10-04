@@ -1,0 +1,146 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    spmd_fvb_igath   ../engine/source/mpi/airbags/spmd_fvb_igath.F
+!||--- called by ------------------------------------------------------
+!||    fv_up_switch     ../engine/source/airbag/fv_up_switch.F
+!||    fvbag1           ../engine/source/airbag/fvbag1.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod        ../engine/share/modules/fvbag_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE SPMD_FVB_IGATH(IFV, ITABS, ITABG)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE FVBAG_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IFV, ITABS(*), ITABG(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER II, I, ITAG, MSGOFF, REQ(NSPMD-1), IERR,
+     .        STAT(MPI_STATUS_SIZE, NSPMD-1), LEN, IADI(NSPMD-1),
+     .        IAD, I1, I2, J1, J2, PMAIN, NNT, J, ITAB(NSPMD-1)
+      INTEGER, DIMENSION(:), ALLOCATABLE :: IBUF
+      DATA MSGOFF/205/
+C
+      IF (FVSPMD(IFV)%RANK == 0) THEN
+C reception of lengths
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD - 1
+            II=II+1
+            ITAG=MSGOFF+I
+            CALL MPI_IRECV(ITAB(II), 1, MPI_INTEGER, I,
+     .                     ITAG, FVSPMD(IFV)%MPI_COMM, REQ(II), IERR)
+         ENDDO
+C
+         CALL MPI_WAITALL(FVSPMD(IFV)%NSPMD-1, REQ, STAT, IERR)
+C
+         LEN=0
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+            II=II+1
+            IADI(II)=LEN+1
+            LEN=LEN+2*ITAB(II)
+         ENDDO
+         call my_alloc(IBUF, LEN, "IBUF")
+C reception of integers
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD-1
+            II=II+1
+            ITAG=MSGOFF+NSPMD+I
+            IAD=IADI(II)
+            LEN=2*ITAB(II)
+            CALL MPI_IRECV(IBUF(IAD), LEN, MPI_INTEGER, I,
+     .                     ITAG, FVSPMD(IFV)%MPI_COMM, REQ(II), IERR)
+         ENDDO
+C filling of the output array itabg
+         DO I=1,FVSPMD(IFV)%NN_L+FVSPMD(IFV)%NNI_L
+            I1=FVSPMD(IFV)%IBUF_L(1,I)
+            I2=FVSPMD(IFV)%IBUF_L(2,I)
+            ITABG(I1)=ITABS(I2)
+         ENDDO
+C
+         CALL MPI_WAITALL(FVSPMD(IFV)%NSPMD-1, REQ, STAT, IERR)
+C
+         II=0
+         DO I=1,FVSPMD(IFV)%NSPMD - 1
+            II=II+1
+            IAD=IADI(II)
+            DO J=1,ITAB(II)
+               J1=IBUF(IAD-1+J)
+               J2=IBUF(IAD-1+ITAB(II)+J)
+               ITABG(J1)=J2
+            ENDDO
+         ENDDO
+         call my_dealloc(IBUF)
+      ELSE IF(FVSPMD(IFV)%RANK > 0) THEN
+         PMAIN=FVSPMD(IFV)%PMAIN
+         NNT=FVSPMD(IFV)%NN_L+FVSPMD(IFV)%NNI_L
+         ITAG=MSGOFF+FVSPMD(IFV)%RANK
+         CALL MPI_ISEND(NNT, 1, MPI_INTEGER, 0,
+     .                  ITAG, FVSPMD(IFV)%MPI_COMM, REQ(1), IERR)
+C
+         CALL MPI_WAIT(REQ(1), STAT, IERR)
+C
+         LEN=2*NNT
+         call my_alloc(IBUF, LEN, "IBUF")
+         DO I=1,NNT
+            IBUF(I)=FVSPMD(IFV)%IBUF_L(1,I)
+            II=FVSPMD(IFV)%IBUF_L(2,I)
+            IBUF(NNT+I)=ITABS(II)
+         ENDDO
+C
+         ITAG=MSGOFF+NSPMD+FVSPMD(IFV)%RANK
+         CALL MPI_ISEND(IBUF, LEN, MPI_INTEGER, 0,
+     .                  ITAG, FVSPMD(IFV)%MPI_COMM, REQ(2), IERR)
+C
+         CALL MPI_WAIT(REQ(2), STAT, IERR)
+         call my_dealloc(IBUF)
+      ENDIF
+C
+#endif
+      RETURN
+      END

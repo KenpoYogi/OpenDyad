@@ -1,0 +1,478 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    inivel_start_mod   ../engine/source/loads/general/inivel/inivel_start.F90
+!||--- called by ------------------------------------------------------
+!||    resol              ../engine/source/engine/resol.F
+!||====================================================================
+      module inivel_start_mod
+!
+        implicit none
+      contains
+        !! \brief apply inivel with T_start
+!||====================================================================
+!||    inivel_start     ../engine/source/loads/general/inivel/inivel_start.F90
+!||--- called by ------------------------------------------------------
+!||    resol            ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg           ../engine/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    constant_mod     ../common_source/modules/constant_mod.F
+!||    elbufdef_mod     ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    groupdef_mod     ../common_source/modules/groupdef_mod.F
+!||    inivel_mod       ../common_source/modules/inivel_mod.F90
+!||    message_mod      ../engine/share/message_module/message_mod.F
+!||    multi_fvm_mod    ../common_source/modules/ale/multi_fvm_mod.F90
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    precision_mod    ../common_source/modules/precision_mod.F90
+!||    sensor_mod       ../common_source/modules/sensor_mod.F90
+!||====================================================================
+        subroutine inivel_start(                                              &
+          ngrnod,  ngrbric,    ngrquad,       ngrsh3n,           &
+          igrnod,  igrbric,    igrquad,       igrsh3n,           &
+          numskw,    lskew,    numfram,       sensors,           &
+          xframe,     skew,          x,             v,           &
+          vr,       numnod,      vflow,         wflow,           &
+          w,     multi_fvm,       iale,       ialelag,           &
+          time ,    iroddl,   ninivelt,      inivel_t,           &
+          nparg,    ngroup,       lens,         iparg,           &
+          elbuf_tab,    ms,         in,        weight,           &
+          nxframe,   t_kin,      ns10e,       icnds10,           &
+          ispmd )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use inivel_mod
+          use message_mod
+          use groupdef_mod
+          use sensor_mod
+          USE multi_fvm_mod
+          use elbufdef_mod
+          use constant_mod,          only : zero,half
+          use precision_mod, only : WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          use my_alloc_mod
+          use my_dealloc_mod, only : my_dealloc
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer , intent(inout)                          :: ninivelt  !< dimension of inivel_t
+          integer , intent(in   )                          :: numskw    !< number of skew
+          integer , intent(in   )                          :: numfram   !< number of frame
+          integer , intent(in   )                          :: lskew     !< first dimension of skew
+          integer , intent(in   )                          :: nxframe   !< first dimension of frame
+          integer , intent(in   )                          :: numnod    !< number of node
+          integer , intent(in   )                          :: nparg     !< first dimension of iparg
+          integer , intent(in   )                          :: ngroup    !< number of element group
+          integer , intent(in   )                          :: iroddl    !< rotational dof flag
+          integer , intent(in   )                          :: iale      !< ale flag
+          integer , intent(in   )                          :: ialelag   !< alelag flag
+          integer , intent(in   )                          :: ngrnod    !< number node group
+          integer , intent(in   )                          :: ngrbric   !< number solid element group
+          integer , intent(in   )                          :: ngrquad   !< number quad element group
+          integer , intent(in   )                          :: ngrsh3n   !< number tria element group
+          integer , intent(in   )                          :: lens      !< dimension of work array itagvel
+          integer , intent(in   )                          :: ns10e     !< number of tetra10 edges
+          integer , intent(in   )                          :: ispmd     !< domain number
+          integer , intent(in   ) ,dimension(3,ns10e)      :: icnds10   !< tetra10 edge connectivity
+          integer , intent(in   ) ,dimension(numnod)       :: weight    !< nodal mass weight array (spmd)
+          integer , dimension(nparg,ngroup), intent(in   ) :: iparg     !< element group data array
+          type(inivel_), dimension(ninivelt),intent(inout) :: inivel_t  !< inivel_struc
+          type (group_)  , dimension(ngrnod)               :: igrnod    !< node group array
+          type (group_)  , dimension(ngrbric)              :: igrbric   !< solid element group array
+          type (group_)  , dimension(ngrquad)              :: igrquad   !< quad element group array
+          type (group_)  , dimension(ngrsh3n)              :: igrsh3n   !< tria element group array
+          type (sensors_) ,intent(in  )                    :: sensors   !< sensor structure
+          TYPE(MULTI_FVM_STRUCT), INTENT(INOUT)            :: multi_fvm !< multi_fvm structure
+          type(elbuf_struct_), target, dimension(ngroup)   :: elbuf_tab !< element buffer data
+          real(kind=WP), intent(in) ,dimension(lskew,numskw+1)   :: skew      !< local skew data
+          real(kind=WP), intent(in) ,dimension(nxframe,numfram+1):: xframe    !< frame data
+          real(kind=WP), intent(in) ,dimension(numnod)           :: ms        !< nodal mass
+          real(kind=WP), intent(in) ,dimension(numnod)           :: in        !< nodal inertia
+          real(kind=WP), intent(in) ,dimension(3,numnod)         :: x         !< coordinate array
+          real(kind=WP), intent(inout) ,dimension(3,numnod)      :: v         !< velocity
+          real(kind=WP), intent(inout) ,dimension(3,numnod)      :: vr        !< rotational velocity
+          real(kind=WP), intent(inout) ,dimension(3,numnod)      :: vflow     !< velocity for int22
+          real(kind=WP), intent(inout) ,dimension(3,numnod)      :: wflow     !< velocity for int22 (ale)
+          real(kind=WP), intent(inout) ,dimension(3,numnod)      :: w         !< velocity for ALE
+          real(kind=WP), intent(in   )                           :: time      !< time
+          real(kind=WP), intent(inout)                           :: t_kin     !< kinematic energy of inivel
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer  :: i,j,id,n,ng,itype,nosys,sens_id,iremain,iupdate
+          integer  :: igrs,igbric,igqd,igtria,isk,ifra,idir,ifm,k1,k2,k3,n1,n2,nd
+          integer  :: mtn,nel,nft,ii,n_ini
+          integer , dimension(:) , allocatable :: itagvel,itag_n
+          real(kind=WP)  :: tstart,tstart_s,tstart1,vx,vy,vz,vl(3), nixj(6),vlt(3),mas
+          real(kind=WP) :: vra, ox, oy, oz
+          type(g_bufel_), pointer :: gbuf
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+!  if need update in case of FVM
+          vl(1:3) = zero
+          nixj(1:6) = zero
+          vlt(1:3) = zero
+          iupdate = 0
+          t_kin = zero
+          vra = zero
+          igtria = 0
+          sens_id = -HUGE(sens_id)
+          tstart = -HUGE(tstart)
+          igrs = 0
+          ifra = 0
+          idir = 0
+          igqd = 0
+          igbric = 0
+          do n =1,ninivelt
+            itype = inivel_t(n)%itype
+            if (itype <0) cycle ! applied already
+            select case (itype)
+             case(0,1,2,3)
+              sens_id = inivel_t(n)%general%sensor_id
+              tstart = inivel_t(n)%general%tstart
+             case(4)
+              sens_id = inivel_t(n)%axis%sensor_id
+              tstart = inivel_t(n)%axis%tstart
+             case(5)
+              sens_id = inivel_t(n)%fvm%sensor_id
+              tstart = inivel_t(n)%fvm%tstart
+            end select
+            tstart_s = zero
+            if (sens_id>0) tstart_s = sensors%sensor_tab(sens_id)%tstart
+            if (tstart==zero) then
+              tstart1 = tstart_s
+            else if (sens_id==0) then
+              tstart1 = tstart
+            else
+              tstart1 = min(tstart,tstart_s)
+            end if
+            if (tstart1<=time) iupdate = 1
+          end do
+          if (iupdate>0) then
+            call my_alloc(itagvel, lens, "itagvel")
+            itagvel = 0
+            call my_alloc(itag_n, numnod, "itag_n")
+            itag_n = 0            
+          end if
+          iremain = 0
+          do n =1,ninivelt
+            itype = inivel_t(n)%itype
+            if (itype <0) cycle ! applied already
+            select case (itype)
+             case(0,1,2,3)
+              sens_id = inivel_t(n)%general%sensor_id
+              tstart = inivel_t(n)%general%tstart
+             case(4)
+              sens_id = inivel_t(n)%axis%sensor_id
+              tstart = inivel_t(n)%axis%tstart
+             case(5)
+              sens_id = inivel_t(n)%fvm%sensor_id
+              tstart = inivel_t(n)%fvm%tstart
+            end select
+            tstart_s = zero
+            if (sens_id>0) tstart_s = sensors%sensor_tab(sens_id)%tstart
+            if (tstart==zero) then
+              tstart1 = tstart_s
+            else if (sens_id==0) then
+              tstart1 = tstart
+            else
+              tstart1 = min(tstart,tstart_s)
+            end if
+            if (tstart1<=time) then
+              id = inivel_t(n)%id
+              if (tstart1==tstart_s) then
+                if (ispmd==0) call ancmsg(msgid=308,anmode=aninfo,i1=id,c1="SENSOR ON")
+              else
+                if (ispmd==0) call ancmsg(msgid=308,anmode=aninfo,i1=id,c1="T_START")
+              end if
+              select case (itype)
+               case(0,1,2,3)
+                isk = inivel_t(n)%general%skew_id
+                vx = inivel_t(n)%general%vx
+                vy = inivel_t(n)%general%vy
+                vz = inivel_t(n)%general%vz
+                if (isk > 0) then
+                  vl(1) = skew(1,isk)*vx+skew(4,isk)*vy+skew(7,isk)*vz
+                  vl(2) = skew(2,isk)*vx+skew(5,isk)*vy+skew(8,isk)*vz
+                  vl(3) = skew(3,isk)*vx+skew(6,isk)*vy+skew(9,isk)*vz
+                else
+                  vl(1) = vx
+                  vl(2) = vy
+                  vl(3) = vz
+                end if
+                igrs = inivel_t(n)%general%grnd_id
+               case(4)
+                idir = inivel_t(n)%axis%dir
+                ifra = inivel_t(n)%axis%frame_id
+                vx = inivel_t(n)%axis%vx
+                vy = inivel_t(n)%axis%vy
+                vz = inivel_t(n)%axis%vz
+                vra = inivel_t(n)%axis%vr
+                if (ifra > 0) then
+                  j = ifra
+                  vl(1) = xframe(1,j)*vx+xframe(4,j)*vy+xframe(7,j)*vz
+                  vl(2) = xframe(2,j)*vx+xframe(5,j)*vy+xframe(8,j)*vz
+                  vl(3) = xframe(3,j)*vx+xframe(6,j)*vy+xframe(9,j)*vz
+                else
+                  vl(1) = vx
+                  vl(2) = vy
+                  vl(3) = vz
+                end if
+                igrs = inivel_t(n)%axis%grnd_id
+               case(5)
+                vl(1) = inivel_t(n)%fvm%vx
+                vl(2) = inivel_t(n)%fvm%vy
+                vl(3) = inivel_t(n)%fvm%vz
+                igbric = inivel_t(n)%fvm%grbric_id
+                igqd   = inivel_t(n)%fvm%grqd_id
+                igtria = inivel_t(n)%fvm%grtria_id
+              end select
+              select case (itype)
+               case(0)
+                do j=1,igrnod(igrs)%nentity
+                  nosys=igrnod(igrs)%entity(j)
+                  v(1:3,nosys)=vl(1:3)
+                  itag_n(nosys) = 2
+                  if(ialelag > 0) then
+                    vflow(1:3,nosys) = vl(1:3)
+                    wflow(1:3,nosys) = vl(1:3)
+                  end if
+                  mas=ms(nosys)*weight(nosys)
+                  t_kin=t_kin+( vl(1)*vl(1)+vl(2)*vl(2)+vl(3)*vl(3))*half*mas
+                end do
+               case(1)
+                do j=1,igrnod(igrs)%nentity
+                  nosys=igrnod(igrs)%entity(j)
+                  if(iroddl > 0) then
+                    vr(1:3,nosys) = vl(1:3)
+                    mas=in(nosys)*weight(nosys)
+                    t_kin=t_kin+( vl(1)*vl(1)+vl(2)*vl(2)+vl(3)*vl(3))*half*mas
+                  end if
+                end do
+               case(2)
+                do j=1,igrnod(igrs)%nentity
+                  nosys=igrnod(igrs)%entity(j)
+                  v(1:3,nosys)=vl(1:3)
+                  itag_n(nosys) = 2
+                  if(ialelag > 0) then
+                    vflow(1:3,nosys) = vl(1:3)
+                    wflow(1:3,nosys) = vl(1:3)
+                  end if
+                  if (iale == 1) then
+                    w(1:3,nosys)=vl(1:3)
+                  end if
+                  mas=ms(nosys)*weight(nosys)
+                  t_kin=t_kin+( vl(1)*vl(1)+vl(2)*vl(2)+vl(3)*vl(3))*half*mas
+                end do
+               case(3)
+                do j=1,igrnod(igrs)%nentity
+                  nosys=igrnod(igrs)%entity(j)
+                  w(1:3,nosys)=vl(1:3)
+                  if(ialelag > 0) then
+                    vflow(1:3,nosys) = vl(1:3)
+                    wflow(1:3,nosys) = vl(1:3)
+                  end if
+                  mas=ms(nosys)*weight(nosys)
+                  t_kin=t_kin+( vl(1)*vl(1)+vl(2)*vl(2)+vl(3)*vl(3))*half*mas
+                end do
+               case(4)
+! no treatment needed for the case with main node of RBODY
+                do j=1,igrnod(igrs)%nentity
+                  nosys=igrnod(igrs)%entity(j)
+                  nixj(1:6) = zero
+                  if (ifra > 0) then
+                    k1=3*idir-2
+                    k2=3*idir-1
+                    k3=3*idir
+                    ifm = ifra
+                    ox  = xframe(10,ifm)
+                    oy  = xframe(11,ifm)
+                    oz  = xframe(12,ifm)
+                    nixj(1)=xframe(k1,ifm)*(x(2,nosys)-oy)
+                    nixj(2)=xframe(k2,ifm)*(x(1,nosys)-ox)
+                    nixj(3)=xframe(k2,ifm)*(x(3,nosys)-oz)
+                    nixj(4)=xframe(k3,ifm)*(x(2,nosys)-oy)
+                    nixj(5)=xframe(k3,ifm)*(x(1,nosys)-ox)
+                    nixj(6)=xframe(k1,ifm)*(x(3,nosys)-oz)
+                    if (iroddl>0) then
+                      vr(1,nosys)= vra*xframe(k1,ifm)
+                      vr(2,nosys)= vra*xframe(k2,ifm)
+                      vr(3,nosys)= vra*xframe(k3,ifm)
+                      vlt(1:3) = vr(1:3,nosys)
+                      mas=in(nosys)*weight(nosys)
+                      t_kin=t_kin+(vlt(1)*vlt(1)+vlt(2)*vlt(2)+vlt(3)*vlt(3))*half*mas
+                    end if
+                  else
+                    if(idir==1) then
+                      nixj(1)=x(2,nosys)
+                      nixj(6)=x(3,nosys)
+                    else if(idir==2) then
+                      nixj(2)=x(1,nosys)
+                      nixj(3)=x(3,nosys)
+                    else if(idir==3) then
+                      nixj(4)=x(2,nosys)
+                      nixj(5)=x(1,nosys)
+                    end if
+                    if (iroddl>0) then
+                      vr(1:3,nosys)= zero !vra*xframe(k1,ifm)
+                      if (idir>0) vr(idir,nosys)= vra
+                      mas=in(nosys)*weight(nosys)
+                      t_kin=t_kin+vra*vra*half*mas
+                    end if
+                  end if
+                  v(1,nosys)= vl(1)+vra*(nixj(3)-nixj(4))
+                  v(2,nosys)= vl(2)+vra*(nixj(5)-nixj(6))
+                  v(3,nosys)= vl(3)+vra*(nixj(1)-nixj(2))
+                  itag_n(nosys) = 2
+                  if(ialelag > 0) then
+                    vflow(1:3,nosys) = v(1:3,nosys)
+                    wflow(1:3,nosys) = v(1:3,nosys)
+                  end if
+                  vlt(1:3) = v(1:3,nosys)
+                  mas=ms(nosys)*weight(nosys)
+                  t_kin=t_kin+(vlt(1)*vlt(1)+vlt(2)*vlt(2)+vlt(3)*vlt(3))*half*mas
+!--
+                end do
+               case(5)
+                if (igbric > 0) then
+                  igrs = igbric
+                  do j=1,igrbric(igrs)%nentity
+                    nosys=igrbric(igrs)%entity(j)
+                    multi_fvm%vel(1:3, nosys) = vl(1:3)
+                    itagvel(nosys) = 1
+                  end do
+                end if
+                if (igqd > 0) then
+                  igrs = igqd
+                  do j=1,igrquad(igrs)%nentity
+                    nosys=igrquad(igrs)%entity(j)
+                    multi_fvm%vel(1:3, nosys) = vl(1:3)
+                    itagvel(nosys) = 1
+                  end do
+                end if
+                if (igtria > 0) then
+                  igrs = igtria
+                  do j=1,igrsh3n(igrs)%nentity
+                    nosys=igrsh3n(igrs)%entity(j)
+                    multi_fvm%vel(1:3, nosys) = vl(1:3)
+                    itagvel(nosys) = 1
+                  end do
+                end if
+              end select
+              inivel_t(n)%itype = -1
+            else
+              iremain = iremain + 1
+            end if
+          end do
+          if (iremain < ninivelt) then
+            n_ini = 0
+            do n =1,ninivelt
+              itype = inivel_t(n)%itype
+              if (itype <0) cycle
+              n_ini = n_ini + 1
+              inivel_t(n_ini)%id = inivel_t(n)%id
+              inivel_t(n_ini)%itype = inivel_t(n)%itype
+              select case (itype)
+               case(0,1,2,3)
+                inivel_t(n_ini)%general%type      = inivel_t(n)%general%type
+                inivel_t(n_ini)%general%skew_id   = inivel_t(n)%general%skew_id
+                inivel_t(n_ini)%general%grnd_id   = inivel_t(n)%general%grnd_id
+                inivel_t(n_ini)%general%sensor_id = inivel_t(n)%general%sensor_id
+                inivel_t(n_ini)%general%vx  = inivel_t(n)%general%vx
+                inivel_t(n_ini)%general%vy  = inivel_t(n)%general%vy
+                inivel_t(n_ini)%general%vz  = inivel_t(n)%general%vz
+                inivel_t(n_ini)%general%tstart  = inivel_t(n)%general%tstart
+               case(4) ! axis
+                inivel_t(n_ini)%axis%dir       = inivel_t(n)%axis%dir
+                inivel_t(n_ini)%axis%frame_id  = inivel_t(n)%axis%frame_id
+                inivel_t(n_ini)%axis%grnd_id   = inivel_t(n)%axis%grnd_id
+                inivel_t(n_ini)%axis%sensor_id = inivel_t(n)%axis%sensor_id
+                inivel_t(n_ini)%axis%vx  = inivel_t(n)%axis%vx
+                inivel_t(n_ini)%axis%vy  = inivel_t(n)%axis%vy
+                inivel_t(n_ini)%axis%vz  = inivel_t(n)%axis%vz
+                inivel_t(n_ini)%axis%vr  = inivel_t(n)%axis%vr
+                inivel_t(n_ini)%axis%tstart = inivel_t(n)%axis%tstart
+               case(5) ! fvm
+                inivel_t(n_ini)%fvm%skew_id    = inivel_t(n)%fvm%skew_id
+                inivel_t(n_ini)%fvm%grbric_id  = inivel_t(n)%fvm%grbric_id
+                inivel_t(n_ini)%fvm%grqd_id    = inivel_t(n)%fvm%grqd_id
+                inivel_t(n_ini)%fvm%grtria_id  = inivel_t(n)%fvm%grtria_id
+                inivel_t(n_ini)%fvm%sensor_id  = inivel_t(n)%fvm%sensor_id
+                inivel_t(n_ini)%fvm%vx  = inivel_t(n)%fvm%vx
+                inivel_t(n_ini)%fvm%vy  = inivel_t(n)%fvm%vy
+                inivel_t(n_ini)%fvm%vz  = inivel_t(n)%fvm%vz
+                inivel_t(n_ini)%fvm%tstart = inivel_t(n)%fvm%tstart
+              end select
+            end do
+            ninivelt = n_ini
+          end if
+!
+          if (iupdate>0) then
+            do ng =1, ngroup
+              mtn = iparg(1, ng)
+              if (mtn == 151) then
+                nel = iparg(2, ng)
+                nft = iparg(3, ng)
+                gbuf => elbuf_tab(ng)%gbuf
+!     as done at T=0
+                do ii = 1, nel
+                  i = ii + nft
+                  if (itagvel(i)==1) then
+                    gbuf%mom(ii + 0 * nel) = multi_fvm%vel(1, i)
+                    gbuf%mom(ii + 1 * nel) = multi_fvm%vel(2, i)
+                    gbuf%mom(ii + 2 * nel) = multi_fvm%vel(3, i)
+                    mas = gbuf%vol(ii) * multi_fvm%rho(i)
+                    vlt(1:3) = multi_fvm%vel(1:3, i)
+                    t_kin=t_kin+(vlt(1)*vlt(1)+vlt(2)*vlt(2)+vlt(3)*vlt(3))*half*mas
+                  end if
+                end do
+              end if !(mtn == 151) then
+            end do
+            do n = 1, ns10e
+              nd = iabs(icnds10(1,n))
+              if (itag_n(nd)==2) cycle
+              n1 = icnds10(2,n)
+              n2 = icnds10(3,n)
+              if (itag_n(n1)==2 .and. itag_n(n2)==2) then 
+                v(1:3,nd) = half*(v(1:3,n1)+v(1:3,n2))
+              end if
+            end do
+!             
+            call my_dealloc(itagvel)
+            call my_dealloc(itag_n)
+          end if
+
+! 1000   FORMAT(3X,'BY SENSOR ON, ACTIVATING INIVEL OF ID =',I10)
+! 2000   FORMAT(3X,'ACTIVATING INIVEL BY T_START OF ID =',I10)
+        end subroutine inivel_start
+      end module inivel_start_mod

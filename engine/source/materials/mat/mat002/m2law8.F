@@ -1,0 +1,383 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    m2law8             ../engine/source/materials/mat/mat002/m2law8.F
+!||--- called by ------------------------------------------------------
+!||    mmain8             ../engine/source/materials/mat_share/mmain8.F
+!||--- calls      -----------------------------------------------------
+!||    mqvisc8            ../engine/source/materials/mat_share/mqvisc8.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod       ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    matparam_def_mod   ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||====================================================================
+      SUBROUTINE M2LAW8(mat_param ,
+     1   PM,      OFF,     SIG,     EINT,
+     2   RHO,     QOLD,    VOL,     STIFN,
+     3   NEL,     D1,      D2,      D3,
+     4   D4,      D5,      D6,      VNEW,
+     5   VOLGP,   DELTAX,  RHO0,    DVOL,
+     6   VD2,     VIS,     MAT,     NC,
+     7   NGL,     GEO,     PID,     EPSEQ,
+     8   DT2T,    NELTST,  ITYPTST, IPLA,
+     9   OFFG,    DPLA,    EPSP,    TSTAR,
+     A   ETSE,    MSSA,    DMELS,   BUFLY,
+     B   SSP,     ITY,     NPT,     JTUR,
+     C   JTHE,    JSMS)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD         
+      use matparam_def_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com08_c.inc"
+#include      "param_c.inc"
+#include      "impl1_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: ITY
+      INTEGER, INTENT(IN) :: NPT
+      INTEGER, INTENT(IN) :: JTUR
+      INTEGER, INTENT(IN) :: JTHE
+      INTEGER, INTENT(IN) :: JSMS
+      INTEGER MAT(MVSIZ),NC(8,MVSIZ),NGL(MVSIZ),PID(MVSIZ)
+      INTEGER NEL,NELTST,ITYPTST,IPLA
+C     REAL
+      my_real
+     .  PM(NPROPM,*),OFF(MVSIZ),SIG(NEL,6),EINT(NEL),DELTAX(MVSIZ),
+     .  RHO(NEL),QOLD(NEL),VOL(NEL) ,STIFN(*),EPSEQ(*),
+     .  D1(MVSIZ,*)          , D2(MVSIZ,*)           ,
+     .  D3(MVSIZ,*)          , D4(MVSIZ,*)           , 
+     .  D5(MVSIZ,*)          , D6(MVSIZ,*)           ,
+     .  VNEW(MVSIZ), RHO0(MVSIZ), DVOL(MVSIZ), VOLGP(MVSIZ,*),
+     .  VD2(MVSIZ) ,  VIS(MVSIZ),GEO(NPROPG,*), DT2T, OFFG(*),
+     .  DPLA(*),EPSP(*),TSTAR(*),ETSE(*), MSSA(*), DMELS(*), SSP(MVSIZ)   
+      TYPE (BUF_LAY_), TARGET :: BUFLY
+      type (matparam_struct_)  ,intent(in)    :: mat_param
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  I,J,II,IPT,JPT,MX,JJ(6)
+      INTEGER  ICC,IFORM
+C     REAL
+      my_real
+     .   SOLD1(MVSIZ), SOLD2(MVSIZ), SOLD3(MVSIZ),
+     .   SOLD4(MVSIZ), SOLD5(MVSIZ), SOLD6(MVSIZ),
+     .   G(MVSIZ)    , C1   , P(MVSIZ)    ,
+     .   G1(MVSIZ)  , G2(MVSIZ), AJ2(MVSIZ), QH(MVSIZ),
+     .   DF(MVSIZ)  , AMU(MVSIZ)   , EINC(MVSIZ), EPD(MVSIZ) ,
+     .   DPDM(MVSIZ), PNEW(MVSIZ) , AK(MVSIZ),
+     .   CA(MVSIZ),CC, CN, EPMX, EPDR, T(MVSIZ),
+     .   SIGMX(MVSIZ),
+     .   TM,MT, SCALE, DTA, DAV,RHOCPI,
+     .   CA_1,CB_1,SIGMX_1,Z3_1,Z4_1,T_1
+      my_real,
+     .  DIMENSION(:), POINTER :: SIGP, EPLA
+      TYPE(L_BUFEL_) ,POINTER :: LBUF
+C=======================================================================
+      DTA =HALF*DT1
+      MX=MAT(1)
+
+      iform = mat_param%iparam(1)
+      icc   = mat_param%iparam(2)
+
+      C1   = mat_param%bulk
+
+      CA_1 = mat_param%uparam(1)
+      CB_1 = mat_param%uparam(2)
+      CN   = mat_param%uparam(3)
+      EPMX = mat_param%uparam(4)
+      SIGMX_1=mat_param%uparam(5)
+      CC   = mat_param%uparam(6)
+      EPDR = mat_param%uparam(7)
+C
+      Z3_1   = mat_param%uparam(10)
+      Z4_1   = mat_param%uparam(11)
+      RHOCPI = mat_param%therm%rhocp
+      IF (RHOCPI > ZERO) RHOCPI = ONE / RHOCPI
+      T_1    = mat_param%therm%tref
+      TM     = mat_param%therm%tmelt
+C
+      DO I=1,NEL
+       G(I)    = mat_param%shear * OFF(I)
+       CA(I)   =CA_1
+       SIGMX(I)=SIGMX_1
+       T(I)    = T_1
+       ETSE(I) = ONE
+      ENDDO
+C
+      DO I=1,NEL
+       DF(I)=RHO0(I)/RHO(I)
+      ENDDO
+C
+      DO J=1,6
+        JJ(J) = NEL*(J-1)
+      ENDDO
+C-----------------------
+C     PRESSION ANCIENNE
+C-----------------------
+      DO I=1,NEL
+        P(I)  =-THIRD*(SIG(I,1)+SIG(I,2)+SIG(I,3))
+        G1(I)=DT1*G(I)
+        G2(I)=TWO*G1(I)
+        AMU(I)=ONE/DF(I)-ONE
+        SIG(I,1)=ZERO
+        SIG(I,2)=ZERO
+        SIG(I,3)=ZERO
+        SIG(I,4)=ZERO
+        SIG(I,5)=ZERO
+        SIG(I,6)=ZERO
+        EINC(I)=ZERO
+        EPSEQ(I)=ZERO    
+      ENDDO
+C------------------------------
+C     DP/DRHO AND SPEED OF SOUND
+C------------------------------
+      DO I=1,NEL
+        DPDM(I)=ONEP333*G(I)+C1
+        SSP(I)=SQRT(ABS(DPDM(I))/RHO0(I))
+      ENDDO
+C--------------------------------------------------
+C     VOLUMETRIC VISCOSITY AND TIME STEP
+C--------------------------------------------------
+      CALL MQVISC8(
+     1   PM,      OFF,     RHO,     VIS,
+     2   VIS,     VIS,     STIFN,   EINT,
+     3   D1,      D2,      D3,      VNEW,
+     4   DVOL,    VD2,     DELTAX,  VIS,
+     5   QOLD,    SSP,     MAT,     NC,
+     6   NGL,     GEO,     PID,     DT2T,
+     7   NELTST,  ITYPTST, OFFG,    MSSA,
+     8   DMELS,   NEL,     ITY,     JTUR,
+     9   JTHE,    JSMS)
+C--------------------------------------------------
+C     NOUVELLE PRESSION
+C--------------------------------------------------
+      DO I=1,NEL
+        PNEW(I)=C1*AMU(I)
+      ENDDO
+      JPT = 0
+C--------------------------------------------------
+C     LOOP OVER GAUSS POINTS
+C--------------------------------------------------
+      DO IPT=1,NPT
+        LBUF => BUFLY%LBUF(1,1,IPT)
+        SIGP => BUFLY%LBUF(1,1,IPT)%SIG(1:NEL*6)
+        EPLA => BUFLY%LBUF(1,1,IPT)%PLA(1:NEL)
+        JPT=(IPT-1)*NEL
+C
+        DO I=1,NEL
+          DAV=ONE-DVOL(I)/VNEW(I)
+          SOLD1(I)=SIGP(JJ(1)+I)*DAV
+          SOLD2(I)=SIGP(JJ(2)+I)*DAV
+          SOLD3(I)=SIGP(JJ(3)+I)*DAV
+          SOLD4(I)=SIGP(JJ(4)+I)*DAV
+          SOLD5(I)=SIGP(JJ(5)+I)*DAV
+          SOLD6(I)=SIGP(JJ(6)+I)*DAV
+        ENDDO
+C--------------------------------------------------
+C     DEVIATORIC STRESSES AT GAUSS POINTS
+C--------------------------------------------------
+        DO I=1,NEL
+          DAV=-THIRD*(D1(I,IPT)+D2(I,IPT)+D3(I,IPT))
+          SIGP(JJ(1)+I)=SIGP(JJ(1)+I)+P(I)+G2(I)*(D1(I,IPT)+DAV)
+          SIGP(JJ(2)+I)=SIGP(JJ(2)+I)+P(I)+G2(I)*(D2(I,IPT)+DAV)
+          SIGP(JJ(3)+I)=SIGP(JJ(3)+I)+P(I)+G2(I)*(D3(I,IPT)+DAV)
+          SIGP(JJ(4)+I)=SIGP(JJ(4)+I)    +G1(I)* D4(I,IPT)
+          SIGP(JJ(5)+I)=SIGP(JJ(5)+I)    +G1(I)* D5(I,IPT)
+          SIGP(JJ(6)+I)=SIGP(JJ(6)+I)    +G1(I)* D6(I,IPT)
+        ENDDO
+C
+        DO I=1,NEL
+          AJ2(I)=HALF*(SIGP(JJ(1)+I)**2+SIGP(JJ(2)+I)**2+SIGP(JJ(3)+I)**2)
+     .                  +SIGP(JJ(4)+I)**2+SIGP(JJ(5)+I)**2+SIGP(JJ(6)+I)**2
+          AJ2(I)=SQRT(THREE*AJ2(I))
+        ENDDO
+C-------------
+C     STRAIN RATE (JOHNSON-COOK, ZERILLI-ARMSTRONG)
+C-------------
+      IF (CC/=ZERO)THEN
+        DO I=1,NEL
+          II=I+JPT
+          EPD(I)=OFF(I)* 
+     .      MAX( ABS(D1(I,IPT)), ABS(D2(I,IPT)), ABS(D3(I,IPT)),
+     .      HALF*ABS(D4(I,IPT)),HALF*ABS(D5(I,IPT)),HALF*ABS(D6(I,IPT)))
+           EPD(I)= MAX(EPD(I),EM15)
+           EPSP(II) = EPD(I)           
+           EPD(I)= LOG(EPD(I)/EPDR)
+        ENDDO
+        IF (IFORM == 1) THEN  ! zerilli
+          DO I=1,NEL
+             EPD(I)= CC*EXP((-Z3_1+Z4_1 * EPD(I))*T(I))
+             IF(ICC==1)SIGMX(I)= SIGMX(I) + EPD(I)
+             CA(I) = CA(I) + EPD(I)
+             T(I) = T(I) + RHOCPI*EINT(I)/MAX(EM15,VOL(I))
+             EPD(I)=ONE
+          ENDDO
+        ELSE                       ! J-C
+          MT=MAX(EM15,Z3_1)
+          DO I=1,NEL
+             TSTAR(I)=MIN(ONE,MAX(ZERO,(T(I)-T_1)/(TM-T_1)))
+             EPD(I)= MAX(ZERO,EPD(I))
+             EPD(I)= (ONE + CC * EPD(I))*(ONE - TSTAR(I)**MT)
+             IF(ICC==1)SIGMX(I)= SIGMX(I)*EPD(I)
+             T(I) = T(I) + EINT(I)/MAX(EM15,VOL(I))*RHOCPI
+          ENDDO
+        ENDIF
+      ELSE
+        DO I=1,NEL
+          EPD(I)=ONE
+        ENDDO
+      ENDIF
+C-------------
+C     CRITERE
+C-------------
+      DO I=1,NEL
+       IF(CN==ONE) THEN
+         AK(I)= CA(I)+CB_1*EPLA(I)
+         QH(I)= CB_1*EPD(I)
+       ELSE
+         IF(EPLA(I)>ZERO) THEN
+           AK(I)=CA(I)+CB_1*EPLA(I)**CN
+           IF(CN>ONE) THEN
+             QH(I)= (CB_1*CN*EPLA(I)**(CN-ONE))*EPD(I)
+           ELSE
+             QH(I)= (CB_1*CN/EPLA(I)**(ONE - CN))*EPD(I)
+           ENDIF
+         ELSE
+           AK(I)=CA(I)
+           QH(I)=ZERO
+         ENDIF
+       ENDIF
+       AK(I)= MIN(AK(I)*EPD(I),SIGMX(I))
+       IF(EPLA(I)>EPMX)AK(I)=ZERO
+      ENDDO
+C
+      IF(IPLA==0)THEN
+       DO I=1,NEL
+         II=I+JPT
+         SCALE= MIN(ONE,AK(I)/ MAX(AJ2(I),EM15))
+         SIGP(JJ(1)+I)=SCALE*SIGP(JJ(1)+I)
+         SIGP(JJ(2)+I)=SCALE*SIGP(JJ(2)+I)
+         SIGP(JJ(3)+I)=SCALE*SIGP(JJ(3)+I)
+         SIGP(JJ(4)+I)=SCALE*SIGP(JJ(4)+I)
+         SIGP(JJ(5)+I)=SCALE*SIGP(JJ(5)+I)
+         SIGP(JJ(6)+I)=SCALE*SIGP(JJ(6)+I)
+         EPLA(I)=EPLA(I)+(ONE-SCALE)*AJ2(I)
+     .                         / MAX(THREE*G(I)+QH(I),EM15)
+         DPLA(II) =(ONE-SCALE)*AJ2(I)/ MAX(THREE*G(I)+QH(I),EM15)     
+       ENDDO
+      ELSEIF(IPLA==2)THEN
+       DO I=1,NEL
+         II=I+JPT
+         SCALE= MIN(ONE,AK(I)/ MAX(AJ2(I),EM15))
+         SIGP(JJ(1)+I)=SCALE*SIGP(JJ(1)+I)
+         SIGP(JJ(2)+I)=SCALE*SIGP(JJ(2)+I)
+         SIGP(JJ(3)+I)=SCALE*SIGP(JJ(3)+I)
+         SIGP(JJ(4)+I)=SCALE*SIGP(JJ(4)+I)
+         SIGP(JJ(5)+I)=SCALE*SIGP(JJ(5)+I)
+         SIGP(JJ(6)+I)=SCALE*SIGP(JJ(6)+I)
+         EPLA(I)=EPLA(I)+(ONE -SCALE)*AJ2(I)
+     .                         / MAX(THREE*G(I),EM15)
+         DPLA(II) = (ONE -SCALE)*AJ2(I)/ MAX(THREE*G(I),EM15)     
+       ENDDO
+      ELSEIF(IPLA==1)THEN
+        DO I=1,NEL
+         II=I+JPT
+         SCALE= MIN(ONE,AK(I)/ MAX(AJ2(I),EM15))
+C        plastic strain increment.
+         DPLA(II)=(ONE -SCALE)*AJ2(I)/MAX(THREE*G(I)+QH(I),EM15)
+C        actual yield stress.
+         AK(I)=AK(I)+DPLA(II)*QH(I)
+         SCALE= MIN(ONE,AK(I)/ MAX(AJ2(I),EM15))
+         SIGP(JJ(1)+I)=SCALE*SIGP(JJ(1)+I)
+         SIGP(JJ(2)+I)=SCALE*SIGP(JJ(2)+I)
+         SIGP(JJ(3)+I)=SCALE*SIGP(JJ(3)+I)
+         SIGP(JJ(4)+I)=SCALE*SIGP(JJ(4)+I)
+         SIGP(JJ(5)+I)=SCALE*SIGP(JJ(5)+I)
+         SIGP(JJ(6)+I)=SCALE*SIGP(JJ(6)+I)
+         EPLA(I)=EPLA(I)+DPLA(II)       
+        ENDDO
+      ENDIF
+C--------------------------------------------------
+C     STRESS AT GAUSS POINTS
+C--------------------------------------------------
+        DO I=1,NEL
+          SIGP(JJ(1)+I)=(SIGP(JJ(1)+I)-PNEW(I))*OFF(I)
+          SIGP(JJ(2)+I)=(SIGP(JJ(2)+I)-PNEW(I))*OFF(I)
+          SIGP(JJ(3)+I)=(SIGP(JJ(3)+I)-PNEW(I))*OFF(I)
+          SIGP(JJ(4)+I)= SIGP(JJ(4)+I)         *OFF(I)
+          SIGP(JJ(5)+I)= SIGP(JJ(5)+I)         *OFF(I)
+          SIGP(JJ(6)+I)= SIGP(JJ(6)+I)         *OFF(I)
+        ENDDO
+C--------------------------------------------------
+C       ENERGIE INTERNE
+C--------------------------------------------------
+        DO I=1,NEL
+          DAV=VOLGP(I,IPT)*OFF(I)*DTA
+          EINT(I)=EINT(I)+DAV*(D1(I,IPT)*(SOLD1(I)+SIGP(JJ(1)+I))+
+     +                         D2(I,IPT)*(SOLD2(I)+SIGP(JJ(2)+I))+
+     +                         D3(I,IPT)*(SOLD3(I)+SIGP(JJ(3)+I))+
+     +                         D4(I,IPT)*(SOLD4(I)+SIGP(JJ(4)+I))+
+     +                         D5(I,IPT)*(SOLD5(I)+SIGP(JJ(5)+I))+
+     +                         D6(I,IPT)*(SOLD6(I)+SIGP(JJ(6)+I)))
+        ENDDO
+C--------------------------------------------------
+C     MEAN STRESS (OUTPUT)
+C--------------------------------------------------
+        DO I=1,NEL
+          SIG(I,1)=SIG(I,1)+ONE_OVER_8*SIGP(JJ(1)+I)
+          SIG(I,2)=SIG(I,2)+ONE_OVER_8*SIGP(JJ(2)+I)
+          SIG(I,3)=SIG(I,3)+ONE_OVER_8*SIGP(JJ(3)+I)
+          SIG(I,4)=SIG(I,4)+ONE_OVER_8*SIGP(JJ(4)+I)
+          SIG(I,5)=SIG(I,5)+ONE_OVER_8*SIGP(JJ(5)+I)
+          SIG(I,6)=SIG(I,6)+ONE_OVER_8*SIGP(JJ(6)+I)
+          EPSEQ(I)=EPSEQ(I)+ONE_OVER_8*EPLA(I)
+        ENDDO
+C
+      ENDDO  ! NPT
+C
+      DO I=1,NEL
+        EINT(I)=EINT(I)/MAX(EM15,VOL(I))
+      ENDDO
+C      
+      IF (IMPL_S>0) THEN
+       DO I=1,NEL
+         II=I+JPT
+         IF(DPLA(II)>0) ETSE(I)= QH(I)/G2(I)
+       ENDDO
+      ENDIF
+C
+      RETURN
+      END

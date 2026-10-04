@@ -1,0 +1,985 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    init_nodal_state                           ../engine/source/interfaces/interf/init_nodal_state.F
+!||--- called by ------------------------------------------------------
+!||    resol                                      ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    count_nb_elem_edge                         ../engine/source/interfaces/interf/count_nb_elem_edge.F
+!||    count_remote_nb_elem_edge                  ../engine/source/interfaces/interf/count_remote_nb_elem_edge.F
+!||    get_hashtable_for_neighbour_segment        ../engine/source/interfaces/interf/get_hashtable_for_neighbour_segment.F90
+!||    init_hashtable_for_neighbour_segment       ../engine/source/interfaces/interf/init_hashtable_for_neighbour_segment.F90
+!||    myqsort_int                                ../common_source/tools/sort/myqsort_int.F
+!||--- uses       -----------------------------------------------------
+!||    array_mod                                  ../common_source/modules/array_mod.F
+!||    element_mod                                ../common_source/modules/elements/element_mod.F90
+!||    get_hashtable_for_neighbour_segment_mod    ../engine/source/interfaces/interf/get_hashtable_for_neighbour_segment.F90
+!||    init_hashtable_for_neighbour_segment_mod   ../engine/source/interfaces/interf/init_hashtable_for_neighbour_segment.F90
+!||    intbufdef_mod                              ../common_source/modules/interfaces/intbufdef_mod.F90
+!||    my_alloc_mod                               ../common_source/tools/memory/my_alloc.F90
+!||    nodal_arrays_mod                           ../common_source/modules/nodal_arrays.F90
+!||    shooting_node_mod                          ../engine/share/modules/shooting_node_mod.F90
+!||    spmd_mod                                   ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+        SUBROUTINE INIT_NODAL_STATE( IPARI,SHOOT_STRUCT,INTBUF_TAB,IAD_ELEM,FR_ELEM,
+     .                               ITAB,NODES,GEO,ADDCNEL,CNEL,
+     .                               IXS,IXC,IXT,IXP,IXR,IXTG,
+     .                               SIZE_ADDCNEL,SIZE_CNEL,
+     .                               numelsg,numelqg,numelcg,numeltrg,numelpg,
+     .                               numelrg,numeltgg,ixs10 )
+!$COMMENT
+!       INIT_NODAL_STATE description
+!           initialization of structures for the new shooting node algo    
+!           this algo is available only for /INTER/TYPE7 & 11 & 10 & 22       
+!       INIT_NODAL_STATE organization
+!           for each secondary node, save :
+!           - the number of processor where the node is defined
+!           - the list of processor where the node is defined
+!           - the number of interface where the node is defined
+!           - the list of interface where the node is defined
+!
+!           for each main node, save :
+!           - the number of processor where the node is defined
+!           - the list of processor where the node is defined
+!           - the number of surface where the node is defined
+!           - the list of surface where the node is defined
+!$ENDCOMMENT
+        USE nodal_arrays_mod
+        USE INTBUFDEF_MOD  
+        USE SHOOTING_NODE_MOD
+        USE ARRAY_MOD
+        use init_hashtable_for_neighbour_segment_mod , only : init_hashtable_for_neighbour_segment
+        use get_hashtable_for_neighbour_segment_mod , only : get_hashtable_for_neighbour_segment
+        use element_mod , only : nixs,nixc,nixq,nixt,nixp,nixr,nixtg
+       use my_alloc_mod
+
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "tabsiz_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER, INTENT(in) :: SIZE_ADDCNEL,SIZE_CNEL !< array size : cnel & addcnel
+        integer, intent(in) :: numelsg !< global number of solid
+        integer, intent(in) :: numelqg !< global number of quad
+        integer, intent(in) :: numelcg !< global number of shell
+        integer, intent(in) :: numeltrg !< global number of truss
+        integer, intent(in) :: numelpg !< global number of beam
+        integer, intent(in) :: numelrg !< global number of spring
+        integer, intent(in) :: numeltgg !< global number of shell3n
+        INTEGER, DIMENSION(NPARI,NINTER), INTENT(in) :: IPARI
+        INTEGER, DIMENSION(2,NSPMD+1), INTENT(in) :: IAD_ELEM  !< adress for frontier node
+        INTEGER, DIMENSION(SFR_ELEM), INTENT(in) :: FR_ELEM    !< frontier node id 
+        TYPE(shooting_node_type), INTENT(inout) :: SHOOT_STRUCT !< structure for shooting node algo
+        TYPE(INTBUF_STRUCT_), DIMENSION(NINTER), INTENT(inout) :: INTBUF_TAB    !< interface data
+        INTEGER, DIMENSION(NUMNOD), INTENT(in) :: ITAB !< array to convert local id to global id
+        type(nodal_arrays_), INTENT(INOUT) :: NODES !< nodal data
+        my_real, DIMENSION(NPROPG,NUMGEO), INTENT(in) :: GEO !< property data
+        INTEGER, DIMENSION(0:SIZE_ADDCNEL), INTENT(in) :: ADDCNEL !< address for the CNEL array
+        INTEGER, DIMENSION(0:SIZE_CNEL), INTENT(in) :: CNEL !< connectivity node --> element
+        INTEGER, DIMENSION(NIXS,NUMELS),TARGET, INTENT(in) :: IXS   !< solid array
+        INTEGER, DIMENSION(NIXC,NUMELC),TARGET, INTENT(in) :: IXC   !< shell array
+        INTEGER, DIMENSION(NIXT,NUMELT),TARGET, INTENT(in) :: IXT !< truss array
+        INTEGER, DIMENSION(NIXP,NUMELP),TARGET, INTENT(in) :: IXP !< beam array
+        INTEGER, DIMENSION(NIXR,NUMELR),TARGET, INTENT(in) :: IXR !< spring array
+        INTEGER, DIMENSION(NIXTG,NUMELTG),TARGET, INTENT(in) :: IXTG !<triangle array
+        INTEGER, DIMENSION(6,NUMELS10), INTENT(in) :: IXS10!< tetra10 data
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        LOGICAL :: TYPE_INTER
+        INTEGER :: NIN,ITY,NSN,NMN,NRTM,NRTS,IDEL,IDELKEEP,NRTMG
+        INTEGER :: I,J
+        INTEGER :: NODE_ID,SHIFT,SHIFT_INTER,NEXT_INTER
+        INTEGER :: TMP_,MY_ERROR,NB_PROC,NB_NODE_SURF,NB_SURF,NB_REAL_NODE,NEDGE,NEDGE_1D
+        INTEGER :: NB_EDGE,NB_EDGE_2
+        INTEGER :: N1,N2,N3,N4
+        INTEGER :: MAX_NB_NODE_PER_SURFACE ! max number of nodes per surface
+        INTEGER :: CHUNK ! chunk size : 1-> interface id, 2-> surface id, 3:6-> node id (for type11, 5&6 values are equal to 0)
+        INTEGER, DIMENSION(4) :: LIST_NODE_ID ! node id of surface
+        INTEGER, DIMENSION(4) :: GLOBAL_NODE_ID ! node id of surface
+        INTEGER, DIMENSION(:), ALLOCATABLE :: WORK_ARRAY,WORK_ARRAY_2,WORK_ARRAY_3
+        INTEGER, DIMENSION(:), ALLOCATABLE :: SORT_ARRAY,PERM
+
+        TYPE(array_type), DIMENSION(:), ALLOCATABLE :: BUFFER_SECOND,BUFFER_MAIN
+        TYPE(array_type), DIMENSION(:), ALLOCATABLE :: R_BUFFER_SECOND,R_BUFFER_MAIN
+#ifdef MPI
+        INTEGER :: MSGTYP,MSGOFF1
+        DATA MSGOFF1/13013/
+        INTEGER, DIMENSION(NSPMD) :: REQUEST_S,REQUEST_R
+        INTEGER, DIMENSION(NSPMD) :: REQUEST_S2,REQUEST_R2
+        INTEGER, DIMENSION(NSPMD) :: REQUEST_S3,REQUEST_R3
+#endif
+        INTEGER :: SIZ,OLD_SIZE
+        INTEGER :: PROC_ID
+        INTEGER :: NB_PROC_1,NB_PROC_2,NB_RESULT_INTERSECT,SHIFT_INTER2
+        INTEGER, DIMENSION(:), ALLOCATABLE :: INTERSECT_1,INTERSECT_2,RESULT_INTERSECT
+        INTEGER, DIMENSION(2,NSPMD) :: S_BUFFER_2_INT,R_BUFFER_2_INT
+        INTEGER, DIMENSION(NSPMD) :: SIZE_BUFFER_MAIN,SIZE_BUFFER_SECOND
+        INTEGER, DIMENSION(NSPMD) :: R_SIZE_BUFFER_MAIN,R_SIZE_BUFFER_SECOND
+
+        integer :: erosion_state
+
+C-----------------------------------------------
+        ! --------------------------------
+        ! Upper & lower bound, only used by the erosion of solid element + /TYPE25
+        ! to get the kind of element (solid,shell or shell3n)
+        ! --------------------------------
+        ! solid
+        shoot_struct%offset_elem%sol_low_bound = 0
+        shoot_struct%offset_elem%sol_up_bound = numelsg
+        ! quad
+        shoot_struct%offset_elem%quad_low_bound = shoot_struct%offset_elem%sol_up_bound + 1
+        shoot_struct%offset_elem%quad_up_bound = shoot_struct%offset_elem%sol_up_bound + numelqg
+        ! shell
+        shoot_struct%offset_elem%shell_low_bound = shoot_struct%offset_elem%quad_up_bound + 1
+        shoot_struct%offset_elem%shell_up_bound = shoot_struct%offset_elem%quad_up_bound + numelcg
+        ! truss
+        shoot_struct%offset_elem%truss_low_bound = shoot_struct%offset_elem%shell_up_bound + 1
+        shoot_struct%offset_elem%truss_up_bound = shoot_struct%offset_elem%shell_up_bound + numeltrg
+        ! beam
+        shoot_struct%offset_elem%beam_low_bound = shoot_struct%offset_elem%truss_up_bound + 1
+        shoot_struct%offset_elem%beam_up_bound = shoot_struct%offset_elem%truss_up_bound + numelpg
+        ! spring
+        shoot_struct%offset_elem%spring_low_bound = shoot_struct%offset_elem%truss_up_bound + 1
+        shoot_struct%offset_elem%spring_up_bound = shoot_struct%offset_elem%truss_up_bound + numelrg
+        ! shell3n
+        shoot_struct%offset_elem%shell3n_low_bound = shoot_struct%offset_elem%spring_up_bound + 1
+        shoot_struct%offset_elem%shell3n_up_bound = shoot_struct%offset_elem%spring_up_bound + numeltgg
+        ! --------------------------------        
+
+
+        ALLOCATE( BUFFER_SECOND(NSPMD) )
+        ALLOCATE( BUFFER_MAIN(NSPMD) )
+        ALLOCATE( R_BUFFER_SECOND(NSPMD) )
+        ALLOCATE( R_BUFFER_MAIN(NSPMD) )
+
+        BUFFER_SECOND(1:NSPMD)%SIZE_INT_ARRAY_1D = 0
+        BUFFER_MAIN(1:NSPMD)%SIZE_INT_ARRAY_1D = 0
+        R_BUFFER_SECOND(1:NSPMD)%SIZE_INT_ARRAY_1D = 0
+        R_BUFFER_MAIN(1:NSPMD)%SIZE_INT_ARRAY_1D = 0
+
+        ! --------------------------------
+        ! SECONDARY NODES
+        ! --------------------------------
+
+        !   SHIFT_S_NODE(i) = index to INTER_SEC_NODE/SEC_NODE_ID for node_id = i
+        !   SHIFT_S_NODE(i+1) - SHIFT_S_NODE(i) = number of interface per node
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_S_NODE) ) call my_dealloc(SHOOT_STRUCT%SHIFT_S_NODE)
+        call my_alloc(SHOOT_STRUCT%SHIFT_S_NODE, NUMNOD+1, "SHOOT_STRUCT%SHIFT_S_NODE")
+        SHOOT_STRUCT%SHIFT_S_NODE(1:NUMNOD+1) = 0
+        DO NIN=1,NINTER
+          ITY = IPARI(7,NIN)  ! interface id
+          NSN = IPARI(5,NIN)  ! number of secondary nodes
+          IDEL = IPARI(17,NIN)! idel option
+          IDELKEEP = IPARI(61,NIN)
+          IF((ITY==7.OR.ITY==10.OR.ITY==22.OR.ITY==24.OR.ITY==25).AND.IDEL>=1.AND.IDELKEEP/=1) THEN
+            ! loop over the S nodes
+            DO I=1,NSN
+              NODE_ID = INTBUF_TAB(NIN)%NSV(I)
+              ! need to check the node_id value: for type24 + e2e NODE_ID can be greater than NUMNOD 
+              IF(NODE_ID<=NUMNOD) SHOOT_STRUCT%SHIFT_S_NODE(NODE_ID+1) = SHOOT_STRUCT%SHIFT_S_NODE(NODE_ID+1) + 1
+            ENDDO
+          ENDIF
+        ENDDO
+
+        SHOOT_STRUCT%SIZE_SEC_NODE = 0
+        DO I=1,NUMNOD
+          SHOOT_STRUCT%SHIFT_S_NODE(I+1) = SHOOT_STRUCT%SHIFT_S_NODE(I+1) + SHOOT_STRUCT%SHIFT_S_NODE(I)
+        ENDDO
+        ! size of %INTER_SEC_NODE & %SEC_NODE_ID
+        SHOOT_STRUCT%SIZE_SEC_NODE = SHOOT_STRUCT%SHIFT_S_NODE(NUMNOD+1)
+
+        ! allocation
+        IF(ALLOCATED(SHOOT_STRUCT%INTER_SEC_NODE) ) call my_dealloc(SHOOT_STRUCT%INTER_SEC_NODE)
+        call my_alloc(SHOOT_STRUCT%INTER_SEC_NODE, SHOOT_STRUCT%SIZE_SEC_NODE, "SHOOT_STRUCT%INTER_SEC_NODE")
+        IF(ALLOCATED(SHOOT_STRUCT%SEC_NODE_ID) ) call my_dealloc(SHOOT_STRUCT%SEC_NODE_ID)
+        call my_alloc(SHOOT_STRUCT%SEC_NODE_ID, SHOOT_STRUCT%SIZE_SEC_NODE, "SHOOT_STRUCT%SEC_NODE_ID")
+
+
+        call my_alloc(WORK_ARRAY, NUMNOD, "WORK_ARRAY")
+        WORK_ARRAY(1:NUMNOD) = 0
+        DO NIN=1,NINTER
+          ITY = IPARI(7,NIN)
+          NSN = IPARI(5,NIN)
+          IDEL = IPARI(17,NIN)! idel option
+          IDELKEEP = IPARI(61,NIN)
+          IF((ITY==7.OR.ITY==10.OR.ITY==22.OR.ITY==24.OR.ITY==25).AND.IDEL>=1.AND.IDELKEEP/=1) THEN
+            DO I=1,NSN
+              NODE_ID = INTBUF_TAB(NIN)%NSV(I)    ! node id
+              IF(NODE_ID<=NUMNOD) THEN
+                WORK_ARRAY(NODE_ID) = WORK_ARRAY(NODE_ID) + 1 
+                SHIFT = WORK_ARRAY(NODE_ID) + SHOOT_STRUCT%SHIFT_S_NODE(NODE_ID) ! index for %inter_sec_node
+                SHOOT_STRUCT%INTER_SEC_NODE( SHIFT ) = NIN  ! save the interface
+                SHOOT_STRUCT%SEC_NODE_ID( SHIFT ) = I       ! save the NSV id
+              ENDIF
+            ENDDO
+          ENDIF
+        ENDDO
+
+        call my_dealloc(WORK_ARRAY)
+        ! --------------------------------
+
+
+        ! --------------------------------
+        ! MAIN NODES
+        ! --------------------------------
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_M_NODE_PROC) ) call my_dealloc(SHOOT_STRUCT%SHIFT_M_NODE_PROC)
+        call my_alloc(SHOOT_STRUCT%SHIFT_M_NODE_PROC, NUMNOD+1, "SHOOT_STRUCT%SHIFT_M_NODE_PROC")
+        SHOOT_STRUCT%SHIFT_M_NODE_PROC(2:NUMNOD+1) = 1
+        SHOOT_STRUCT%SHIFT_M_NODE_PROC(1) = 0
+        ! ---------------------
+        ! compute the nodal index (main node)
+        ! shift(i) gives the index of the i node
+        ! shift(i+1)-shift(i) gives the number of surface of the i node
+        DO I=1,NSPMD
+          DO J=IAD_ELEM(1,I),IAD_ELEM(1,I+1)-1
+            NODE_ID = FR_ELEM(J)
+            SHOOT_STRUCT%SHIFT_M_NODE_PROC(NODE_ID+1) = SHOOT_STRUCT%SHIFT_M_NODE_PROC(NODE_ID+1) + 1
+          ENDDO
+        ENDDO
+        DO I=1,NUMNOD
+          SHOOT_STRUCT%SHIFT_M_NODE_PROC(I+1) = SHOOT_STRUCT%SHIFT_M_NODE_PROC(I+1) + SHOOT_STRUCT%SHIFT_M_NODE_PROC(I)
+        ENDDO
+        ! save the size 
+        SHOOT_STRUCT%SIZE_M_NODE_PROC = SHOOT_STRUCT%SHIFT_M_NODE_PROC(NUMNOD+1)
+        ! ---------------------
+
+        ! ---------------------
+        ! compute the list of processor for each node
+        IF(ALLOCATED(SHOOT_STRUCT%M_NODE_PROC) ) call my_dealloc(SHOOT_STRUCT%M_NODE_PROC)
+        call my_alloc(SHOOT_STRUCT%M_NODE_PROC, SHOOT_STRUCT%SIZE_M_NODE_PROC, "SHOOT_STRUCT%M_NODE_PROC")
+        SHOOT_STRUCT%M_NODE_PROC(1:SHOOT_STRUCT%SIZE_M_NODE_PROC) = -1
+        call my_alloc(WORK_ARRAY, NUMNOD, "WORK_ARRAY")
+        WORK_ARRAY(1:NUMNOD) = 0
+
+        ! loop over the nodes to save the proc ID        
+        DO I=1,NUMNOD
+          WORK_ARRAY(I) = WORK_ARRAY(I) + 1
+          SHIFT = WORK_ARRAY(I) + SHOOT_STRUCT%SHIFT_M_NODE_PROC(I) ! index for M_NODE_PROC
+          SHOOT_STRUCT%M_NODE_PROC( SHIFT ) = ISPMD+1
+        ENDDO
+        ! loop over the frontier nodes to save the proc ID
+        DO I=1,NSPMD
+          DO J=IAD_ELEM(1,I),IAD_ELEM(1,I+1)-1
+            NODE_ID = FR_ELEM(J)
+            WORK_ARRAY(NODE_ID) = WORK_ARRAY(NODE_ID) + 1
+            SHIFT = WORK_ARRAY(NODE_ID) + SHOOT_STRUCT%SHIFT_M_NODE_PROC(NODE_ID) ! index for M_NODE_PROC
+            SHOOT_STRUCT%M_NODE_PROC( SHIFT ) = I     ! save the processor ID
+          ENDDO
+        ENDDO
+        ! sort the list of processor and compute the max number of processor
+        SHOOT_STRUCT%MAX_PROC_NB = 0
+        DO I=1,NUMNOD
+          SHIFT = SHOOT_STRUCT%SHIFT_M_NODE_PROC(I) ! index for M_NODE_PROC
+          NB_PROC = SHOOT_STRUCT%SHIFT_M_NODE_PROC(I+1) - SHOOT_STRUCT%SHIFT_M_NODE_PROC(I)
+          SHOOT_STRUCT%MAX_PROC_NB = MAX(SHOOT_STRUCT%MAX_PROC_NB,NB_PROC)
+          IF(NB_PROC>2) THEN
+            call my_alloc(SORT_ARRAY, NB_PROC, "SORT_ARRAY")
+            call my_alloc(PERM, NB_PROC, "PERM")
+            SORT_ARRAY(1:NB_PROC) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC )
+            CALL MYQSORT_INT(NB_PROC, SORT_ARRAY, PERM, MY_ERROR)
+            SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC ) = SORT_ARRAY(1:NB_PROC)
+            call my_dealloc(SORT_ARRAY)
+            call my_dealloc(PERM)
+          ELSEIF(NB_PROC==2) THEN
+            IF(SHOOT_STRUCT%M_NODE_PROC(SHIFT+1)>SHOOT_STRUCT%M_NODE_PROC(SHIFT+2)) THEN
+              TMP_ = SHOOT_STRUCT%M_NODE_PROC(SHIFT+2)
+              SHOOT_STRUCT%M_NODE_PROC(SHIFT+2) = SHOOT_STRUCT%M_NODE_PROC(SHIFT+1)
+              SHOOT_STRUCT%M_NODE_PROC(SHIFT+1) = TMP_
+            ENDIF
+          ENDIF
+        ENDDO
+        ! ---------------------
+
+        ! ---------------------
+        ! compute the index for the surface/edge array
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_M_NODE_SURF) ) call my_dealloc(SHOOT_STRUCT%SHIFT_M_NODE_SURF)
+        call my_alloc(SHOOT_STRUCT%SHIFT_M_NODE_SURF, NUMNOD+1, "SHOOT_STRUCT%SHIFT_M_NODE_SURF")
+        SHOOT_STRUCT%SHIFT_M_NODE_SURF(1:NUMNOD+1) = 0
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_M_NODE_EDGE) ) call my_dealloc(SHOOT_STRUCT%SHIFT_M_NODE_EDGE)
+        call my_alloc(SHOOT_STRUCT%SHIFT_M_NODE_EDGE, NUMNOD+1, "SHOOT_STRUCT%SHIFT_M_NODE_EDGE")
+        SHOOT_STRUCT%SHIFT_M_NODE_EDGE(1:NUMNOD+1) = 0
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_S_NODE_EDGE) ) call my_dealloc(SHOOT_STRUCT%SHIFT_S_NODE_EDGE)
+        call my_alloc(SHOOT_STRUCT%SHIFT_S_NODE_EDGE, NUMNOD+1, "SHOOT_STRUCT%SHIFT_S_NODE_EDGE")
+        SHOOT_STRUCT%SHIFT_S_NODE_EDGE(1:NUMNOD+1) = 0
+
+        DO NIN=1,NINTER
+          ITY = IPARI(7,NIN)  ! interface id
+          NMN = IPARI(6,NIN)  ! number of main nodes
+          NRTM = IPARI(4,NIN) ! number of main surfaces/edges
+          NRTS = IPARI(3,NIN) ! number of secondary edges
+          IDEL = IPARI(17,NIN)! idel option
+          NEDGE = IPARI(68,NIN)! E2E 
+          NEDGE_1D = IPARI(101,NIN)! E2E 
+          ! -----------------------------
+          IF((ITY==7.OR.ITY==10.OR.ITY==22.OR.ITY==24.OR.ITY==25).AND.IDEL>=1) THEN
+            ! loop over the M surface
+            DO I=1,NRTM
+              N1 = INTBUF_TAB(NIN)%IRECTM((I-1)*4+1)
+              N2 = INTBUF_TAB(NIN)%IRECTM((I-1)*4+2)
+              N3 = INTBUF_TAB(NIN)%IRECTM((I-1)*4+3)
+              N4 = INTBUF_TAB(NIN)%IRECTM((I-1)*4+4)
+              SHOOT_STRUCT%SHIFT_M_NODE_SURF(N1+1) = SHOOT_STRUCT%SHIFT_M_NODE_SURF(N1+1) + 1
+              SHOOT_STRUCT%SHIFT_M_NODE_SURF(N2+1) = SHOOT_STRUCT%SHIFT_M_NODE_SURF(N2+1) + 1
+              SHOOT_STRUCT%SHIFT_M_NODE_SURF(N3+1) = SHOOT_STRUCT%SHIFT_M_NODE_SURF(N3+1) + 1
+              IF(N3/=N4) SHOOT_STRUCT%SHIFT_M_NODE_SURF(N4+1) = SHOOT_STRUCT%SHIFT_M_NODE_SURF(N4+1) + 1
+            ENDDO
+
+                IF(ITY==25.AND.IDEL>=1.AND.IPARI(58,NIN)/=0.AND.IPARI(101,NIN)>0) THEN ! Inter 25+E2E+1D elemets
+                  IF(IDEL>=1) THEN
+                    DO I=1,NEDGE
+                      IF(INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+7)==3) THEN
+                        N1 = INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+5)
+                        N2 = INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+6)
+                        SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N1+1) = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N1+1) + 1
+                        SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N2+1) = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N2+1) + 1
+                      ENDIF
+                    ENDDO
+                  ENDIF
+               ENDIF
+            ! -----------------------------
+
+          ELSEIF(ITY == 11) THEN
+            ! loop over the M edge
+            IF(IDEL>=1) THEN
+              DO I=1,NRTM
+                N1 = INTBUF_TAB(NIN)%IRECTM((I-1)*2+1)
+                N2 = INTBUF_TAB(NIN)%IRECTM((I-1)*2+2)
+                SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N1+1) = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N1+1) + 1
+                SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N2+1) = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N2+1) + 1
+              ENDDO
+            ENDIF
+            ! loop over the S edge
+            IF(IDEL>=1) THEN
+              DO I=1,NRTS
+                N1 = INTBUF_TAB(NIN)%IRECTS((I-1)*2+1)
+                N2 = INTBUF_TAB(NIN)%IRECTS((I-1)*2+2)
+                SHOOT_STRUCT%SHIFT_S_NODE_EDGE(N1+1) = SHOOT_STRUCT%SHIFT_S_NODE_EDGE(N1+1) + 1
+                SHOOT_STRUCT%SHIFT_S_NODE_EDGE(N2+1) = SHOOT_STRUCT%SHIFT_S_NODE_EDGE(N2+1) + 1
+              ENDDO
+            ENDIF
+          ENDIF
+          ! -----------------------------
+        ENDDO
+
+        DO I=1,NUMNOD
+          SHOOT_STRUCT%SHIFT_M_NODE_SURF(I+1) = SHOOT_STRUCT%SHIFT_M_NODE_SURF(I+1) + SHOOT_STRUCT%SHIFT_M_NODE_SURF(I)
+          SHOOT_STRUCT%SHIFT_M_NODE_EDGE(I+1) = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(I+1) + SHOOT_STRUCT%SHIFT_M_NODE_EDGE(I)
+          SHOOT_STRUCT%SHIFT_S_NODE_EDGE(I+1) = SHOOT_STRUCT%SHIFT_S_NODE_EDGE(I+1) + SHOOT_STRUCT%SHIFT_S_NODE_EDGE(I)
+        ENDDO
+        SHOOT_STRUCT%SIZE_M_NODE_SURF = SHOOT_STRUCT%SHIFT_M_NODE_SURF(NUMNOD+1)
+        IF(ALLOCATED(SHOOT_STRUCT%M_NODE_SURF) ) call my_dealloc(SHOOT_STRUCT%M_NODE_SURF)
+        call my_alloc(SHOOT_STRUCT%M_NODE_SURF, SHOOT_STRUCT%SIZE_M_NODE_SURF, "SHOOT_STRUCT%M_NODE_SURF")
+        IF(ALLOCATED(SHOOT_STRUCT%M_NODE_EDGE) ) call my_dealloc(SHOOT_STRUCT%M_NODE_EDGE)
+        SHOOT_STRUCT%SIZE_M_NODE_EDGE = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(NUMNOD+1)
+        call my_alloc(SHOOT_STRUCT%M_NODE_EDGE, SHOOT_STRUCT%SIZE_M_NODE_EDGE, "SHOOT_STRUCT%M_NODE_EDGE")
+        SHOOT_STRUCT%SIZE_S_NODE_EDGE = SHOOT_STRUCT%SHIFT_S_NODE_EDGE(NUMNOD+1)
+        IF(ALLOCATED(SHOOT_STRUCT%S_NODE_EDGE) ) call my_dealloc(SHOOT_STRUCT%S_NODE_EDGE)
+        call my_alloc(SHOOT_STRUCT%S_NODE_EDGE, SHOOT_STRUCT%SIZE_S_NODE_EDGE, "SHOOT_STRUCT%S_NODE_EDGE")
+        ! ---------------------
+        ! compute the max number of surface/edge
+        SHOOT_STRUCT%MAX_SURF_NB = 0
+        SHOOT_STRUCT%MAX_EDGE_NB = 0
+        DO I=1,NUMNOD
+          NB_SURF = SHOOT_STRUCT%SHIFT_M_NODE_SURF(I+1) - SHOOT_STRUCT%SHIFT_M_NODE_SURF(I)
+          SHOOT_STRUCT%MAX_SURF_NB = MAX(SHOOT_STRUCT%MAX_SURF_NB,NB_SURF)
+
+          NB_EDGE = SHOOT_STRUCT%SHIFT_M_NODE_EDGE(I+1) - SHOOT_STRUCT%SHIFT_M_NODE_EDGE(I)
+          NB_EDGE_2 = SHOOT_STRUCT%SHIFT_S_NODE_EDGE(I+1) - SHOOT_STRUCT%SHIFT_S_NODE_EDGE(I)
+          NB_EDGE = MAX(NB_EDGE,NB_EDGE_2)
+          SHOOT_STRUCT%MAX_EDGE_NB = MAX(SHOOT_STRUCT%MAX_EDGE_NB,NB_EDGE)
+        ENDDO
+        ! ---------------------
+        ! save the surface/edge ID for each node
+        WORK_ARRAY(1:NUMNOD) = 0
+        call my_alloc(WORK_ARRAY_2, NUMNOD, "WORK_ARRAY_2")
+        WORK_ARRAY_2(1:NUMNOD) = 0
+        call my_alloc(WORK_ARRAY_3, NUMNOD, "WORK_ARRAY_3")
+        WORK_ARRAY_3(1:NUMNOD) = 0
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_INTERFACE) ) call my_dealloc(SHOOT_STRUCT%SHIFT_INTERFACE)
+        IF(ALLOCATED(SHOOT_STRUCT%SHIFT_INTERFACE2) ) call my_dealloc(SHOOT_STRUCT%SHIFT_INTERFACE2)
+        call my_alloc(SHOOT_STRUCT%SHIFT_INTERFACE, NINTER+1, 2, "SHOOT_STRUCT%SHIFT_INTERFACE")
+        call my_alloc(SHOOT_STRUCT%SHIFT_INTERFACE2, NINTER, "SHOOT_STRUCT%SHIFT_INTERFACE2")
+        NEXT_INTER = 0
+        SHIFT_INTER = 1
+        SHIFT_INTER2 = 0
+        DO NIN=1,NINTER
+          ITY = IPARI(7,NIN)  ! interface id
+          NMN = IPARI(6,NIN)  ! number of main nodes
+          NRTM = IPARI(4,NIN) ! number of main surfaces/edges
+          NRTS = IPARI(3,NIN) ! number of secondary edges
+          IDEL = IPARI(17,NIN)! idel option
+          NRTMG = IPARI(74,NIN) ! global number of main surfaces
+          NEDGE = IPARI(68,NIN)! E2E 
+          NEDGE_1D = IPARI(101,NIN)! E2E 
+          ! ---------------------------
+          IF((ITY==7.OR.ITY==10.OR.ITY==22.OR.ITY==24.OR.ITY==25).AND.IDEL>=1) THEN
+            ! loop over the M surface
+            DO I=1,NRTM
+              N3 = INTBUF_TAB(NIN)%IRECTM((I-1)*4+3)
+              N4 = INTBUF_TAB(NIN)%IRECTM((I-1)*4+4)
+              NB_NODE_SURF = 4
+              IF(N3==N4) NB_NODE_SURF = 3
+              DO J=1,NB_NODE_SURF
+                NODE_ID = INTBUF_TAB(NIN)%IRECTM((I-1)*4+J)
+                WORK_ARRAY(NODE_ID) = WORK_ARRAY(NODE_ID) + 1
+                SHIFT = WORK_ARRAY(NODE_ID) + SHOOT_STRUCT%SHIFT_M_NODE_SURF(NODE_ID) ! index for M_NODE_SURF
+                SHOOT_STRUCT%M_NODE_SURF( SHIFT ) = SHIFT_INTER  - 1 + I     ! save the surface ID
+              ENDDO
+            ENDDO
+
+                IF(ITY==25.AND.IDEL>=1.AND.IPARI(58,NIN)/=0.AND.IPARI(101,NIN)>0) THEN ! Inter 25+E2E+1D elemets
+                    NEDGE_1D = IPARI(101,NIN) 
+                    DO I=1,NEDGE
+                      IF(INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+7)==3) THEN
+                        N1 = INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+5)
+                        N2 = INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+6)
+                        WORK_ARRAY_2(N1) = WORK_ARRAY_2(N1) + 1
+                        SHIFT = WORK_ARRAY_2(N1) + SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N1) ! index for M_NODE_EDGE
+                        SHOOT_STRUCT%M_NODE_EDGE( SHIFT ) = SHIFT_INTER  - 1 + I + NRTM    ! save the edge ID
+                        WORK_ARRAY_2(N2) = WORK_ARRAY_2(N2) + 1
+                        SHIFT = WORK_ARRAY_2(N2) + SHOOT_STRUCT%SHIFT_M_NODE_EDGE(N2) ! index for M_NODE_EDGE
+                        SHOOT_STRUCT%M_NODE_EDGE( SHIFT ) = SHIFT_INTER  - 1 + I + NRTM    ! save the edge ID
+                      ENDIF
+                    ENDDO
+                ENDIF
+
+
+          ELSEIF(ITY==11) THEN
+            ! loop over the M edge
+            IF(IDEL>=1) THEN
+              DO I=1,NRTM
+                DO J=1,2
+                  NODE_ID = INTBUF_TAB(NIN)%IRECTM((I-1)*2+J)
+                  WORK_ARRAY_2(NODE_ID) = WORK_ARRAY_2(NODE_ID) + 1
+                  SHIFT = WORK_ARRAY_2(NODE_ID) + SHOOT_STRUCT%SHIFT_M_NODE_EDGE(NODE_ID) ! index for M_NODE_EDGE
+                  SHOOT_STRUCT%M_NODE_EDGE( SHIFT ) = SHIFT_INTER  - 1 + I     ! save the edge ID
+                ENDDO
+              ENDDO
+
+            ENDIF
+            ! loop over the S edge
+            IF(IDEL>=1) THEN
+              DO I=1,NRTS
+                DO J=1,2
+                  NODE_ID = INTBUF_TAB(NIN)%IRECTS((I-1)*2+J)
+                  WORK_ARRAY_3(NODE_ID) = WORK_ARRAY_3(NODE_ID) + 1
+                  SHIFT = WORK_ARRAY_3(NODE_ID) + SHOOT_STRUCT%SHIFT_S_NODE_EDGE(NODE_ID) ! index for S_NODE_EDGE
+                  SHOOT_STRUCT%S_NODE_EDGE( SHIFT ) = SHIFT_INTER  - 1 + I     ! save the edge ID
+                ENDDO
+              ENDDO
+            ENDIF
+          ENDIF
+          ! ---------------------------
+          IF(NRTM+NRTS+NEDGE_1D>0) THEN
+            NEXT_INTER = NEXT_INTER + 1
+            SHOOT_STRUCT%SHIFT_INTERFACE(NEXT_INTER,1) = SHIFT_INTER
+            SHOOT_STRUCT%SHIFT_INTERFACE(NEXT_INTER,2) = NIN
+          ENDIF
+          IF(NRTMG>0.AND.(ITY==25.AND.IPARI(100,NIN)/=0)) THEN
+            SHOOT_STRUCT%SHIFT_INTERFACE2(NIN) = SHIFT_INTER2
+            SHIFT_INTER2 = SHIFT_INTER2 + NRTMG
+          ENDIF
+
+          SHIFT_INTER = SHIFT_INTER + NRTM + NRTS + NEDGE_1D
+        ENDDO
+        SHOOT_STRUCT%SHIFT_INTERFACE(NEXT_INTER+1,1) = SHIFT_INTER + 1
+        SHOOT_STRUCT%SHIFT_INTERFACE(NINTER+1,1) = SHIFT_INTER + 1
+        SHOOT_STRUCT%SHIFT_INTERFACE(NINTER+1,2) = NEXT_INTER
+
+
+        call my_dealloc(WORK_ARRAY)
+
+        call my_alloc(INTERSECT_1, NSPMD, "INTERSECT_1")
+        call my_alloc(INTERSECT_2, NSPMD, "INTERSECT_2")
+        call my_alloc(RESULT_INTERSECT, NSPMD, "RESULT_INTERSECT")
+
+        SIZE_BUFFER_MAIN(1:NSPMD) = 0
+        SIZE_BUFFER_SECOND(1:NSPMD) = 0
+        MAX_NB_NODE_PER_SURFACE = 4 ! up to 4 nodes per surface
+        CHUNK = 2 + MAX_NB_NODE_PER_SURFACE ! up to 4 nodes per surface + surface id + interface id
+        DO NIN=1,NINTER
+          ITY = IPARI(7,NIN)  ! interface id
+          NMN = IPARI(6,NIN)  ! number of main nodes
+          NRTM = IPARI(4,NIN) ! number of main surfaces/edges
+          NRTS = IPARI(3,NIN) ! number of secondary edges
+          IDEL = IPARI(17,NIN)! idel option
+          TYPE_INTER = (ITY==7.OR.ITY==10.OR.ITY==11.OR.ITY==22.OR.ITY==24) ! interface 7/10/11/22/24/25 with idel=1
+          TYPE_INTER = (TYPE_INTER.OR.(ITY==25.AND.IPARI(100,NIN)==0)) ! interface  7/10/11/22/24/25 with idel=1
+          TYPE_INTER = (TYPE_INTER.AND.(IDEL==1)) ! interface  7/10/11/22/24/25 with idel=1
+          NEDGE =IPARI(68,NIN)  
+          NEDGE_1D = 0
+          IF(ITY==25.AND.IPARI(101,NIN)>0 ) NEDGE_1D =NEDGE 
+          ! ----------------------------------------
+          IF((TYPE_INTER.AND.(IDEL==1)).OR.(ITY==25.AND.IPARI(100,NIN)/=0)) THEN
+            IF(.NOT.ALLOCATED(SHOOT_STRUCT%INTER)) ALLOCATE(SHOOT_STRUCT%INTER(NINTER))
+            IF(ALLOCATED(SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_M)) call my_dealloc(SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_M)
+            IF(.NOT.ALLOCATED(SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_M)) THEN
+              ALLOCATE( SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_M(NRTM+NEDGE_1D) )
+            ENDIF
+            SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_M(1:NRTM+NEDGE_1D) = 0
+            
+            IF(.NOT.ALLOCATED(SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_S)) THEN
+              ALLOCATE( SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_S(NRTS) )
+            ENDIF
+            SHOOT_STRUCT%INTER(NIN)%REMOTE_ELM_S(1:NRTS) = 0
+            IF(ITY==25.AND.IPARI(100,NIN)/=0) THEN
+              IF(.NOT.ALLOCATED(SHOOT_STRUCT%INTER)) ALLOCATE(SHOOT_STRUCT%INTER(NINTER))
+              ALLOCATE( SHOOT_STRUCT%INTER(NIN)%NB_ELM_M(NRTM) )
+              SHOOT_STRUCT%INTER(NIN)%NB_ELM_M(1:NRTM) = 0
+            ENDIF
+          ENDIF
+          ! ----------------------------------------
+          
+          ! ----------------------------------------
+          IF( (TYPE_INTER.OR.(ITY==25.AND.IPARI(100,NIN)/=0)).AND.NSPMD>1 ) THEN
+            DO I=1,NSPMD
+              IF(.NOT.ALLOCATED(BUFFER_SECOND(I)%INT_ARRAY_1D)) THEN
+                BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D = NUMNOD/4+1
+                CALL ALLOC_1D_ARRAY(BUFFER_SECOND(I))
+              ENDIF
+
+              IF(.NOT.ALLOCATED(BUFFER_MAIN(I)%INT_ARRAY_1D)) THEN
+                BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D = NUMNOD/4+1
+                CALL ALLOC_1D_ARRAY(BUFFER_MAIN(I))
+              ENDIF
+            ENDDO
+            NB_NODE_SURF = 4
+            IF(ITY==11) NB_NODE_SURF = 2
+            ! ------------------------------------
+            ! loop over the M edge
+            DO I=1,NRTM
+              LIST_NODE_ID(1) = INTBUF_TAB(NIN)%IRECTM((I-1)*NB_NODE_SURF+1) ! node id N1
+              LIST_NODE_ID(2) = INTBUF_TAB(NIN)%IRECTM((I-1)*NB_NODE_SURF+2) ! node id N2
+              LIST_NODE_ID(3) = 0 ! fake node id for interface typ11
+              LIST_NODE_ID(4) = 0 ! fake node id for interface typ11
+              GLOBAL_NODE_ID(1) = ITAB(LIST_NODE_ID(1)) ! global node id N1
+              GLOBAL_NODE_ID(2) = ITAB(LIST_NODE_ID(2)) ! global node id N2
+              GLOBAL_NODE_ID(3) = 0 ! fake node id for interface typ11
+              GLOBAL_NODE_ID(4) = 0 ! fake node id for interface typ11
+
+              NB_REAL_NODE = 2 ! number of node per surface (4 for interface type 7 / 2 for interface type 11)
+              IF(ITY==7.OR.ITY==10.OR.ITY==22.OR.ITY==24.OR.ITY==25) THEN
+                LIST_NODE_ID(3) = INTBUF_TAB(NIN)%IRECTM((I-1)*NB_NODE_SURF+3) ! node id N3
+                LIST_NODE_ID(4) = INTBUF_TAB(NIN)%IRECTM((I-1)*NB_NODE_SURF+4) ! node id N4
+                GLOBAL_NODE_ID(3) = ITAB(LIST_NODE_ID(3)) ! global node id N3
+                GLOBAL_NODE_ID(4) = ITAB(LIST_NODE_ID(4)) ! global node id N4
+                NB_REAL_NODE = 4 ! number of node per surface (4 for interface type 7 / 2 for interface type 11)
+                IF(LIST_NODE_ID(3)==LIST_NODE_ID(4)) NB_REAL_NODE = 3 ! N3 and N4 equal : the surface is defined as a triangle -> only 3 nodes
+              ENDIF
+
+              NB_PROC_1 =   SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(1)+1) 
+     .                  - SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(1)) ! get the number of processor of the node     
+              NB_PROC_2 =   SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(2)+1) 
+     .                  - SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(2)) ! get the number of processor of the node
+              NB_RESULT_INTERSECT = 0
+              
+              ! initialize the data for N1
+              SHIFT =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(1))
+              INTERSECT_1(1:NB_PROC_1) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC_1 )
+              ! -------------------------
+              ! intersection of node list to find the common processors
+              DO J = 1,NB_REAL_NODE-1
+                IF(NB_PROC_1>1.AND.NB_PROC_2>1) THEN
+                  ! initialize the data for N(J+1)
+                  SHIFT =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(J+1))
+                  NB_PROC_2 =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(J+1)+1) 
+     .                       - SHOOT_STRUCT%SHIFT_M_NODE_PROC(LIST_NODE_ID(J+1)) ! get the number of processor of the node
+                  INTERSECT_2(1:NB_PROC_2) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC_2 )
+
+                  CALL INTERSECT_2_SORTED_SETS( INTERSECT_1,NB_PROC_1,
+     .                                          INTERSECT_2,NB_PROC_2,
+     .                                          RESULT_INTERSECT,NB_RESULT_INTERSECT )
+                  ! save the intesected list for the next intersection
+                  NB_PROC_1 = NB_RESULT_INTERSECT
+                  INTERSECT_1(1:NB_RESULT_INTERSECT) = RESULT_INTERSECT(1:NB_RESULT_INTERSECT)
+                ELSE
+                  NB_RESULT_INTERSECT = 0
+                  NB_PROC_1 = 0
+                  NB_PROC_2 = 0
+                ENDIF
+              ENDDO
+              ! -------------------------
+              IF(NB_RESULT_INTERSECT>1) THEN
+                ! ---------------------
+                ! intersection of node list to find the 
+                 DO J=1,NB_RESULT_INTERSECT
+                  PROC_ID = RESULT_INTERSECT(J)
+                  IF(PROC_ID/=ISPMD+1) THEN
+                    IF(SIZE_BUFFER_MAIN(PROC_ID)+CHUNK>BUFFER_MAIN(PROC_ID)%SIZE_INT_ARRAY_1D) THEN 
+                      OLD_SIZE = BUFFER_MAIN(PROC_ID)%SIZE_INT_ARRAY_1D
+                      call my_alloc(WORK_ARRAY, OLD_SIZE, "WORK_ARRAY")
+                      WORK_ARRAY(1:OLD_SIZE) = 
+     .                BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D(1:OLD_SIZE)
+                      CALL DEALLOC_1D_ARRAY(BUFFER_MAIN(PROC_ID))
+                      BUFFER_MAIN(PROC_ID)%SIZE_INT_ARRAY_1D = CHUNK * (OLD_SIZE + CHUNK)
+                      CALL ALLOC_1D_ARRAY(BUFFER_MAIN(PROC_ID))
+                      BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D(1:OLD_SIZE) = WORK_ARRAY(1:OLD_SIZE)
+                      call my_dealloc(WORK_ARRAY)
+                    ENDIF
+                    ! 1 : interface id
+                    SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = NIN
+                    ! 2 : local surface id
+                    SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = I
+                    ! 3 : global node id N1
+                    SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = GLOBAL_NODE_ID(1)
+                    ! 4 : global node id N2
+                    SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = GLOBAL_NODE_ID(2)                            
+                    ! 5 : fake node id for interface type11 / global node id N3 for interface type7
+                    SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = GLOBAL_NODE_ID(3)
+                    ! 6 : fake node id for interface type11 / global node id N3 for interface type7
+                    SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = GLOBAL_NODE_ID(4)
+                  ENDIF
+                ENDDO
+                ! ---------------------
+              ENDIF
+            ENDDO
+            ! ------------------------------------
+
+            IF(ITY==25.AND.IPARI(101,NIN)>0) THEN
+                ! ---------------------
+                ! loop over the 1D elements edges
+              DO I=1,NEDGE
+               IF(INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+7)==3) THEN
+                 N1 = INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+5)
+                 N2 = INTBUF_TAB(NIN)%LEDGE((I-1)*NLEDGE+6)
+                 NB_PROC_1 = SHOOT_STRUCT%SHIFT_M_NODE_PROC(N1+1) - SHOOT_STRUCT%SHIFT_M_NODE_PROC(N1) ! get the number of processor of the node     
+                 NB_PROC_2 = SHOOT_STRUCT%SHIFT_M_NODE_PROC(N2+1) - SHOOT_STRUCT%SHIFT_M_NODE_PROC(N2) ! get the number of processor of the node
+                 IF(NB_PROC_1>1.AND.NB_PROC_2>1) THEN
+                   SHIFT =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(N1)
+                   INTERSECT_1(1:NB_PROC_1) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC_1 )
+                   SHIFT =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(N2)
+                   INTERSECT_2(1:NB_PROC_2) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC_2 )
+
+                   NB_RESULT_INTERSECT = 0
+                   CALL INTERSECT_2_SORTED_SETS( INTERSECT_1,NB_PROC_1,
+     .                                           INTERSECT_2,NB_PROC_2,
+     .                                           RESULT_INTERSECT,NB_RESULT_INTERSECT )
+                  ! save the intesected list for the next intersection
+                   NB_PROC_1 = NB_RESULT_INTERSECT
+                   INTERSECT_1(1:NB_RESULT_INTERSECT) = RESULT_INTERSECT(1:NB_RESULT_INTERSECT)
+                 ELSE
+                   NB_RESULT_INTERSECT = 0
+                   NB_PROC_1 = 0
+                   NB_PROC_2 = 0
+                 ENDIF
+                 ! -------------------------
+                 IF(NB_RESULT_INTERSECT>1) THEN
+                  ! ---------------------
+                  ! intersection of node list to find the 
+                    DO J=1,NB_RESULT_INTERSECT
+                      PROC_ID = RESULT_INTERSECT(J)
+                      IF(PROC_ID/=ISPMD+1) THEN
+                       IF(SIZE_BUFFER_MAIN(PROC_ID)+CHUNK>BUFFER_MAIN(PROC_ID)%SIZE_INT_ARRAY_1D) THEN 
+                          OLD_SIZE = BUFFER_MAIN(PROC_ID)%SIZE_INT_ARRAY_1D
+                          call my_alloc(WORK_ARRAY, OLD_SIZE, "WORK_ARRAY")
+                          WORK_ARRAY(1:OLD_SIZE) = 
+     .                    BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D(1:OLD_SIZE)
+                          CALL DEALLOC_1D_ARRAY(BUFFER_MAIN(PROC_ID))
+                          BUFFER_MAIN(PROC_ID)%SIZE_INT_ARRAY_1D = CHUNK * (OLD_SIZE + CHUNK)
+                          CALL ALLOC_1D_ARRAY(BUFFER_MAIN(PROC_ID))
+                          BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D(1:OLD_SIZE) = WORK_ARRAY(1:OLD_SIZE)
+                          call my_dealloc(WORK_ARRAY)
+                        ENDIF
+                       ! 1 : interface id
+                        SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                        BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = NIN
+                       ! 2 : local surface id
+                        SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                        BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = I + NRTM
+                       ! 3 : global node id N1
+                        SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                        BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = ITAB(N1)
+                       ! 4 : global node id N2
+                        SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                        BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = ITAB(N2)                       
+                       ! 5 : fake node id for interface type11 / global node id N3 for interface type7
+                        SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                        BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = 0
+                       ! 6 : fake node id for interface type11 / global node id N3 for interface type7
+                        SIZE_BUFFER_MAIN(PROC_ID) = SIZE_BUFFER_MAIN(PROC_ID) + 1
+                        BUFFER_MAIN(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_MAIN(PROC_ID) ) = 0
+                     ENDIF
+                   ENDDO
+                 ! ---------------------
+                 ENDIF
+
+
+               ENDIF
+              ENDDO
+            ENDIF
+            ! ------------------------------------
+            IF(ITY==11) THEN
+              ! ---------------------
+              ! loop over the secondary nodes
+              DO I=1,NRTS
+                N1 = INTBUF_TAB(NIN)%IRECTS((I-1)*2+1)
+                N2 = INTBUF_TAB(NIN)%IRECTS((I-1)*2+2)
+                NB_PROC_1 = SHOOT_STRUCT%SHIFT_M_NODE_PROC(N1+1) - SHOOT_STRUCT%SHIFT_M_NODE_PROC(N1) ! get the number of processor of the node     
+                NB_PROC_2 = SHOOT_STRUCT%SHIFT_M_NODE_PROC(N2+1) - SHOOT_STRUCT%SHIFT_M_NODE_PROC(N2) ! get the number of processor of the node
+                IF(NB_PROC_1>1.AND.NB_PROC_2>1) THEN
+                  SHIFT =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(N1)
+                  INTERSECT_1(1:NB_PROC_1) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC_1 )
+                  SHIFT =  SHOOT_STRUCT%SHIFT_M_NODE_PROC(N2)
+                  INTERSECT_2(1:NB_PROC_2) = SHOOT_STRUCT%M_NODE_PROC( SHIFT+1:SHIFT+NB_PROC_2 )
+
+                  NB_RESULT_INTERSECT = 0
+                  CALL INTERSECT_2_SORTED_SETS( INTERSECT_1,NB_PROC_1,
+     .                                          INTERSECT_2,NB_PROC_2,
+     .                                          RESULT_INTERSECT,NB_RESULT_INTERSECT )
+
+                  IF(NB_RESULT_INTERSECT>1) THEN
+                    DO J=1,NB_RESULT_INTERSECT
+                      PROC_ID = RESULT_INTERSECT(J)
+                      IF(PROC_ID/=ISPMD+1) THEN
+                        IF(SIZE_BUFFER_SECOND(PROC_ID)+CHUNK>BUFFER_SECOND(PROC_ID)%SIZE_INT_ARRAY_1D) THEN 
+                          OLD_SIZE = BUFFER_SECOND(PROC_ID)%SIZE_INT_ARRAY_1D
+                          call my_alloc(WORK_ARRAY, OLD_SIZE, "WORK_ARRAY")
+                          WORK_ARRAY(1:OLD_SIZE) = 
+     .                         BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D(1:OLD_SIZE)
+                          CALL DEALLOC_1D_ARRAY(BUFFER_SECOND(PROC_ID))
+                          BUFFER_SECOND(PROC_ID)%SIZE_INT_ARRAY_1D = 
+     .                         CHUNK * (BUFFER_SECOND(PROC_ID)%SIZE_INT_ARRAY_1D + CHUNK)
+                          CALL ALLOC_1D_ARRAY(BUFFER_SECOND(PROC_ID))
+                          BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D(1:OLD_SIZE) = WORK_ARRAY(1:OLD_SIZE)
+                          call my_dealloc(WORK_ARRAY)
+                        ENDIF
+                        ! 1 : interface id
+                        SIZE_BUFFER_SECOND(PROC_ID) = SIZE_BUFFER_SECOND(PROC_ID) + 1
+                        BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_SECOND(PROC_ID) ) = NIN
+                        ! 2 : local surface id
+                        SIZE_BUFFER_SECOND(PROC_ID) = SIZE_BUFFER_SECOND(PROC_ID) + 1
+                        BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_SECOND(PROC_ID) ) = I
+                        ! 3 : global node id N1
+                        SIZE_BUFFER_SECOND(PROC_ID) = SIZE_BUFFER_SECOND(PROC_ID) + 1
+                        BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_SECOND(PROC_ID) ) = ITAB(N1)
+                        ! 4 : global node id N2
+                        SIZE_BUFFER_SECOND(PROC_ID) = SIZE_BUFFER_SECOND(PROC_ID) + 1
+                        BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_SECOND(PROC_ID) ) = ITAB(N2)
+                        ! 5 : fake node id
+                        SIZE_BUFFER_SECOND(PROC_ID) = SIZE_BUFFER_SECOND(PROC_ID) + 1
+                        BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_SECOND(PROC_ID) ) = 0
+                        ! 6 : fake node id
+                        SIZE_BUFFER_SECOND(PROC_ID) = SIZE_BUFFER_SECOND(PROC_ID) + 1
+                        BUFFER_SECOND(PROC_ID)%INT_ARRAY_1D( SIZE_BUFFER_SECOND(PROC_ID) ) = 0
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF ! proc 1 & proc 2 > 1
+              ENDDO ! loop over the secondary nodes
+              ! ---------------------
+            ENDIF ! type 11 : secondary nodes
+            ! ------------------------------------
+          ENDIF ! type 11 or 7 + idel = 1 + nspmd > 1
+          ! ----------------------------------------
+
+          ! ----------------------------------------
+          IF(ITY==25.AND.IPARI(100,NIN)/=0) THEN
+            DO I=1,NRTM
+              ! check if the current segment is an internal segment
+              IF(INTBUF_TAB(NIN)%STFM(I)<ZERO) THEN
+                SHOOT_STRUCT%INTER(NIN)%NB_ELM_M(I) = SHOOT_STRUCT%INTER(NIN)%NB_ELM_M(I) + 1
+                IF(INTBUF_TAB(NIN)%IELEM_M(2*(I-1)+2)/=0) THEN
+                  SHOOT_STRUCT%INTER(NIN)%NB_ELM_M(I) = SHOOT_STRUCT%INTER(NIN)%NB_ELM_M(I) + 1
+                ENDIF
+              ENDIF
+            ENDDO
+          ENDIF ! type 25 with solid erosion
+          ! ----------------------------------------
+        ENDDO
+        ! ---------------------------
+        IF(NSPMD>1) THEN
+#ifdef MPI
+          MSGTYP = MSGOFF1
+          DO I=1,NSPMD
+            R_SIZE_BUFFER_MAIN(I) = 0
+            R_SIZE_BUFFER_SECOND(I) = 0
+            SIZ = IAD_ELEM(1,I+1)-IAD_ELEM(1,I)
+            IF(I/=ISPMD+1.AND.SIZ>0) THEN
+              S_BUFFER_2_INT(1,I) = SIZE_BUFFER_MAIN(I)
+              S_BUFFER_2_INT(2,I) = SIZE_BUFFER_SECOND(I)
+              CALL SPMD_ISEND(S_BUFFER_2_INT(1:2,I),2,IT_SPMD(I),MSGTYP,REQUEST_S(I))
+            ENDIF
+            IF(I/=ISPMD+1.AND.SIZ>0) THEN
+              CALL SPMD_IRECV(R_BUFFER_2_INT(1:2,I),2,IT_SPMD(I),MSGTYP,REQUEST_R(I))
+            ENDIF
+          ENDDO
+
+          DO I=1,NSPMD
+            SIZ = IAD_ELEM(1,I+1)-IAD_ELEM(1,I)
+            IF(I/=ISPMD+1.AND.SIZ>0) THEN
+              CALL SPMD_WAIT(REQUEST_S(I))
+              CALL SPMD_WAIT(REQUEST_R(I))
+              R_SIZE_BUFFER_MAIN(I) = R_BUFFER_2_INT(1,I)
+              R_SIZE_BUFFER_SECOND(I) = R_BUFFER_2_INT(2,I)    
+            ENDIF
+          ENDDO
+          DO I=1,NSPMD
+            IF(R_SIZE_BUFFER_MAIN(I)>0) THEN
+              R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D = R_SIZE_BUFFER_MAIN(I)
+              CALL ALLOC_1D_ARRAY(R_BUFFER_MAIN(I))    
+              CALL SPMD_IRECV( R_BUFFER_MAIN(I)%INT_ARRAY_1D(1:R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D),
+     .                         R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D,IT_SPMD(I),MSGTYP,REQUEST_R2(I) )
+            ENDIF
+            IF(R_SIZE_BUFFER_SECOND(I)>0) THEN
+              R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D = R_SIZE_BUFFER_SECOND(I)
+              CALL ALLOC_1D_ARRAY(R_BUFFER_SECOND(I))
+              CALL SPMD_IRECV( R_BUFFER_SECOND(I)%INT_ARRAY_1D(1:R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D),
+     .                         R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D,IT_SPMD(I),MSGTYP,REQUEST_R3(I) )
+            ENDIF
+            IF(SIZE_BUFFER_MAIN(I)>0) THEN
+              CALL SPMD_ISEND( BUFFER_MAIN(I)%INT_ARRAY_1D(1:SIZE_BUFFER_MAIN(I)),SIZE_BUFFER_MAIN(I),
+     .                         IT_SPMD(I),MSGTYP,REQUEST_S2(I) )
+            ENDIF
+            IF(SIZE_BUFFER_SECOND(I)>0) THEN
+              CALL SPMD_ISEND( BUFFER_SECOND(I)%INT_ARRAY_1D(1:SIZE_BUFFER_SECOND(I)),SIZE_BUFFER_SECOND(I),
+     .                         IT_SPMD(I),MSGTYP,REQUEST_S3(I) )
+            ENDIF
+          ENDDO
+          DO I=1,NSPMD
+            SIZ = IAD_ELEM(1,I+1)-IAD_ELEM(1,I)
+            IF(SIZE_BUFFER_MAIN(I)>0) CALL SPMD_WAIT(REQUEST_S2(I))
+            IF(R_SIZE_BUFFER_MAIN(I)>0) CALL SPMD_WAIT(REQUEST_R2(I))
+            IF(SIZE_BUFFER_SECOND(I)>0) CALL SPMD_WAIT(REQUEST_S3(I))
+            IF(R_SIZE_BUFFER_SECOND(I)>0) CALL SPMD_WAIT(REQUEST_R3(I))
+          ENDDO
+          DO I=1,NSPMD
+            IF(R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D>0) THEN
+              CALL COUNT_REMOTE_NB_ELEM_EDGE( R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D,R_BUFFER_MAIN(I)%INT_ARRAY_1D,
+     .                                      GEO,IXS,IXC,IXT,IXP,IXR,IXTG,ADDCNEL,NODES,CNEL,CHUNK,IXS10)
+              CALL SPMD_ISEND( R_BUFFER_MAIN(I)%INT_ARRAY_1D(1:R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D),
+     .                         R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D,IT_SPMD(I),MSGTYP,REQUEST_S2(I) )
+   
+            ENDIF
+            IF(R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D>0) THEN
+              CALL COUNT_REMOTE_NB_ELEM_EDGE( R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D,R_BUFFER_SECOND(I)%INT_ARRAY_1D,
+     .                                      GEO,IXS,IXC,IXT,IXP,IXR,IXTG,ADDCNEL,NODES,CNEL,CHUNK,IXS10 )
+              CALL SPMD_ISEND( R_BUFFER_SECOND(I)%INT_ARRAY_1D(1:R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D),
+     .                        R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D,IT_SPMD(I),MSGTYP,REQUEST_S3(I))
+            ENDIF
+            IF(SIZE_BUFFER_MAIN(I)>0) THEN
+              CALL SPMD_IRECV( BUFFER_MAIN(I)%INT_ARRAY_1D(1:SIZE_BUFFER_MAIN(I)),SIZE_BUFFER_MAIN(I),
+     .                         IT_SPMD(I),MSGTYP,REQUEST_R2(I) )
+            ENDIF
+            IF(SIZE_BUFFER_SECOND(I)>0) THEN
+              CALL SPMD_IRECV( BUFFER_SECOND(I)%INT_ARRAY_1D(1:SIZE_BUFFER_SECOND(I)),SIZE_BUFFER_SECOND(I),
+     .                        IT_SPMD(I),MSGTYP,REQUEST_R3(I) )
+            ENDIF
+          ENDDO
+          DO I=1,NSPMD
+            SIZ = IAD_ELEM(1,I+1)-IAD_ELEM(1,I)
+            IF(R_BUFFER_MAIN(I)%SIZE_INT_ARRAY_1D>0) THEN
+              CALL SPMD_WAIT(REQUEST_S2(I))
+              CALL DEALLOC_1D_ARRAY(R_BUFFER_MAIN(I))   
+            ENDIF
+            IF(SIZE_BUFFER_MAIN(I)>0) THEN
+              CALL SPMD_WAIT(REQUEST_R2(I))
+              CALL COUNT_NB_ELEM_EDGE( 1,SIZE_BUFFER_MAIN(I),BUFFER_MAIN(I)%INT_ARRAY_1D,SHOOT_STRUCT,CHUNK)
+              CALL DEALLOC_1D_ARRAY(BUFFER_MAIN(I))
+            ENDIF
+            IF(R_BUFFER_SECOND(I)%SIZE_INT_ARRAY_1D>0) THEN
+              CALL SPMD_WAIT(REQUEST_S3(I))
+              CALL DEALLOC_1D_ARRAY(R_BUFFER_SECOND(I))   
+            ENDIF
+            IF(SIZE_BUFFER_SECOND(I)>0) THEN
+              CALL SPMD_WAIT(REQUEST_R3(I))
+              CALL COUNT_NB_ELEM_EDGE( 2,SIZE_BUFFER_SECOND(I),BUFFER_SECOND(I)%INT_ARRAY_1D,SHOOT_STRUCT,CHUNK)
+              CALL DEALLOC_1D_ARRAY(BUFFER_SECOND(I))
+            ENDIF
+          ENDDO
+#endif
+        ENDIF
+        ! ---------------------------
+
+        call my_dealloc(WORK_ARRAY_2)
+        call my_dealloc(WORK_ARRAY_3)
+
+        call my_dealloc(INTERSECT_1)
+        call my_dealloc(INTERSECT_2)
+        call my_dealloc(RESULT_INTERSECT)
+
+        DEALLOCATE( BUFFER_SECOND )
+        DEALLOCATE( BUFFER_MAIN )
+        DEALLOCATE( R_BUFFER_SECOND )
+        DEALLOCATE( R_BUFFER_MAIN )
+        ! --------------------------------
+        ! WORKING ARRAY
+        ! --------------------------------
+        IF(.NOT.ALLOCATED(SHOOT_STRUCT%GLOBAL_NB_ELEM_OFF)) THEN
+          call my_alloc(SHOOT_STRUCT%GLOBAL_NB_ELEM_OFF, NTHREAD, "SHOOT_STRUCT%GLOBAL_NB_ELEM_OFF")
+        ENDIF
+
+        ! ---------------------------
+        ! Only for interface type 24 & 25
+        SHOOT_STRUCT%NUMBER_REMOTE_SURF = 0 ! number of deactivated potential remote surface for interface type 24 & 25
+        SHOOT_STRUCT%SIZE_REMOTE_SURF = 0 ! size of array of REMOTE_SURF (list of potential remote deactivated surfaces)
+        IF(ALLOCATED(SHOOT_STRUCT%REMOTE_SURF)) call my_dealloc(SHOOT_STRUCT%REMOTE_SURF)
+        call my_alloc(SHOOT_STRUCT%REMOTE_SURF, SHOOT_STRUCT%SIZE_REMOTE_SURF, "SHOOT_STRUCT%REMOTE_SURF")
+        ! ---------------------------
+
+        ! ---------------------------
+        ! Only for interface type 25
+        SHOOT_STRUCT%NUMBER_NEW_SURF = 0 ! number of new active segment/surface for interface type 25
+        SHOOT_STRUCT%SIZE_NEW_SURF = 0 ! size of array of NEW_SURF 
+        IF(ALLOCATED(SHOOT_STRUCT%NEW_SURF)) call my_dealloc(SHOOT_STRUCT%NEW_SURF)
+        call my_alloc(SHOOT_STRUCT%NEW_SURF, SHOOT_STRUCT%SIZE_NEW_SURF, "SHOOT_STRUCT%NEW_SURF")
+        ! ---------------------------
+
+
+        ! ---------------------------
+        ! Only for interface type25 : allocation & initialization of structure/hash table for the neighbourhood's searching
+        call init_hashtable_for_neighbour_segment( npari,ninter,ipari,shoot_struct )
+        do nin=1,ninter
+          ity = ipari(7,nin) ! get the interface id
+          idel = ipari(17,nin) ! get the idel option
+          erosion_state = ipari(100,nin) ! get the erosion state          
+          if(ity==25.and.(idel/=0.or.erosion_state/=0)) then
+            call get_hashtable_for_neighbour_segment( nin,npari,ninter,ipari,intbuf_tab,shoot_struct )
+          endif
+        enddo
+        ! ---------------------------
+
+        RETURN
+        END SUBROUTINE INIT_NODAL_STATE

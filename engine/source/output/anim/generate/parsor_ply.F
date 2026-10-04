@@ -1,0 +1,200 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    parsor_ply            ../engine/source/output/anim/generate/parsor_ply.F
+!||--- called by ------------------------------------------------------
+!||    genani                ../engine/source/output/anim/generate/genani.F
+!||--- calls      -----------------------------------------------------
+!||    get_ply_nod           ../engine/source/output/anim/generate/anin_ply_init.F
+!||    get_ply_nodid         ../engine/source/output/anim/generate/anin_ply_init.F
+!||    spmd_iget_partn_ply   ../engine/source/mpi/anim/spmd_iget_partn_ply.F
+!||    spmd_iglob_partn      ../engine/source/mpi/anim/spmd_iglob_partn.F
+!||    write_i_c             ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    element_mod           ../common_source/modules/elements/element_mod.F90
+!||    my_alloc_mod          ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod        ../common_source/tools/memory/my_dealloc.F90
+!||    plyxfem_mod           ../engine/share/modules/plyxfem_mod.F
+!||====================================================================
+      SUBROUTINE PARSOR_PLY(NEL_PLY, X,       D,       XNORM,  CDG,
+     .                      IPARG,   IXC,     IXTG,    INVERT, EL2FA,
+     .                      MATER,   IPARTC,  NODGLOB, IDPLY,  IADPLY,
+     .                      IADPLYG, PLYNUMC, NBF_PXFEMG)
+      USE PLYXFEM_MOD
+      USE my_alloc_mod
+      use element_mod , only : nixc,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+C     REAL
+      my_real
+     .   X(*),D(*),XNORM(3,*),CDG(*)
+      INTEGER IXC(NIXC,*),IXTG(NIXTG,*),IPARG(NPARG,*),
+     .        INVERT(*), EL2FA(*),MATER(*),
+     .        IPARTC(*),NODGLOB(*),
+     .        NEL_PLY,IDPLY,IADPLY(*),IADPLYG(*),PLYNUMC,
+     .        NBF_PXFEMG
+C-----------------------------------------------
+      INTEGER GET_PLY_NODID
+      EXTERNAL GET_PLY_NODID
+      INTEGER GET_PLY_NOD
+      EXTERNAL GET_PLY_NOD
+C-----------------------------------------------
+C     REAL
+      INTEGER II(4), IE, NG, ITY, LFT, LLT, N, I, 
+     . NEL, IAD, NPAR, NFT,MTN,
+     . JJ,BUF,ISHPLYXFEM,
+     .        IPT,ELC,PLYS,IPLY,IE_EL2FA,
+     .        NPCC,IDPLYN
+      INTEGER EMPL
+      INTEGER,DIMENSION(:),ALLOCATABLE::NP
+      INTEGER,DIMENSION(:),ALLOCATABLE::PLYELEMS
+C-----------------------------------------------
+C     PLY ELEMS INIT
+C-----------------------------------------------
+      call my_alloc(PLYELEMS, NUMELC, "PLYELEMS")
+      call my_alloc(NP, PLYNUMC*4, "NP")
+      NPCC = 0
+      DO PLYS = 1,NPLYPART
+        IPLY = INDX_PLY(PLYS)
+        NPCC = NPCC + PLYSHELL(IPLY)%PLYNUMSHELL
+      ENDDO
+
+      JJ = 0
+      NEL_PLY = 0
+      IE=0
+      DO PLYS = 1,NPLYPART
+        IPLY = INDX_PLY(PLYS)
+        PLYELEMS=0
+        DO I=1,PLYSHELL(IPLY)%PLYNUMSHELL
+           IPT = PLYSHELL(IPLY)%SHELLIPT(I)
+           ELC = PLYSHELL(IPLY)%SHID(I)
+           PLYELEMS(ELC)=IPT
+        ENDDO
+C-----------------------------------------------
+        IE_EL2FA=0
+        NPAR = 0
+C
+C In SPMD you must send the info even qd we have 0 local elem
+         DO 490 NG=1,NGROUP
+          MTN   =IPARG(1,NG)
+          NEL   =IPARG(2,NG)
+          NFT   =IPARG(3,NG)
+          IAD   =IPARG(4,NG)
+          ITY   =IPARG(5,NG)
+          ISHPLYXFEM = IPARG(50,NG)
+          LFT=1
+          LLT=NEL
+cccc        KPT    =IPARG(6,NG)    
+C-----------------------------------------------
+C       COQUES
+C-----------------------------------------------
+          IF(ISHPLYXFEM > 0) THEN
+             IF(ITY==3)THEN
+c               KPT   =IPARG(6,NG)
+c               IHBE = IPARG(23,NG)
+c               ISTRAIN=IPARG(44,NG)
+c               IEXPAN=IPARG(49,NG)
+c               CALL CBUFAD (IAD-1,NEL,ISTRAIN,KPT,IHBE,0,0,0,IEXPAN,
+c     .                      IPARG(1,NG))
+                DO 130 I=LFT,LLT
+                N = I + NFT
+                IF(PLYELEMS(N) == 0)GOTO 130
+cc                OFF = BUFEL(IAD+I+SH_IH*NEL-1)
+                   II(1) = IXC(2,N)
+                   II(2) = IXC(3,N)
+                   II(3) = IXC(4,N)
+                   II(4) = IXC(5,N)
+                   IE = IE + 1
+                   IE_EL2FA = IE_EL2FA + 1
+c                  CALL FACNOR(X,D,II,XNORM,CDG,INVERT(IE))
+                   IF (NSPMD == 1) THEN
+                     II(1) = GET_PLY_NODID(IPLY,II(1),IDPLY)- 1
+                     II(2) = GET_PLY_NODID(IPLY,II(2),IDPLY)- 1
+                     II(3) = GET_PLY_NODID(IPLY,II(3),IDPLY)- 1
+                     II(4) = GET_PLY_NODID(IPLY,II(4),IDPLY)- 1
+                     CALL WRITE_I_C(II,4)
+                   ELSE
+                     EMPL = GET_PLY_NOD(IPLY,II(1))
+                     NP(JJ+1) = PLYNOD(IPLY)%PLYNODID(EMPL)
+
+                     EMPL = GET_PLY_NOD(IPLY,II(2))
+                     NP(JJ+2) = PLYNOD(IPLY)%PLYNODID(EMPL)
+
+                     EMPL = GET_PLY_NOD(IPLY,II(3))
+                     NP(JJ+3) = PLYNOD(IPLY)%PLYNODID(EMPL)
+
+                     EMPL = GET_PLY_NOD(IPLY,II(4))
+                     NP(JJ+4) = PLYNOD(IPLY)%PLYNODID(EMPL)
+
+                   END IF
+                   EL2FA(NEL_PLY+IE_EL2FA) = IE 
+                   JJ = JJ + 4
+ 130           CONTINUE
+C-----------------------------------------------
+C             COQUES 3 NOEUDS
+C-----------------------------------------------
+              ELSEIF(ITY==7)THEN
+              ENDIF
+          ENDIF
+ 490   CONTINUE
+C
+
+        IADPLY(PLYS) = IE
+        NEL_PLY = NEL_PLY + PLYSHELL(IPLY)%PLYNUMSHELL
+      ENDDO
+
+      IF (NSPMD > 1) THEN
+C   build global part array on proc 0
+
+        IF (ISPMD==0) THEN
+         CALL SPMD_IGLOB_PARTN(IADPLY,NPLYPART,IADPLYG,NPLYPART)
+         BUF = NBF_PXFEMG*4
+         IDPLYN = IDPLY - 1
+         CALL SPMD_IGET_PARTN_PLY(4,JJ,NP,NPLYPART,IADPLYG,BUF,1,IDPLYN)
+        ELSE
+         CALL SPMD_IGLOB_PARTN(IADPLY,NPLYPART,IADPLYG,NPLYPART)
+         BUF=1
+         IDPLYN = IDPLY - 1
+         CALL SPMD_IGET_PARTN_PLY(4,JJ,NP,NPLYPART,IADPLYG,BUF,1,IDPLYN)
+        ENDIF
+
+      ENDIF
+      call my_dealloc(PLYELEMS)
+      call my_dealloc(NP)
+C-----------------------------------------------
+      RETURN
+      END

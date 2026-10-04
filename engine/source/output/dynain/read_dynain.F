@@ -1,0 +1,318 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    read_dynain      ../engine/source/output/dynain/read_dynain.F
+!||--- called by ------------------------------------------------------
+!||    lectur           ../engine/source/input/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg           ../engine/source/output/message/message.F
+!||    arret            ../engine/source/system/arret.F
+!||    my_orders        ../common_source/tools/sort/my_orders.c
+!||    spmd_gatherv     ../engine/source/mpi/generic/spmd_gatherv.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod      ../common_source/modules/elements/element_mod.F90
+!||    message_mod      ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    spmd_mod         ../engine/source/mpi/spmd_mod.F90
+!||    state_mod        ../common_source/modules/state_mod.F
+!||====================================================================
+      SUBROUTINE READ_DYNAIN(IPART,DYNAIN_DATA,IPARTC,IPARTTG,IXC,IXTG)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE STATE_MOD
+      USE SPMD_MOD
+      use element_mod , only : nixc,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "units_c.inc"
+#include      "scr16_c.inc"
+#include      "scr17_c.inc"
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPART(LIPART1,*), IXC(NIXC,*), IXTG(NIXTG,*),IPARTC(*), IPARTTG(*)
+      TYPE (DYNAIN_DATABASE), INTENT(INOUT) :: DYNAIN_DATA
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,IDPRT,J,IP
+      INTEGER N ,NELC , NELTG , NELCG , NELTGG , 
+     .   FLG_CHK , IS_CHECK , JWARN, NELMIN , NELMAX,
+     .   MY_SIZEC ,MY_SIZETG ,IERR ,
+     .   SIZEC_P0(NSPMD), SIZETG_P0(NSPMD) ,ADRC(NSPMD) ,
+     .   ADRTG(NSPMD)
+C        
+      INTEGER WORK(70000)
+      INTEGER ,  DIMENSION(:),ALLOCATABLE :: NELIDC ,NELIDTG,
+     .        CLEFC ,CLEFTG ,INDXC ,INDXTG ,IDWARN ,NELIDCG ,
+     .        NELIDTGG 
+C-----------------------------------------------
+      call my_alloc(DYNAIN_DATA%IPART_DYNAIN, NPART, "DYNAIN_DATA%IPART_DYNAIN")
+      DYNAIN_DATA%IPART_DYNAIN(1:NPART) = 0 
+      IF (DYNAIN_DATA%NDYNAINPRT /= 0) THEN
+            DO I=1,DYNAIN_DATA%NDYNAINPRT
+              READ(IIN,'(I10)') IDPRT
+            IP=0
+              DO J=1,NPART
+                IF(IPART(4,J)==IDPRT)IP=J
+              END DO
+              IF(IP==0)THEN
+               CALL ANCMSG(MSGID=290,ANMODE=ANINFO,I1=IDPRT)
+             CALL ARRET(2)
+          END IF
+          DYNAIN_DATA%IPART_DYNAIN(IP)=1
+        END DO
+      ELSEIF(DYNAIN_DATA%NDYNAINALL /= 0) THEN
+            DO J=1,NPART
+              DYNAIN_DATA%IPART_DYNAIN(J) = 1
+            END DO
+      ENDIF
+
+C-------------------------------------------------------------------------------
+C     CHECK FOR DYNAIN FILE OUTPUT : 3node shell and 4node shell have same ID
+C-------------------------------------------------------------------------------  
+
+      IF(DYNAIN_DATA%DYNAIN_CHECK == 0.AND.(DYNAIN_DATA%NDYNAINPRT /=0 .OR.DYNAIN_DATA%NDYNAINALL /= 0) ) THEN
+   
+        NELC = 0
+        NELTG = 0 
+        NELCG = 0
+        NELTGG = 0 
+
+        IF(NUMELC/=0) ALLOCATE(NELIDC(NUMELC),STAT=IERR)
+        IF(NUMELTG/=0) ALLOCATE(NELIDTG(NUMELTG),STAT=IERR)
+
+        IF(DYNAIN_DATA%NDYNAINALL /= 0) THEN
+
+          IF(NUMELC/=0)THEN
+            DO I=1,NUMELC
+               NELIDC(I) = IXC(NIXC,I)
+            ENDDO
+            NELC = NUMELC 
+          ENDIF
+          IF(NUMELTG/=0)THEN
+            DO I=1,NUMELTG
+               NELIDTG(NELTG) = IXTG(NIXTG,I)
+            ENDDO
+            NELTG = NUMELTG 
+          ENDIF
+
+        ELSE
+          NELC = 0 
+          DO I=1,NUMELC
+              IP = IPARTC(I)
+              IF(DYNAIN_DATA%IPART_DYNAIN(IP)==1) THEN
+                 NELC = NELC + 1
+                 NELIDC(NELC) = IXC(NIXC,I)
+              ENDIF
+           ENDDO
+           NELTG = 0 
+           DO I=1,NUMELTG
+              IP = IPARTTG(I)
+              IF(DYNAIN_DATA%IPART_DYNAIN(IP)==1) THEN
+                 NELTG = NELTG + 1
+                 NELIDTG(NELTG) = IXTG(NIXTG,I)
+              ENDIF
+           ENDDO
+
+        ENDIF
+
+
+        IF (NSPMD > 1) THEN
+
+      
+          SIZEC_P0(1:NSPMD) = 0
+          ADRC(1:NSPMD) = 0
+
+      !   send the local size of index to PROC0
+          MY_SIZEC = NELC
+
+          CALL SPMD_GATHER(MY_SIZEC,SIZEC_P0,1,1,0)
+
+          SIZETG_P0(1:NSPMD) = 0
+          ADRTG(1:NSPMD) = 0
+
+          MY_SIZETG = NELTG
+
+          CALL SPMD_GATHER(MY_SIZETG,SIZETG_P0,1,1,0)
+
+          NELCG = 0
+          IF(ISPMD==0) THEN
+            ADRC(1) = 0
+            DO I=1,NSPMD-1
+               ADRC(I+1) = ADRC(I) + SIZEC_P0(I)
+               NELCG = NELCG + SIZEC_P0(I)
+            ENDDO
+            NELCG = NELCG + SIZEC_P0(NSPMD)
+          ENDIF
+
+          NELTGG = 0
+          IF(ISPMD==0) THEN
+            ADRTG(1) = 0
+            DO I=1,NSPMD-1
+               ADRTG(I+1) = ADRTG(I) + SIZETG_P0(I)
+               NELTGG = NELTGG + SIZETG_P0(I)
+            ENDDO
+            NELTGG = NELTGG + SIZETG_P0(NSPMD)
+          ENDIF
+
+           call my_alloc(NELIDCG, NELCG, "NELIDCG", stat=IERR)
+           call my_alloc(NELIDTGG, NELTGG, "NELIDTGG", stat=IERR)
+
+          !   send the local NUMELC to PROC0
+
+          CALL SPMD_GATHERV(NELIDC,MY_SIZEC,NELIDCG,
+     .                          SIZEC_P0,ADRC,0)
+          !   send the local NUMELTG to PROC0
+          CALL SPMD_GATHERV(NELIDTG,MY_SIZETG,NELIDTGG,
+     .                          SIZETG_P0,ADRTG,0)
+
+        ELSE
+          NELCG = NELC
+          NELTGG = NELTG
+          IF(NELCG/=0) THEN
+            call my_alloc(NELIDCG, NELCG, "NELIDCG", stat=IERR)
+            NELIDCG(1:NELCG) = NELIDC(1:NELC)
+          ENDIF
+          IF(NELTGG/=0) THEN     
+            call my_alloc(NELIDTGG, NELTGG, "NELIDTGG", stat=IERR)
+            NELIDTGG(1:NELTGG) = NELIDTG(1:NELTG)  
+          ENDIF  
+
+        ENDIF
+
+
+        IF(ISPMD == 0) THEN
+
+          FLG_CHK = 0
+
+          IF(NELCG/=0.AND.NELTGG/=0) FLG_CHK = 1
+      
+          IF(FLG_CHK > 0 ) THEN ! IF checK is needed
+
+              IS_CHECK = 0
+   
+              call my_alloc(CLEFC, NELCG, "CLEFC", stat=IERR)
+              call my_alloc(INDXC, 2*NELCG, "INDXC", stat=IERR)
+
+              DO N=1,NELCG
+                INDXC(N)=N
+                CLEFC(N)= NELIDCG(N)
+              END DO
+              CALL MY_ORDERS(0,WORK,CLEFC,INDXC,NELCG,1)     
+
+              call my_alloc(CLEFTG, NELTGG, "CLEFTG", stat=IERR)
+              call my_alloc(INDXTG, 2*NELTGG, "INDXTG", stat=IERR)
+
+              DO N=1,NELTGG
+                INDXTG(N)=N
+                CLEFTG(N)= NELIDTGG(N)
+              END DO
+
+              CALL MY_ORDERS(0,WORK,CLEFTG,INDXTG,NELTGG,1)         
+
+              IF(NELIDTGG(INDXTG(1))>=NELIDCG(INDXC(1)).AND.NELIDTGG(INDXTG(1))<=NELIDCG(INDXC(NELCG)))THEN
+                 IS_CHECK = 1
+              ENDIF
+
+              IF(NELIDTGG(INDXTG(NELTGG))>=NELIDCG(INDXC(1)).AND.NELIDTGG(INDXTG(NELTGG))<=NELIDCG(INDXC(NELCG)))THEN
+                 IS_CHECK = 1
+              ENDIF
+
+              IF(NELIDCG(INDXC(1))>=NELIDTGG(INDXTG(1)).AND.NELIDCG(INDXC(1))<=NELIDTGG(INDXTG(NELTGG)))THEN
+                 IS_CHECK = 1
+              ENDIF
+
+              IF(NELIDCG(INDXC(NELCG))>=NELIDTGG(INDXTG(1)).AND.NELIDCG(INDXC(NELCG))<=NELIDTGG(INDXTG(NELTGG)))THEN
+                 IS_CHECK = 1
+              ENDIF
+       
+              IF(IS_CHECK == 1) THEN
+                 NELMIN = MAX(NELIDCG(INDXC(1)),NELIDTGG(INDXTG(1)))
+                 NELMAX = MIN(NELIDCG(INDXC(NELCG)),NELIDTGG(INDXTG(NELTGG)))
+
+                 call my_alloc(IDWARN, MIN(NELCG,NELTGG), "IDWARN", stat=IERR)
+
+                 JWARN = 0
+                 DO I=1,NELCG
+                   IF(NELIDCG(INDXC(I))>=NELMIN.AND.NELIDCG(INDXC(I))<=NELMAX) THEN
+                     DO J=1,NELTGG
+                       IF(NELIDTGG(INDXTG(J))>=NELMIN.AND.NELIDTGG(INDXTG(J))<=NELMAX) THEN
+                         IF(NELIDCG(INDXC(I))==NELIDTGG(INDXTG(J))) THEN
+                           JWARN = JWARN + 1
+                           IDWARN(JWARN) = NELIDCG(INDXC(I)) 
+                         ENDIF
+                       ENDIF
+                     ENDDO
+                   ENDIF
+                 ENDDO
+
+                 IF(JWARN/=0)THEN
+                   WRITE(IOUT,'(A,A)')
+     . ' ** ERROR : DYNAIN FILE CAN NOT BE WRITTEN',
+     . ' THESE 4 NODE SHELLS AND 3 NODE SHELLS HAVE SAME USER ID'
+                  WRITE(IOUT,*) IDWARN(1:JWARN)
+
+                  WRITE(ISTDO,'(A,A,I10,A)')
+     . ' ** ERROR : DYNAIN FILE CAN NOT BE WRITTEN',
+     . ' 4 NODE SHELLS AND 3 NODE SHELLS MUST TO HAVE DIFFERENT USER ID',
+     .  JWARN,'ERROR(S)'
+                  CALL ARRET(0)
+                 ENDIF
+
+                call my_dealloc(IDWARN)
+
+              ENDIF
+C
+              call my_dealloc(CLEFC)
+              call my_dealloc(CLEFTG)
+              call my_dealloc(INDXC)
+              call my_dealloc(INDXTG)
+C
+          ENDIF
+        ENDIF
+
+        IF(NUMELC/=0) DEALLOCATE(NELIDC,STAT=IERR)
+        IF(NUMELTG/=0) DEALLOCATE(NELIDTG,STAT=IERR)
+        call my_dealloc(NELIDCG)
+        call my_dealloc(NELIDTGG)
+
+      ENDIF
+
+
+      RETURN
+      END

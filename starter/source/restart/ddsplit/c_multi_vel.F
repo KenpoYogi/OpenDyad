@@ -1,0 +1,62 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+      
+!||====================================================================
+!||    c_multi_vel     ../starter/source/restart/ddsplit/c_multi_vel.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit         ../starter/source/restart/ddsplit/ddsplit.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE C_MULTI_VEL(CEP, NUMEL, NUMEL_L, PROC, 
+     .     MULTI_FVM_VEL_L, MULTI_FVM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------      
+      USE MULTI_FVM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: CEP(*), NUMEL, NUMEL_L, PROC
+      TYPE(MULTI_FVM_STRUCT), INTENT(IN) :: MULTI_FVM
+      my_real, INTENT(OUT) :: MULTI_FVM_VEL_L(3, NUMEL)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------   
+      INTEGER :: I
+      INTEGER ::  IELEM
+      
+      IELEM = 0
+      DO I = 1, NUMEL
+         IF (CEP(I) == PROC) THEN
+            IELEM = IELEM + 1
+            MULTI_FVM_VEL_L(1:3, IELEM) = MULTI_FVM%VEL(1:3, I)
+         ENDIF
+      ENDDO
+
+      RETURN
+      END

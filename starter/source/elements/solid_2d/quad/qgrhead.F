@@ -1,0 +1,316 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    qgrhead                ../starter/source/elements/solid_2d/quad/qgrhead.F
+!||--- called by ------------------------------------------------------
+!||    lectur                 ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                 ../starter/source/output/message/message.F
+!||    fretitl2               ../starter/source/starter/freform.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod            ../starter/share/message_module/message_mod.F
+!||    reorder_mod            ../starter/share/modules1/reorder_mod.F
+!||====================================================================
+      SUBROUTINE QGRHEAD(
+     1       IXQ     ,PM      ,GEO     ,INUM    ,ISEL    ,
+     2       ITR1    ,EADD    ,INDEX   ,ITRI    ,IPARTQ  ,     
+     3       ND      ,IGRSURF ,IGRQUAD ,CEP     ,MAT_PARAM,
+     5       XEP     ,IGEO    ,IPM     ,IQUAOFF ,TRIMAT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE GROUPDEF_MOD
+      USE MATPARAM_DEF_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+      use reorder_mod
+C-----------------------------------------------
+C            A R G U M E N T S
+C-----------------------------------------------
+C     IXQ(7,NUMELQ)     TABLEAU CONECS+PID+MID+NOS SOLIDES 4N      E
+C     PM(NPROPM,NUMMAT) ARRAY OF MATERIAL PROPERTIES           E
+C     GEO(NPROPG,NUMGEO) ARRAY OF PID CHARACTERISTICS                 E
+C     INUM(8,NUMELQ)    TABLEAU DE TRAVAIL                         E/S
+C     ISEL(NSELQ)       TABLEAU DES SOLIDES 4N CHOISIS POUR TH     E/S
+C     ITR1(NSELQ)       TABLEAU DE TRAVAIL                         E/S
+C     EADD(NUMELQ)      TABLEAU DES ADRESEES DANS IDAM CHGT DAMIER   S
+C     INDEX(NUMELQ)     TABLEAU DE TRAVAIL                         E/S
+C     ITRI(5,NUMELQ)    TABLEAU DE TRAVAIL                         E/S
+C     IPARTQ(NUMELQ)    TABLEAU PART                               E/S
+C     CEP(NUMELQ)       TABLEAU DE TRAVAIL                         E/S
+C     XEP(NUMELQ)       TABLEAU DE TRAVAIL                         E/S
+C     IQUAOFF(NUMELQ)   FLAG ELEM RBY ON/OFF                       E/S
+C-----------------------------------------------
+C   I M P L I C I T   T Y P E S
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C O M M O N   B L O C K S
+C-----------------------------------------------
+#include      "vect01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D U M M Y   A R G U M E N T S
+C-----------------------------------------------
+      INTEGER IXQ(7,*),ISEL(*),INUM(9,*),IPARTQ(*),
+     .        EADD(*),ITR1(*),INDEX(*),ITRI(5,*),ND, CEP(*),XEP(*),
+     .        IGEO(NPROPGI,NUMGEO), IPM(NPROPMI,NUMMAT),
+     .        IQUAOFF(*)
+      my_real ::  PM(NPROPM,NUMMAT), GEO(NPROPG,NUMGEO)
+C-----------------------------------------------
+      TYPE (GROUP_)  , DIMENSION(NGRQUAD)  :: IGRQUAD
+      TYPE (SURF_)   , DIMENSION(NSURF)   :: IGRSURF
+      TYPE (MATPARAM_STRUCT_) ,DIMENSION(NUMMAT),INTENT(IN) :: MAT_PARAM
+      INTEGER,INTENT(INOUT) :: TRIMAT
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER 
+     .        I,J,K, NN, MLN, MID, PID ,
+     .        II,JJ, II1,JJ1,II2,JJ2,II3,JJ3,II4,JJ4,
+     .        MODE, ML1, ML2, MT1, MT2,IGT, 
+     .        MSKMLN,MSKJAL,MSKMID,MSKPID,IEOS,
+     .        MSKJEU,MSKJTU,MSKJTH,MSKJPO,
+     .        IPLAST,IREP,IFAIL,IRB,
+     .        JALE_FROM_MAT,JALE_FROM_PROP
+      INTEGER ID
+      CHARACTER(LEN=NCHARTITLE)::TITR
+      INTEGER WORK(70000)
+      EXTERNAL MY_AND
+      INTEGER MY_AND
+      integer, dimension(:), allocatable :: index2
+C
+      DATA MSKMLN /O'07770000000'/
+      DATA MSKJAL /O'00000070000'/
+      DATA MSKJEU /O'00000007000'/
+      DATA MSKJTU /O'00000000700'/
+      DATA MSKJTH /O'00000000070'/
+      DATA MSKJPO /O'00000000007'/
+      DATA MSKMID /O'07777777777'/
+      DATA MSKPID /O'07777777777'/
+C
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+ 
+C----------------------------------------------------------
+C   GLOBAL SORT ON ALL CRITERIA FOR ALL ELEMENTS
+C----------------------------------------------------------
+C
+      call my_alloc(index2, numelq, "index2")
+      index2(1:numelq) = permutation%quad(1:numelq)
+      
+      DO I=1,NUMELQ
+        EADD(I)=1
+        ITRI(4,I)=I
+        INDEX(I)=I
+        INUM(1,I)=IPARTQ(I)
+        INUM(2,I)=IXQ(1,I)
+        INUM(3,I)=IXQ(2,I)
+        INUM(4,I)=IXQ(3,I)
+        INUM(5,I)=IXQ(4,I)
+        INUM(6,I)=IXQ(5,I)
+        INUM(7,I)=IXQ(6,I)
+        INUM(8,I)=IXQ(7,I)
+        INUM(9,I)=IQUAOFF(I)
+      ENDDO
+C
+      DO I=1,NUMELQ
+        XEP(I)=CEP(I)
+      ENDDO
+C
+C
+      DO I = 1, NUMELQ
+        II = I
+        NPT=1
+        JPOR=0
+        MID= IXQ(1,II)
+        PID= IXQ(6,II)
+        IPLAST= 1
+        IREP  = 0
+        JCVT  = 0
+        IFAIL = 0
+        IEOS  = 0
+        IF (PID/=0) THEN
+          IGT  = IGEO(11,PID)
+          IF (IGT /= 15) IPLAST = IGEO(9,PID)
+          IF (IGT==15)JPOR=2*NINT(GEO(28,PID))
+          JCVT = IGEO(16,PID)
+        ENDIF
+        MLN = NINT(PM(19,ABS(MID)))
+         IF(MLN == 51)TRIMAT=4
+        IF(MID<0)THEN
+          IF(MLN==6.AND.JPOR/=2)MLN=17
+          IF(MLN==46)MLN=47
+          MID=IABS(MID)
+        ENDIF
+        IFAIL = MAT_PARAM(MID)%NFAIL      
+        JALE_FROM_MAT = NINT(PM(72,MID))
+        JALE_FROM_PROP = IGEO(62,PID)
+        JALE = MAX(JALE_FROM_MAT, JALE_FROM_PROP) !if inconsistent, error message was displayed in PART reader
+        JLAG=0
+        IF(JALE==0.AND.MLN/=18)JLAG=1
+        JEUL=0
+        IF(JALE==2)THEN
+          JALE=0
+          JEUL=1
+        ENDIF
+        JTUR=NINT(PM(70,MID))
+        JTHE=NINT(PM(71,MID))
+        JMULT=0
+        IF(MLN==20)THEN
+          JMULT=NINT(PM(20,MID))
+          MT1=NINT(PM(21,MID))
+          MT2=NINT(PM(22,MID))
+          ML1=NINT(PM(19,MT1))
+          ML2=NINT(PM(19,MT2))
+        ELSE
+          JMULT=0
+          ML1=0
+          ML2=0 
+        ENDIF
+C
+        IF(JCVT/=0.AND.(JLAG==0.OR.MLN==20))THEN
+          ID=IGEO(1,PID)
+          CALL FRETITL2(TITR,
+     .                  IGEO(NPROPGI-LTITR+1,PID),LTITR)
+          CALL ANCMSG(MSGID=608,
+     .                MSGTYPE=MSGWARNING,
+     .                ANMODE=ANINFO_BLIND_1,
+     .                I1=ID,
+     .                C1=TITR,
+     .                I2=IXQ(7,I))
+          JCVT=0
+        END IF
+        IEOS = IPM(4,MID)
+C sort on elem deletes rigidbody
+C IRB = 0 : elem actif
+C IRB = 1 : inactive elem and optimized for SPMD
+C IRB = 2: Elem inactive but optimized to be active in SPMD
+        IRB = IQUAOFF(I)       
+C
+C Npt = 1;Jhbe = 0;Jivf = 0 and jlag not used
+C Key 1---------------------------------
+        JPOR=ISHFT(JPOR,0)
+        JTHE=ISHFT(JTHE,3)
+        JTUR=ISHFT(JTUR,6)
+        JEUL=ISHFT(JEUL,9)
+        JALE=ISHFT(JALE,12)
+        MLN=ISHFT(MLN,21)
+c        IRB=MY_SHIFTL(IRB,0)
+        ITRI(1,I)=MLN+JALE+JEUL+JTUR+JTHE+JPOR+IRB 
+C Key 2---------------------------------
+        IPLAST=ISHFT(IPLAST,0)
+        IFAIL = ISHFT(IFAIL,3)
+        ML1=ISHFT(ML1,5)
+        ML2=ISHFT(ML2,13)
+        IGT=ISHFT(IGT,21)
+        JCVT=ISHFT(JCVT,28)
+        ITRI(2,I)=IPLAST+ML1+ML2+IGT+JCVT + IFAIL
+C Key 3---------------------------------
+        ITRI(3,I)=MID
+C Key 4---------------------------------
+        ITRI(4,I)=PID
+C Key 5---------------------------------
+        IEOS = ISHFT(IEOS,0)
+C       next = MY_SHIFTL(next,4) 
+        ITRI(5,I)=IEOS
+
+      ENDDO
+C
+      MODE=0
+      CALL MY_ORDERS( MODE, WORK, ITRI, INDEX, NUMELQ , 5)
+C
+      DO I=1,NUMELQ
+        IPARTQ(I) =INUM(1,INDEX(I))
+        IQUAOFF(I) = INUM(9,INDEX(I))
+      ENDDO
+      DO I=1,NUMELQ
+        CEP(I)=XEP(INDEX(I))
+        permutation%quad(i) = index2(index(i))
+      ENDDO
+      DO  K=1,7
+        DO  I=1,NUMELQ
+          IXQ(K,I)=INUM(K+1,INDEX(I))
+        ENDDO
+      ENDDO
+
+C
+C INVERSE OF INDEX (ITR1)
+C
+      DO I=1,NUMELQ
+        ITR1(INDEX(I))=I
+      ENDDO
+
+
+C
+C SURFACE RENUMBERING
+C
+      DO I=1,NSURF
+        NN=IGRSURF(I)%NSEG
+        DO J=1,NN
+          IF(IGRSURF(I)%ELTYP(J) == 2) IGRSURF(I)%ELEM(J) = ITR1(IGRSURF(I)%ELEM(J))
+        ENDDO
+      ENDDO
+C
+C RSOLID GROUPS RENUMBERING
+C
+      DO I=1,NGRQUAD
+        NN=IGRQUAD(I)%NENTITY
+        DO J=1,NN
+          IGRQUAD(I)%ENTITY(J) = ITR1(IGRQUAD(I)%ENTITY(J))
+        ENDDO
+      ENDDO
+C
+C--------------------------------------------------------------
+C         BUILDING SUPER GROUPS
+C--------------------------------------------------------------
+      ND=1
+      DO I=2,NUMELQ
+        II=ITRI(1,INDEX(I))
+        JJ=ITRI(1,INDEX(I-1))
+        II1=ITRI(2,INDEX(I))
+        JJ1=ITRI(2,INDEX(I-1))
+        II2=ITRI(3,INDEX(I))
+        JJ2=ITRI(3,INDEX(I-1))
+        II3=ITRI(4,INDEX(I))
+        JJ3=ITRI(4,INDEX(I-1))
+        II4=ITRI(5,INDEX(I))
+        JJ4=ITRI(5,INDEX(I-1))
+        IF(II/=JJ.OR.
+     .     II1/=JJ1.OR.
+     .     II4/=JJ4.OR.
+     .     II2/=JJ2.OR.
+     .     II3/=JJ3) THEN
+              ND=ND+1
+              EADD(ND)=I
+        ENDIF
+      ENDDO
+      EADD(ND+1) = NUMELQ+1
+      call my_dealloc(index2)
+C
+      RETURN
+      END

@@ -1,0 +1,151 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    i2_surfi_dim_mod   ../starter/source/interfaces/inter3d1/i2_surfi_dim.F90
+!||--- called by ------------------------------------------------------
+!||    lecint             ../starter/source/interfaces/interf1/lecint.F
+!||====================================================================
+      module i2_surfi_dim_mod
+        implicit none
+      contains
+! ======================================================================================================================
+!                                                   procedures
+! ======================================================================================================================
+!! \brief This subroutine performs the dimensioning of the interface type2 with input surf/surf
+!||====================================================================
+!||    i2_surfi_dim     ../starter/source/interfaces/inter3d1/i2_surfi_dim.F90
+!||--- called by ------------------------------------------------------
+!||    lecint           ../starter/source/interfaces/interf1/lecint.F
+!||--- calls      -----------------------------------------------------
+!||    select_s2s       ../starter/source/interfaces/inter3d1/select_s2s.F90
+!||--- uses       -----------------------------------------------------
+!||    select_s2s_mod   ../starter/source/interfaces/inter3d1/select_s2s.F90
+!||====================================================================
+        subroutine i2_surfi_dim(                                             &
+          npari   ,ipari   ,nsurf   ,igrsurf ,                &
+          nsn     ,nrtm    ,nmn     ,dsearch ,                &
+          x       ,numnod  )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use groupdef_mod
+          use select_s2s_mod, only : select_s2s
+          use precision_mod, only : WP
+          use MY_ALLOC_MOD
+          use my_dealloc_mod, only : my_dealloc
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,                                   intent(in) :: npari               !< the size of ipari
+          integer,   dimension(npari),               intent(in) :: ipari               !< interface general data
+          integer,                                   intent(in) :: nsurf               !< the size of igrsurf
+          type (surf_)   , dimension(nsurf),         intent(in) :: igrsurf             !< surf data
+          integer,                                   intent(in) :: numnod              !< the size of ipari
+          integer,                                  intent(out) :: nsn                 !< number of secondary nodes
+          integer,                                  intent(out) :: nrtm                !< number of main segs
+          integer,                                  intent(out) :: nmn                 !< number of main nodes
+          real(kind=WP),                                   intent(in) :: dsearch             !< search distance
+          real(kind=WP),    dimension(3,numnod),           intent(in) :: x                   !< coordinates of the nodes
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,l,k,n,ns,isu1,isu2,nsu1,nsu2,id
+          integer,  dimension(:), allocatable :: itags1,itags2,itagn
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   External functions
+! ----------------------------------------------------------------------------------------------------------------------
+! [ external functions must be kept to minimum ]
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+          isu1  = ipari(45)
+          isu2  = ipari(46)
+          nsu1  = igrsurf(isu1)%nseg
+          nsu2  = igrsurf(isu2)%nseg
+          id  = ipari(15)
+          call my_alloc(itags1,nsu1,"itags1")
+          call my_alloc(itags2,nsu2,"itags2")
+          itags1 = 1
+          itags2 = 1
+!
+          call select_s2s(nsu1,nsu2,igrsurf(isu1)%nodes,igrsurf(isu2)%nodes,itags1,itags2,x,numnod,dsearch)
+          call my_alloc(itagn,numnod,"itagn")
+          itagn = 0
+          l = 0
+          do i=1,igrsurf(isu1)%nseg
+            if (itags1(i)>0) l = l + 1
+          end do
+          nrtm = l
+          l = 0
+          do i=1,igrsurf(isu2)%nseg
+            if (itags2(i)>0) l = l + 1
+          end do
+          nrtm = nrtm + l
+! nsn
+          ns = 0
+          do i=1,igrsurf(isu1)%nseg
+            if (itags1(i)==0) cycle
+            do k=1,4
+              n=igrsurf(isu1)%nodes(i,k)
+              if(itagn(n) == 0)then
+                ns = ns + 1
+                itagn(n) = 1
+              end if
+            end do
+          end do
+          nsn = ns
+          ns = 0
+          do i=1,igrsurf(isu2)%nseg
+            if (itags2(i)==0) cycle
+            do k=1,4
+              n=igrsurf(isu2)%nodes(i,k)
+              if(itagn(n) == 0)then
+                ns = ns + 1
+                itagn(n) = 2
+              end if
+            end do
+          end do
+          nsn = nsn + ns
+          nmn = nsn
+          call my_dealloc(itags1)
+          call my_dealloc(itags2)
+          call my_dealloc(itagn)
+
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine i2_surfi_dim
+      end module i2_surfi_dim_mod
+
+
+
+
+
+
+

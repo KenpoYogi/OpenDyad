@@ -1,0 +1,707 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    i11trivox        ../engine/source/interfaces/intsort/i11trivox.F
+!||--- called by ------------------------------------------------------
+!||    i11buce_vox      ../engine/source/interfaces/intsort/i11buce.F
+!||--- calls      -----------------------------------------------------
+!||    i11sto_vox       ../engine/source/interfaces/intsort/i11sto.F
+!||    ireallocate      ../engine/share/modules/realloc_mod.F
+!||    my_barrier       ../engine/source/system/machine.F
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    realloc_mod      ../engine/share/modules/realloc_mod.F
+!||    tri11            ../engine/share/modules/tri11_mod.F
+!||    tri7box          ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE I11TRIVOX(
+     1      IRECTS, IRECTM , X      , NRTM      ,NRTSR ,
+     2      XYZM  , II_STOK, CAND_S , CAND_M    ,NSN4  ,
+     3      NOINT , TZINF  , I_MEM  , ESHIFT    ,ADDCM ,
+     5      CHAINE, NRTS   , ITAB   , STFS      ,STFM  ,
+     6      IAUTO , VOXEL  , NBX    , NBY       ,NBZ   ,
+     7      ITASK , IFPEN  , IFORM  , GAPMIN    ,DRAD  ,
+     8      MARGE  ,GAP_S  , GAP_M  , GAP_S_L   ,GAP_M_L,
+     9      BGAPSMX, IGAP  ,GAP     ,FLAGREMNODE,KREMNODE,
+     1      REMNODE,DGAPLOAD)    
+C============================================================================
+C   M o d u l e s
+C-----------------------------------------------
+      USE REALLOC_MOD
+      USE TRI7BOX
+      USE TRI11
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#ifdef  MPI
+#endif
+!-----------------------------------------------
+!  SUBROUTINE AIM
+! ==============
+! VOXEL SEARCH to find couple (edge,edge) with penetration among all possible couples defined by second and main side.
+! Temporary found candidate are written in Temporary array PROV_S and PROV_M in order to optimise OpenMP performances.
+! There is no order.
+! PROV_S(i),PROV_M(i) : is a potential candidate couple because edges are geometrically near each other.
+! I11STO subroutine will compute if penetration is positive and if couple was not already stoked, in this case, candidate is stoked in CAND(S(i), CAND_M(i)
+!
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C
+C     NOM          DESCRIPTION                       E/S
+C
+C     ADD(2,*)     ARRAY OF ADRESSES              E/S 
+C          1.........ADRESSES NODES C          2.........ADRESSES ELEMENTS
+C     ZYZM(6,*)    ARRAY OF XYZMIN                E/S 
+C          1.........XMIN BOITE
+C          2.........YMIN BOITE
+C          3.........ZMIN BOITE
+C          4.........XMAX BOITE
+C          5.........YMAX BOITE
+C          6.........ZMAX BOITE
+C     IRECTM(2,*)  ARRAY OF CONEC                 E
+C          1.........NODE 1 main EDGE
+C          2.........NODE 2 main EDGE
+C     IRECTS(2,*)  ARRAY OF CONEC                 E
+C          1.........NODE 1 SECOND EDGE
+C          2.........NODE 2 SECOND EDGE
+C     X(3,*)       COORDONNEES NODALES               E
+C     II_STOK       contact pairs storage level
+C                                CANDIDATES impact    E/S
+C     CAND_S       boites resultats nodes C     CAND_M       adresses des boites resultat elements
+C     NOINT        INTERFACE USER NUMBER
+C     TZINF        TAILLE ZONE INFLUENCE
+C     VOXEL(*,*,*) VOXEL PARTIONNEMENT DE l'ESPACE (NBX+2,NBY+2,NBZ+2) 
+C                  stores secondary edges in each voxel
+C                  In practice designe the first stop on a chain list
+C     MAX_ADD      maximum address for chain arrays
+C     NSN4         4*NSN maximum size now allowed for the
+C                  COUPLES NODES,ELT CANDIDATES
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ::
+     .         NRTM,NRTSR,ESHIFT,NRTS,IGAP,
+     .         NSN4,NOINT,ITAB(*),NBX,NBY,NBZ,IAUTO,
+     .         IRECTS(2,NRTS),IRECTM(2,NRTM)
+      INTEGER ITASK,IFORM
+      INTEGER, INTENT(INOUT) ::
+     .         CAND_S(*),CAND_M(*),ADDCM(*),CHAINE(2,*), 
+     .         VOXEL(1:NBX+2,1:NBY+2,1:NBZ+2), I_MEM,IFPEN(*),II_STOK,
+     .         FLAGREMNODE,KREMNODE(*),REMNODE(*)
+      my_real
+     .       ,INTENT(IN) ::
+     .         X(3,*),XYZM(6,*),
+     .        STFS(NRTS),STFM(NRTM), TZINF, GAP
+      my_real , INTENT(IN) :: DGAPLOAD,DRAD
+      my_real
+     .        GAPMIN,MARGE,BGAPSMX,
+     .        GAP_S(*),GAP_M(*), GAP_S_L(*), GAP_M_L(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER 
+     .        I,J,SS1,SS2,
+     .        N1,N2,MM1,MM2, K,L,
+     .        PROV_S(2*MVSIZ),PROV_M(2*MVSIZ),    !Provisional table of candidates sent to i11stok
+     .        IX1,IY1,IZ1,IX2,IY2,IZ2, 
+     .        IX,IY,IZ, FIRST_ADD,
+     .        I_STOK, I_STOK_BAK, IEDG,
+     .        PREV_ADD, CHAIN_ADD, CURRENT_ADD,   !for scanning chain arrays
+     .        NEDG, DEJA , MAX_ADD , M,REMOVE_REMOTE
+      INTEGER, DIMENSION(3) :: TMIN,TMAX
+      my_real
+     .        XX1, XX2,
+     .        XMIN, XMAX,YMIN, YMAX,ZMIN, ZMAX, 
+     .        YY1,YY2,ZZ1,ZZ2,
+     .        AAA,
+     .        XMAX_EDGS(NRTS+NRTSR), XMIN_EDGS(NRTS+NRTSR),   !min/max coordinates of secondary and main edges
+     .        YMAX_EDGS(NRTS+NRTSR), YMIN_EDGS(NRTS+NRTSR),
+     .        ZMAX_EDGS(NRTS+NRTSR), ZMIN_EDGS(NRTS+NRTSR),
+     .        XMAX_EDGM(NRTM), XMIN_EDGM(NRTM),
+     .        YMAX_EDGM(NRTM), YMIN_EDGM(NRTM),
+     .        ZMAX_EDGM(NRTM), ZMIN_EDGM(NRTM),     
+     .        XMINB,YMINB,ZMINB,XMAXB,YMAXB,ZMAXB    
+C-----------------------------------------------
+      INTEGER, DIMENSION(:), ALLOCATABLE ::  TAGREMLINE    
+C-----------------------------------------------
+C
+      IF(FLAGREMNODE==2) THEN
+        call my_alloc(TAGREMLINE, NRTS, "TAGREMLINE")
+        TAGREMLINE(1:NRTS) = 0
+      ENDIF
+C  
+      AAA = ZERO 
+      !ATTENTION A POPTIONMISER FOR NE PAS TO PERFORM ONE RAZ COMPLETE SI NRTS ==0
+      MIN_IX=NBX+2
+      MIN_IY=NBY+2
+      MIN_IZ=NBZ+2
+      MAX_IX=1
+      MAX_IY=1
+      MAX_IZ=1      
+      
+      !---------------------------------------------------------!
+      ! allocation of chain arrays
+      !---------------------------------------------------------!
+      IF(ITASK == 0)THEN
+        MAX_ADD = max(1,4*(NRTS+NRTSR))
+        ALLOCATE(LCHAIN_ELEM(1:MAX_ADD))
+! TODO: non-default lower bound, convert manually
+        ALLOCATE(LCHAIN_NEXT(1:MAX_ADD))
+! TODO: non-default lower bound, convert manually
+        ALLOCATE(LCHAIN_LAST(1:MAX_ADD))
+! TODO: non-default lower bound, convert manually
+      END IF   
+      
+            CALL MY_BARRIER      !all threads wait for allocation       
+
+      IF(NRTM==0.OR.NRTS==0)THEN
+       !Do not reinitize all the Voxel if there is no candidate
+        MIN_IX=1
+        MIN_IY=1
+        MIN_IZ=1        
+      END IF
+
+      !---------------------------------------------------------!
+      ! retrieval of domain boundaries
+      !---------------------------------------------------------!
+      XMIN = XYZM(1,1)
+      YMIN = XYZM(2,1)
+      ZMIN = XYZM(3,1)
+      XMAX = XYZM(4,1)
+      YMAX = XYZM(5,1)
+      ZMAX = XYZM(6,1)      
+c     Dev Future: xminb larger than Xmin ...
+      XMINB = XMIN
+      YMINB = YMIN
+      ZMINB = ZMIN
+      XMAXB = XMAX
+      YMAXB = YMAX
+      ZMAXB = ZMAX  
+C=======================================================================
+C 1   for each edge, mark occupied voxels
+C     the number of edges in a voxel being variable, we
+C     use a chain array
+C     these voxels represent the edge neighborhood
+C     We then look for all the entities interfaces
+C     in this neighborhood
+C=======================================================================
+      IF(ITASK == 0)THEN
+        
+        CURRENT_ADD=1 ! first address
+
+        DO I = 1,NRTS  !si besoin on peut inverser Main/Secnd
+        
+            IF(STFS(I)==ZERO)CYCLE !We do not retain the Destruit facets
+                 
+            !-------------------------------------------!
+            ! Nodes ID for edge (N1,N2)                      !
+            !-------------------------------------------!
+            N1=IRECTS(1,I)
+            N2=IRECTS(2,I)             
+            !-------------------------------------------!
+            ! Coordinates of the two nodes              !
+            ! +optimization // search for nodes
+            !within xmin xmax of processor elements
+            !-------------------------------------------!
+            XX1=X(1,N1)
+            XX2=X(1,N2)
+            XMAX_EDGS(I)=MAX(XX1,XX2); IF(XMAX_EDGS(I) < XMIN) CYCLE
+            XMIN_EDGS(I)=MIN(XX1,XX2); IF(XMIN_EDGS(I) > XMAX) CYCLE             
+            YY1=X(2,N1)
+            YY2=X(2,N2) 
+            YMAX_EDGS(I)=MAX(YY1,YY2); IF(YMAX_EDGS(I) < YMIN) CYCLE
+            YMIN_EDGS(I)=MIN(YY1,YY2); IF(YMIN_EDGS(I) > YMAX) CYCLE         
+            ZZ1=X(3,N1)
+            ZZ2=X(3,N2)
+            ZMAX_EDGS(I)=MAX(ZZ1,ZZ2); IF(ZMAX_EDGS(I) < ZMIN) CYCLE
+            ZMIN_EDGS(I)=MIN(ZZ1,ZZ2); IF(ZMIN_EDGS(I) > ZMAX) CYCLE
+
+            !-------------------------------------------!
+            !  VOXEL OCCUPIED BY THE EDGE               !
+            !-------------------------------------------!
+            !Voxel_lower_left_bound for this edge
+            IX1=INT(NBX*(XMIN_EDGS(I)-XMINB)/(XMAXB-XMINB))
+            IY1=INT(NBY*(YMIN_EDGS(I)-YMINB)/(YMAXB-YMINB))
+            IZ1=INT(NBZ*(ZMIN_EDGS(I)-ZMINB)/(ZMAXB-ZMINB))
+            IX1=MAX(1,2+MIN(NBX,IX1))
+            IY1=MAX(1,2+MIN(NBY,IY1))
+            IZ1=MAX(1,2+MIN(NBZ,IZ1))
+            !Voxel_upper_right_bound for this edge
+            IX2=INT(NBX*(XMAX_EDGS(I)-XMINB)/(XMAXB-XMINB))
+            IY2=INT(NBY*(YMAX_EDGS(I)-YMINB)/(YMAXB-YMINB))
+            IZ2=INT(NBZ*(ZMAX_EDGS(I)-ZMINB)/(ZMAXB-ZMINB))
+            IX2=MAX(1,2+MIN(NBX,IX2))
+            IY2=MAX(1,2+MIN(NBY,IY2))
+            IZ2=MAX(1,2+MIN(NBZ,IZ2))
+          
+            !for voxel reset
+            MIN_IX = MIN(MIN_IX,IX1)
+            MIN_IY = MIN(MIN_IY,IY1)
+            MIN_IZ = MIN(MIN_IZ,IZ1)          
+            MAX_IX = MAX(MAX_IX,IX2)
+            MAX_IY = MAX(MAX_IY,IY2)
+            MAX_IZ = MAX(MAX_IZ,IZ2)                                                  
+
+            !----------------------------------------------!
+            ! EDGE STORAGE FOR EACH VOXEL (CHAINED ARRAY)  !
+            !----------------------------------------------!
+C
+C           VOXEL(i,j,k) LCHAIN_LAST(FIRST)
+C           +-----------+------------+ 
+C           |  =>FIRST  |   =>LAST   |                    
+C           +--+--------+--+---------+
+C              |           |
+C              |           |
+C              |           |
+C              |           |   LCHAIN_ELEM(*) LCHAIN_NEXT(*) 
+C              |           |   +------------+-----------+
+C              +-------------->| edge_id    |   iadd 3  |  1:FIRST --+
+C                          |   +------------+-----------+            |
+C                          |   |            |              |  2           |
+C                          |   +------------+-----------+            |
+C                          |   | edge_id    |   iadd 4  |  3 <-------+
+C                          |   +------------+-----------+            |
+C                          |   | edge_id    |   iadd 6  |  4 <-------+
+C                          |   +------------+-----------+            |
+C                        |   |            |              |  5           |
+C                          |   +------------+-----------+            |
+C                          +-->| edge_id    |   0       |  6:LAST <--+
+C                            +------------+-----------+
+C                              |            |              |  MAX_ADD
+C                              +------------+-----------+
+C 
+            !for all voxels occupied by the brick
+            DO IZ = IZ1,IZ2
+             DO IY = IY1,IY2
+              DO IX = IX1,IX2
+ 
+                FIRST_ADD = VOXEL(IX,IY,IZ)
+
+                IF(FIRST_ADD == 0)THEN
+                !voxel encore vide
+                 VOXEL(IX,IY,IZ)          = CURRENT_ADD ! address in chain array of first edge found occupying the voxel
+                 LCHAIN_LAST(CURRENT_ADD) = CURRENT_ADD ! Last = Address for Current Edge
+                 LCHAIN_ELEM(CURRENT_ADD) = I               ! edge ID
+                 LCHAIN_NEXT(CURRENT_ADD) = 0               ! no next because last in the list
+                ELSE
+                 !voxel contenant deja une edge
+                 PREV_ADD                 = LCHAIN_LAST(FIRST_ADD) ! becomes the penultimate
+                 LCHAIN_LAST(FIRST_ADD)         = CURRENT_ADD                  ! update of the last
+                 LCHAIN_ELEM(CURRENT_ADD) = I                          ! edge ID
+                 LCHAIN_NEXT(PREV_ADD)         = CURRENT_ADD                  ! maj du suivant 0 -> CURRENT_ADD
+                 LCHAIN_NEXT(CURRENT_ADD) = 0                          ! no next because last in the list
+                ENDIF
+
+                CURRENT_ADD = CURRENT_ADD+1 
+
+                IF( CURRENT_ADD>=MAX_ADD)THEN
+                 !Optimization: DEALLOCATE/GOTO DEBUT SUPRRESION.
+                 !REALLOCATE SI PAS ASSEZ DE PLACE : inutile de recommencer de 1 a MAX_ADD-1, on poursuit de MAX_ADD a 2*MAX_ADD
+                 MAX_ADD = 2 * MAX_ADD        
+                 !print *, "reallocate"
+                 LCHAIN_NEXT => IREALLOCATE(LCHAIN_NEXT, MAX_ADD)
+                 LCHAIN_ELEM => IREALLOCATE(LCHAIN_ELEM, MAX_ADD)
+                 LCHAIN_LAST => IREALLOCATE(LCHAIN_LAST, MAX_ADD)                               
+                ENDIF                         
+
+              ENDDO !IX
+             ENDDO !IY
+            ENDDO !IZ
+
+        ENDDO !DO I=1,NRTS
+
+C=======================================================================
+C 2   process remote edges. retrieve the 2 nodes of
+C    remote edges that are in the same voxels
+C
+C           a to perform C
+C=======================================================================
+        DO I = NRTS+1,NRTS+NRTSR  !si besoin on peut inverser Main/Secnd       
+c            If (Stfs (i) == Zero) Cycle! We do not retain the destroyed facets, already done in SPMD_Mach :: SPMD_TRI11VOX
+          J=I-NRTS          
+          !-------------------------------------------!
+          ! Coordinates of the two nodes              !
+          ! +optimization // search for nodes
+          !within xmin xmax of processor elements
+          !-------------------------------------------!
+          XX1=XREM(1,J)
+          XX2=XREM(8,J)
+          XMAX_EDGS(I)=MAX(XX1,XX2)      ; IF(XMAX_EDGS(I) < XMIN) CYCLE
+          XMIN_EDGS(I)=MIN(XX1,XX2)      ; IF(XMIN_EDGS(I) > XMAX) CYCLE             
+          YY1=XREM(2,J)
+          YY2=XREM(9,J) 
+          YMAX_EDGS(I)=MAX(YY1,YY2)      ; IF(YMAX_EDGS(I) < YMIN) CYCLE
+          YMIN_EDGS(I)=MIN(YY1,YY2)      ; IF(YMIN_EDGS(I) > YMAX) CYCLE         
+          ZZ1=XREM(3,J)
+          ZZ2=XREM(10,J)
+          ZMAX_EDGS(I)=MAX(ZZ1,ZZ2)      ; IF(ZMAX_EDGS(I) < ZMIN) CYCLE
+          ZMIN_EDGS(I)=MIN(ZZ1,ZZ2)      ; IF(ZMIN_EDGS(I) > ZMAX) CYCLE
+
+          !-------------------------------------------!
+          !  VOXEL OCCUPIED BY THE EDGE               !
+          !-------------------------------------------!
+          !Voxel_lower_left_bound for this edge
+          IX1=INT(NBX*(XMIN_EDGS(I)-XMINB)/(XMAXB-XMINB))
+          IY1=INT(NBY*(YMIN_EDGS(I)-YMINB)/(YMAXB-YMINB))
+          IZ1=INT(NBZ*(ZMIN_EDGS(I)-ZMINB)/(ZMAXB-ZMINB))
+          IX1=MAX(1,2+MIN(NBX,IX1))
+          IY1=MAX(1,2+MIN(NBY,IY1))
+          IZ1=MAX(1,2+MIN(NBZ,IZ1))
+          !Voxel_upper_right_bound for this edge
+          IX2=INT(NBX*(XMAX_EDGS(I)-XMINB)/(XMAXB-XMINB))
+          IY2=INT(NBY*(YMAX_EDGS(I)-YMINB)/(YMAXB-YMINB))
+          IZ2=INT(NBZ*(ZMAX_EDGS(I)-ZMINB)/(ZMAXB-ZMINB))
+          IX2=MAX(1,2+MIN(NBX,IX2))
+          IY2=MAX(1,2+MIN(NBY,IY2))
+          IZ2=MAX(1,2+MIN(NBZ,IZ2))
+          
+          !for voxel reset
+          MIN_IX = MIN(MIN_IX,IX1)
+          MIN_IY = MIN(MIN_IY,IY1)
+          MIN_IZ = MIN(MIN_IZ,IZ1)          
+          MAX_IX = MAX(MAX_IX,IX2)
+          MAX_IY = MAX(MAX_IY,IY2)
+          MAX_IZ = MAX(MAX_IZ,IZ2)                                                  
+
+          !----------------------------------------------!
+          ! EDGE STORAGE FOR EACH VOXEL (CHAINED ARRAY)  !
+          !----------------------------------------------!
+C
+C           VOXEL(i,j,k) LCHAIN_LAST(FIRST)
+C           +-----------+------------+ 
+C           |  =>FIRST  |   =>LAST   |                    
+C           +--+--------+--+---------+
+C              |           |
+C              |           |
+C              |           |
+C              |           |   LCHAIN_ELEM(*) LCHAIN_NEXT(*) 
+C              |           |   +------------+-----------+
+C              +-------------->| edge_id    |   iadd 3  |  1:FIRST --+
+C                          |   +------------+-----------+            |
+C                          |   |            |              |  2           |
+C                          |   +------------+-----------+            |
+C                          |   | edge_id    |   iadd 4  |  3 <-------+
+C                          |   +------------+-----------+            |
+C                          |   | edge_id    |   iadd 6  |  4 <-------+
+C                          |   +------------+-----------+            |
+C                        |   |            |              |  5           |
+C                          |   +------------+-----------+            |
+C                          +-->| edge_id    |   0       |  6:LAST <--+
+C                            +------------+-----------+
+C                              |            |              |  MAX_ADD
+C                              +------------+-----------+
+C 
+            !for all voxels occupied by the brick
+          DO IZ = IZ1,IZ2
+           DO IY = IY1,IY2
+            DO IX = IX1,IX2           
+              FIRST_ADD = VOXEL(IX,IY,IZ)
+              IF(FIRST_ADD == 0)THEN
+               !voxel encore vide
+                VOXEL(IX,IY,IZ)          = CURRENT_ADD ! address in chain array of first edge found occupying the voxel
+                LCHAIN_LAST(CURRENT_ADD) = CURRENT_ADD ! Last = Address for Current Edge
+                LCHAIN_ELEM(CURRENT_ADD) = I               ! edge ID
+                LCHAIN_NEXT(CURRENT_ADD) = 0               ! no next because last in the list
+              ELSE
+                !voxel contenant deja une edge
+                PREV_ADD                 = LCHAIN_LAST(FIRST_ADD) ! becomes the penultimate
+                LCHAIN_LAST(FIRST_ADD)         = CURRENT_ADD                  ! update of the last
+                LCHAIN_ELEM(CURRENT_ADD) = I                          ! edge ID
+                LCHAIN_NEXT(PREV_ADD)         = CURRENT_ADD                  ! maj du suivant 0 -> CURRENT_ADD
+                LCHAIN_NEXT(CURRENT_ADD) = 0                          ! no next because last in the list
+              ENDIF
+              CURRENT_ADD = CURRENT_ADD+1 
+              IF( CURRENT_ADD>=MAX_ADD)THEN
+                !Optimization: DEALLOCATE/GOTO DEBUT SUPRRESION.
+                !REALLOCATE SI PAS ASSEZ DE PLACE : inutile de recommencer de 1 a MAX_ADD-1, on poursuit de MAX_ADD a 2*MAX_ADD
+                MAX_ADD = 2 * MAX_ADD        
+                !print *, "reallocate remote"
+                LCHAIN_NEXT => IREALLOCATE(LCHAIN_NEXT, MAX_ADD)
+                LCHAIN_ELEM => IREALLOCATE(LCHAIN_ELEM, MAX_ADD)
+                LCHAIN_LAST => IREALLOCATE(LCHAIN_LAST, MAX_ADD)                               
+              ENDIF                         
+            ENDDO !IX
+           ENDDO !IY
+          ENDDO !IZ
+
+        ENDDO !DO NRTS+1,NRTS+NRTSR
+
+
+      END IF !(ITASK==0)
+      
+      CALL MY_BARRIER  !The Voxel table must be filled before continuing 
+                       !max_add must be the same for everyone
+C=======================================================================
+C 3   from voxels occupied by a main edge, we are able
+C     to know all secondary edges in this neighborhood
+C     which allows creating candidate pairs for contact
+C     if penetration is positive
+C=======================================================================
+      NEDG   = 0 
+      I_STOK = 0
+      MARGE = TZINF - MAX(GAP+DGAPLOAD,DRAD)
+
+      DO IEDG=1,NRTM
+
+        IF(STFM(IEDG) == ZERO)CYCLE   ! We do not retain the Destruit facets
+
+c       AAA = ZERO !MARGE
+        AAA = TZINF
+        IF(IGAP == 0)THEN
+          AAA = TZINF          
+        ELSE
+          AAA = MARGE+
+     .        MAX(MAX(GAPMIN,BGAPSMX+GAP_M(IEDG))+DGAPLOAD,DRAD)
+        ENDIF
+
+        
+        !-------------------------------------------!
+        !    (N1,N2) is the current main edge     !
+        !-------------------------------------------!
+        N1 = IRECTM(1,IEDG)
+        N2 = IRECTM(2,IEDG)
+        MM1 = ITAB(N1)
+        MM2 = ITAB(N2)
+
+        !-------------------------------------------!
+        !     X-coordinates of the four nodes       !
+        !-------------------------------------------!
+        XX1=X(1,N1)
+        XX2=X(1,N2)
+        YY1=X(2,N1)
+        YY2=X(2,N2)
+        ZZ1=X(3,N1)
+        ZZ2=X(3,N2)
+
+        XMAX_EDGM(IEDG)=MAX(XX1,XX2) ! +TZINF
+        XMIN_EDGM(IEDG)=MIN(XX1,XX2) ! -TZINF
+        YMAX_EDGM(IEDG)=MAX(YY1,YY2) ! +TZINF
+        YMIN_EDGM(IEDG)=MIN(YY1,YY2) ! -TZINF
+        ZMAX_EDGM(IEDG)=MAX(ZZ1,ZZ2) ! +TZINF
+        ZMIN_EDGM(IEDG)=MIN(ZZ1,ZZ2) ! -TZINF
+
+        !-------------------------------------------!
+        !  VOXEL OCCUPIED BY THE BRICK              !
+        !-------------------------------------------!
+        !Voxel_lower_left_bound for this element---+
+        IX1=INT(NBX*(XMIN_EDGM(IEDG)-AAA-XMINB)/(XMAXB-XMINB))
+        IY1=INT(NBY*(YMIN_EDGM(IEDG)-AAA-YMINB)/(YMAXB-YMINB))
+        IZ1=INT(NBZ*(ZMIN_EDGM(IEDG)-AAA-ZMINB)/(ZMAXB-ZMINB))
+        IX1=MAX(1,2+MIN(NBX,IX1))
+        IY1=MAX(1,2+MIN(NBY,IY1))
+        IZ1=MAX(1,2+MIN(NBZ,IZ1))
+        !Voxel_upper_right_bound for this element---+
+        IX2=INT(NBX*(XMAX_EDGM(IEDG)+AAA-XMINB)/(XMAXB-XMINB))
+        IY2=INT(NBY*(YMAX_EDGM(IEDG)+AAA-YMINB)/(YMAXB-YMINB))
+        IZ2=INT(NBZ*(ZMAX_EDGM(IEDG)+AAA-ZMINB)/(ZMAXB-ZMINB))
+        IX2=MAX(1,2+MIN(NBX,IX2))
+        IY2=MAX(1,2+MIN(NBY,IY2))
+        IZ2=MAX(1,2+MIN(NBZ,IZ2))
+
+        DEJA = 0     ! The Edge is not yet a candidate.
+        I_STOK_BAK = I_STOK
+C
+C--- IREMGAP - tag of deactivated lines
+        IF(FLAGREMNODE==2)THEN
+          K = KREMNODE(2*(IEDG-1)+1)
+          L = KREMNODE(2*(IEDG-1)+2)-1
+          DO M=K,L
+            TAGREMLINE(REMNODE(M)) = 1
+          ENDDO
+        ENDIF
+C
+        !we browse again the secondary edges in the neighborhood of main edge IEDG
+        !ON CONSTITUE ICI ONE COUPLE
+
+        DO IZ = IZ1,IZ2
+         DO IY = IY1,IY2
+          DO IX = IX1,IX2        
+          
+            CHAIN_ADD = VOXEL(IX,IY,IZ) ! address in chain array of first edge stored in the voxel
+            DO WHILE(CHAIN_ADD /= 0)          ! loop over edges of current voxel
+              I = LCHAIN_ELEM(CHAIN_ADD)       ! numbers of edge_id scanned in current voxel
+
+              !Second Edge Nodes, exclude couples with common node
+              IF (I<=NRTS)THEN
+                SS1=ITAB(IRECTS(1,I))
+                SS2=ITAB(IRECTS(2,I))              
+              ELSE 
+                SS1=IREM(2,I-NRTS)
+                SS2=IREM(3,I-NRTS)                                                        
+              END IF
+              
+              IF( (SS1==MM1).OR.(SS1==MM2).OR.
+     .            (SS2==MM1).OR.(SS2==MM2)    )THEN
+                CHAIN_ADD = LCHAIN_NEXT(CHAIN_ADD)
+                CYCLE
+              END IF
+              
+              !Uniqueness of Peirs
+              IF(IAUTO==1 .AND. MM1<SS1 )THEN
+                CHAIN_ADD = LCHAIN_NEXT(CHAIN_ADD)
+                CYCLE
+              END IF                      
+
+C             IREMPGAP
+              IF (FLAGREMNODE == 2) THEN
+                IF (I <= NRTS) THEN
+C-                Local Taged lines are removed
+                  IF(TAGREMLINE(I)==1) THEN
+                    CHAIN_ADD = LCHAIN_NEXT(CHAIN_ADD)
+                    CYCLE
+                  ENDIF
+                ELSE
+C-                Remote lines are identified by nodes
+                  K = KREMNODE(2*(IEDG-1)+2)
+                  L = KREMNODE(2*(IEDG-1)+3)-1
+                  REMOVE_REMOTE = 0
+                  DO M=K,L,2
+                    IF ((SS1==REMNODE(M)).AND.(SS2==REMNODE(M+1))) REMOVE_REMOTE = 1
+                  ENDDO
+                  IF (REMOVE_REMOTE==1) THEN
+                    CHAIN_ADD = LCHAIN_NEXT(CHAIN_ADD)
+                    CYCLE
+                  ENDIF
+                ENDIF
+              ENDIF  
+  
+              I_STOK = I_STOK + 1 !on dispose d'un candidat
+              PROV_S(I_STOK) = I    !edge secnd
+              PROV_M(I_STOK) = IEDG !edge main
+                                                            
+              !print *, "candidat:",  IEDG, I
+              IF(DEJA==0) NEDG = NEDG + 1     !nombre d edges candidate au calcul de contact (debug)                 
+              DEJA=1                          !The EDGE Main IEDG is the subject of a candidate writing.We count the main edges being the subject of a candidate couple: we must no longer include NEDG for the other EDGE SOLD TESTEES.
+              CHAIN_ADD = LCHAIN_NEXT(CHAIN_ADD)
+C-----------------------------------------------------
+              IF(I_STOK>=NVSIZ)THEN
+                CALL I11STO_VOX(
+     1               NVSIZ ,IRECTS,IRECTM,X     ,II_STOK,
+     2               CAND_S,CAND_M,NSN4  ,NOINT ,MARGE,
+     3               I_MEM ,PROV_S,PROV_M,ESHIFT,ADDCM ,
+     4               CHAINE,NRTS  ,ITAB  ,IFPEN ,IFORM,
+     5               GAPMIN,DRAD  ,IGAP, GAP_S, GAP_M,
+     7               GAP_S_L, GAP_M_L ,DGAPLOAD)
+
+                IF(I_MEM==2) THEN
+                  !print *, "too much candidates"
+c                    IF (ITASK==0)II_STOK=ZERO       
+                  GOTO 1000
+                END IF!(I_MEM==2)
+                I_STOK = I_STOK-NVSIZ
+C  !DIR$ ASSUME (I_STOK < NVSIZ) 
+                DO J=1,I_STOK
+                  PROV_S(J) = PROV_S(J+NVSIZ)
+                  PROV_M(J) = PROV_M(J+NVSIZ)
+                ENDDO           
+              ENDIF                 
+C-----------------------------------------------------                   
+
+            ENDDO !NEXT WHILE(CHAIN_ADD /= 0)
+          ENDDO   !NEXT IZ
+         ENDDO    !NEXT IY
+        ENDDO     !NEXT IZ
+ 
+C--- IREMGAP - clean of tagremline
+        IF(FLAGREMNODE==2)THEN
+          K = KREMNODE(2*(IEDG-1)+1)
+          L = KREMNODE(2*(IEDG-1)+2)-1
+          DO M=K,L
+            TAGREMLINE(REMNODE(M)) = 0
+          ENDDO
+        ENDIF
+
+      ENDDO       !NEXT IEDG
+
+C-------------------------------------------------------------------------
+C     end of sorting
+C-------------------------------------------------------------------------
+ 
+      IF(I_STOK/=0)CALL I11STO_VOX(
+     1              I_STOK,IRECTS,IRECTM,X     ,II_STOK,
+     2              CAND_S,CAND_M,NSN4  ,NOINT ,MARGE  ,
+     3              I_MEM ,PROV_S,PROV_M,ESHIFT,ADDCM  ,
+     4              CHAINE,NRTS  ,ITAB  ,IFPEN ,IFORM  ,
+     5              GAPMIN,DRAD  ,IGAP, GAP_S  ,GAP_M  ,
+     7              GAP_S_L, GAP_M_L ,DGAPLOAD)
+
+    
+C=======================================================================
+C 4   reset nodes in boxes to zero and deallocation
+C=======================================================================
+
+ 1000 CONTINUE            
+
+      CALL MY_BARRIER  !Do not be Desalloue as long as the other threads have not finished working  
+       
+
+      ! can be optimized: do not reset the whole table (several possible solutions)  
+      !! VOXEL( MIN_IX:MAX_IX, MIN_IY:MAX_IY, MIN_IZ:MAX_IZ ) = 0        
+      TMIN(1) = MIN_IX
+      TMIN(2) = MIN_IY
+      TMIN(3) = MIN_IZ
+
+      TMAX(1) = MAX_IX
+      TMAX(2) = MAX_IY
+      TMAX(3) = MAX_IZ
+      
+      IF (ITASK==0)THEN   
+        !RESET VOXEL WITHIN USED RANGE ONLY
+        DO K= TMIN(3),TMAX(3)
+          DO J= TMIN(2),TMAX(2)
+             DO I= TMIN(1),TMAX(1)
+                VOXEL(I,J,K) = 0
+             END DO
+          END DO
+        END DO   
+        !CHAINED LIST DEALLOCATION
+        call my_dealloc(LCHAIN_NEXT)
+        call my_dealloc(LCHAIN_ELEM)
+        call my_dealloc(LCHAIN_LAST)
+        IF(FLAGREMNODE==2) call my_dealloc(TAGREMLINE)
+      END IF    
+  
+C___________________________________________________________________________________________________________
+
+      RETURN   
+      END
+
+
+

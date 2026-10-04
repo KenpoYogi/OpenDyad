@@ -1,0 +1,181 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    stat_sphcel_spmd_mod   ../engine/source/output/sta/stat_sphcel_spmd.F90
+!||--- called by ------------------------------------------------------
+!||    genstat                ../engine/source/output/sta/genstat.F
+!||====================================================================
+      module stat_sphcel_spmd_mod
+        implicit none
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!! \sphcel element state file write for mpi
+!||====================================================================
+!||    stat_sphcel_spmd      ../engine/source/output/sta/stat_sphcel_spmd.F90
+!||--- called by ------------------------------------------------------
+!||    genstat               ../engine/source/output/sta/genstat.F
+!||--- calls      -----------------------------------------------------
+!||    my_orders             ../common_source/tools/sort/my_orders.c
+!||    spmd_iget_partn_sta   ../engine/source/mpi/output/spmd_stat.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod          ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    my_alloc_mod          ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod        ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+        subroutine stat_sphcel_spmd(numnod          ,numsph      ,numsphg      ,nisp          ,npart           ,  &
+          ngroup          ,nparg       ,lipart1      ,stat_numelsph ,stat_numelsph_g ,  &
+          lengsph         ,nspmd       ,itab         ,ipart         ,kxsp            ,  &
+          ipartsph        ,ipart_state ,nodtag       ,stat_indxsph  ,iparg           ,  &
+          elbuf_tab       ,idel        )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use ELBUFDEF_MOD, only: elbuf_struct_
+          use my_alloc_mod
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          use my_dealloc_mod, only : my_dealloc
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+#include "task_c.inc"
+#include "units_c.inc"
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,                                   intent(in) :: numnod                      !< number of nodes
+          integer,                                   intent(in) :: numsph                      !< number of SPHCELS
+          integer,                                   intent(in) :: numsphg                     !< global number of SPHCELS
+          integer,                                   intent(in) :: nisp                        !< size for sphcel array definition
+          integer,                                   intent(in) :: npart                       !< number of parts
+          integer,                                   intent(in) :: ngroup                      !< group number
+          integer,                                   intent(in) :: nparg                       !< size for array definition group array
+          integer,                                   intent(in) :: lipart1                     !< size for array definition part array
+          integer,                                   intent(inout) :: stat_numelsph            !< number of sphcell written
+          integer,                                   intent(inout) :: stat_numelsph_g          !< global number of sphcell written
+          integer,                                   intent(in) :: lengsph                     !< length of work array
+          integer,                                   intent(inout) :: nspmd                    !< number of mpi domains
+          integer,                                   intent(in) :: itab(numnod)                !< array for user nodes Ids
+          integer,                                   intent(in) :: ipart(lipart1,npart)        !< array for parts
+          integer,                                   intent(in) :: kxsp(nisp,numsph)           !< array for sphcel
+          integer,                                   intent(in) :: ipartsph(numsph)            !< array for sphcel -> part internal Id
+          integer,                                   intent(in) :: ipart_state(numsph)         !< array for written parts in sta files
+          integer,                                   intent(inout) :: nodtag(numnod)           !< array for written nodes in sta files
+          integer,                                   intent(inout) :: stat_indxsph(numsph)     !< array for index of sphcels in sta file
+          integer,                                   intent(in) :: iparg(nparg,ngroup)         !< array for groups
+          type(elbuf_struct_),                       intent(in) :: elbuf_tab(ngroup)           !< element buffer structure
+          integer,                                   intent(in) :: idel                        !< is not activated sphcel to be written in sta file
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,k
+          integer :: n,jj,iprt0,iprt,ii
+          integer :: ng,nel,nft,lft,llt,ity,ioff
+          integer :: work(70000)
+          integer,dimension(:,:),allocatable :: iadg
+          integer,dimension(:,:),allocatable :: clef
+          integer,dimension(:),allocatable :: npglob
+          integer,dimension(:),allocatable :: np
+! ----------------------------------------------------------------------------------------------------------------------
+          call my_alloc(clef, 2, numsphg, "clef")
+          call my_alloc(npglob, 4*lengsph, "npglob")
+          call my_alloc(iadg, nspmd, npart, "iadg")
+          call my_alloc(np, 4*numsph, "np")
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+          jj = 0
+          ii = 0
+          if (numsph /= 0) then
+            do ng=1,ngroup
+              ity = iparg(5,ng)
+              if (ity == 51) then
+                nel = iparg(2,ng)
+                nft = iparg(3,ng)
+                lft=1
+                llt=nel
+                do i=lft,llt
+                  n  = i + nft
+                  iprt=ipartsph(n)
+                  if (ipart_state(iprt) /= 0) then
+                    np(jj+1) = kxsp(nisp,n)
+                    np(jj+2) = itab(kxsp(3,n))
+                    np(jj+3) = iprt
+                    np(jj+4) = max(0,nint(elbuf_tab(ng)%gbuf%off(i)))
+                    ii = ii + 1
+                    jj = jj + 4
+                    stat_numelsph =stat_numelsph+1
+                    clef(1,ii)=iprt
+                    clef(2,ii)=kxsp(nisp,n)
+                    nodtag(kxsp(3,n))=1
+                  end if ! if (ipart_state(iprt) /= 0)
+                end do ! do i=lft,llt
+              end if ! if (ity == 51)
+            end do ! do ng=1,ngroup
+          end if ! if (numelsph /= 0)
+
+          stat_numelsph_g=0
+          call spmd_iget_partn_sta(4,stat_numelsph,stat_numelsph_g,lengsph,np, &
+            iadg,npglob,stat_indxsph)
+
+          if (ispmd==0) then
+            do n=1,stat_numelsph_g
+              stat_indxsph(n)=n
+              clef(1,n)=npglob(4*(n-1)+3)
+              clef(2,n)=npglob(4*(n-1)+1)
+            end do
+            call my_orders(0,work,clef,stat_indxsph,stat_numelsph_g,2)
+
+
+            iprt0=0
+            do n=1,stat_numelsph_g
+              k=stat_indxsph(n)
+              jj=4*(k-1)
+              iprt=npglob(jj+3)
+              ioff=npglob(jj+4)
+              if (idel==0 .or. (idel==1 .and. ioff >= 1)) then
+                if (iprt /= iprt0) then
+                  write(iugeo,"(a,i10)")"/SPHCEL/",ipart(4,iprt)
+                  write(iugeo,"(a)")"#sphcel_id"
+                  iprt0=iprt
+                end if
+                write(iugeo,"(i10)") npglob(jj+2)
+              end if !if (idel)
+            end do ! do n=1,stat_numelsph_g
+          end if !if (ispmd)
+
+          call my_dealloc(clef)
+          call my_dealloc(npglob)
+          call my_dealloc(iadg)
+          call my_dealloc(np)
+          return
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine stat_sphcel_spmd
+      end module stat_sphcel_spmd_mod
+
+

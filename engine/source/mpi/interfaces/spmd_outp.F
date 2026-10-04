@@ -1,0 +1,1215 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+
+
+!||====================================================================
+!||    outp_arsz_ss    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp         ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_ss   ../engine/source/output/sty/outp_s_s.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod     ../common_source/modules/elements/element_mod.F90
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_SS(IPARG,DD_IAD,IPM,IXS,P0ARS,WASZ,WASZ_WR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use element_mod , only : nixs
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include "param_c.inc"
+#include "com01_c.inc"
+#include "scr16_c.inc"
+#include "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),P0ARS(2),WASZ(2),WASZ_WR(2),
+     . IXS(NIXS,*),IPM(NPROPMI,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER SZP0(2*NSPGROUP+2), RSZP0(2*NSPGROUP+2), 
+     .
+     . I
+
+      INTEGER IERROR
+C-----------------------------------------------
+      P0ARS = 0
+      WASZ = 0
+      CALL COUNT_ARSZ_SS(IPARG,DD_IAD,IPM,IXS,WASZ,SZP0)
+
+      IF ( OUTP_SS(1)  == 1.OR.OUTP_SS(2)  == 1.OR.OUTP_SS(3)  == 1
+     . .OR.OUTP_SS(4)  == 1.OR.OUTP_SS(5)  == 1.OR.OUTP_SS(6)  == 1 
+     . .OR.OUTP_SS(7)  == 1.OR.OUTP_SS(25) == 1.OR.OUTP_SS(20) == 1
+     . .OR.OUTP_SS(21) == 1.OR.OUTP_SS(22) == 1.OR.OUTP_SS(23) == 1
+     . .OR.OUTP_SS(24) == 1.OR.OUTP_SS(26) == 1 ) THEN
+
+        CALL SPMD_REDUCE(SZP0,RSZP0,2*NSPGROUP+2,
+     .                   SPMD_SUM,IT_SPMD(1))
+
+
+        IF (ISPMD == 0) THEN
+          P0ARS(1) =RSZP0(2*NSPGROUP+1)
+          P0ARS(2) =RSZP0(2*NSPGROUP+2)
+          WASZ_WR(:) = -1
+          DO I=1,NSPGROUP
+           WASZ_WR(1) = MAX(WASZ_WR(1),RSZP0(I)) 
+           WASZ_WR(2) = MAX(WASZ_WR(2),RSZP0(NSPGROUP+I)) 
+          ENDDO
+          WASZ_WR(1) = WASZ_WR(1)+6
+          WASZ_WR(2) = WASZ_WR(2)+6
+        ELSE
+          P0ARS(:) = 1 
+          WASZ_WR(:) = 1
+        ENDIF
+      END IF
+#endif
+      RETURN
+      END
+ 
+
+!||====================================================================
+!||    outp_arsz_cs    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp         ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_cs   ../engine/source/output/sty/outp_c_s.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod     ../common_source/modules/elements/element_mod.F90
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_CS(IPARG,IXC,IXTG,IGEO,IPM,DD_IAD,
+     .                         P0ARS,WASZ,WASZ_WR) 
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use element_mod , only : nixc,nixtg
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "scr16_c.inc"
+#include      "param_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IXC(NIXC,*),IXTG(NIXTG,*),DD_IAD(NSPMD+1,*) ,
+     .        IPARG(NPARG,*),IPM(NPROPMI,*),WASZ(2),IGEO(NPROPGI,*),
+     ,        P0ARS(2),IUSER_FULL,J,WASZ_WR(2)
+
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER 
+     . I,
+     . SZP0(2*NSPGROUP+2),RSZP0(2*NSPGROUP+2)
+      INTEGER IERROR
+
+
+      P0ARS = 0
+      WASZ = 0
+
+      CALL COUNT_ARSZ_CS(IPARG,IXC,IXTG,IGEO,IPM,DD_IAD,
+     .                         WASZ,SZP0)      
+
+      IUSER_FULL = 0
+      DO J=1,60
+        IF(OUTP_CS(26 + J) == 1) IUSER_FULL = 1
+      ENDDO
+
+      IF ( OUTP_CS( 1) == 1.OR.OUTP_CS( 2) == 1.OR.OUTP_CS( 3) == 1
+     . .OR.OUTP_CS( 4) == 1.OR.OUTP_CS( 7) == 1.OR.OUTP_CS(25) == 1
+     . .OR.OUTP_CS(20) == 1.OR.OUTP_CS(21) == 1.OR.OUTP_CS(22) == 1
+     . .OR.OUTP_CS(23) == 1.OR.OUTP_CS(24) == 1.OR.OUTP_CS(26) == 1
+     . .OR.IUSER_FULL == 1) THEN
+
+
+        CALL SPMD_REDUCE(SZP0,RSZP0,2*NSPGROUP+2,
+     .                   SPMD_SUM,IT_SPMD(1))
+
+        IF (ISPMD == 0) THEN
+          P0ARS(1:2) = RSZP0(2*NSPGROUP+1:2*NSPGROUP+2)
+          WASZ_WR(1:2) = -1
+          DO I=1,NSPGROUP
+           WASZ_WR(1) = MAX(WASZ_WR(1),RSZP0(I)) 
+           WASZ_WR(2) = MAX(WASZ_WR(2),RSZP0(NSPGROUP+I)) 
+          ENDDO
+          WASZ_WR(1) = WASZ_WR(1)+6
+          WASZ_WR(2) = WASZ_WR(2)+6
+        ELSE
+          P0ARS = 1
+          WASZ_WR(:) = 1
+        ENDIF
+      ENDIF
+#endif
+      RETURN
+      END
+c
+!||====================================================================
+!||    outp_arsz_st    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp         ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_st   ../engine/source/output/sty/outp_s_t.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod    ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_ST(IPARG,DD_IAD,WASZ,WASZ_WR,P0ARS)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD         
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "scr16_c.inc"
+#include      "task_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPARG(NPARG,*), DD_IAD(NSPMD+1,*),WASZ(3),WASZ_WR(3),P0ARS(3)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER 
+     . I,
+     .        SZP0(3*NSPGROUP+3),RSZP0(3*NSPGROUP+3)
+      INTEGER IERROR
+C=======================================================================
+      WASZ = 0
+      P0ARS = 0
+c------------------------------
+      IF (OUTP_ST(1)==1.OR.OUTP_ST(2)==1.OR.OUTP_ST(3)==1) THEN
+        CALL COUNT_ARSZ_ST(IPARG,DD_IAD,WASZ,SZP0)
+
+        CALL SPMD_REDUCE(SZP0,RSZP0,3*NSPGROUP+3,
+     .                   SPMD_SUM,IT_SPMD(1))
+      
+        IF (ISPMD == 0) THEN
+          P0ARS(1:3) = RSZP0(3*NSPGROUP+1:3*NSPGROUP+3)+8
+          WASZ_WR(1:3) = -1
+          DO I=1,NSPGROUP
+           WASZ_WR(1) = MAX(WASZ_WR(1),RSZP0(I)) 
+           WASZ_WR(2) = MAX(WASZ_WR(2),RSZP0(NSPGROUP+I)) 
+           WASZ_WR(3) = MAX(WASZ_WR(3),RSZP0(2*NSPGROUP+I)) 
+          ENDDO
+        ELSE
+          P0ARS(:) = 1
+          WASZ_WR(:) = 1
+        ENDIF
+      ENDIF
+#endif
+      RETURN
+      END
+
+
+!||====================================================================
+!||    outp_arsz_ct    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp         ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_ct   ../engine/source/output/sty/outp_c_t.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod    ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_CT(IPARG,DD_IAD,WASZ,WASZP,WASZ_WR,ELBUF_TAB)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "task_c.inc"
+#include      "com01_c.inc"
+#include      "scr16_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),WASZ(3),WASZP(3),WASZ_WR(3)
+        TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+        INTEGER COUNT, I, 
+     .          SZP0(3*NSPGROUP+3),RSZP0(3*NSPGROUP+3)
+C-----------------------------------------------
+      INTEGER IERROR
+
+      WASZ = 0
+      WASZP = 0
+      WASZ_WR = 0
+      CALL COUNT_ARSZ_CT(IPARG,DD_IAD,WASZ,SZP0,ELBUF_TAB)
+
+      COUNT = 0
+      DO I=1,30
+        COUNT = COUNT + OUTP_CT(10+I)+OUTP_CT(50+I)+OUTP_CT(100+I)
+      ENDDO
+
+      IF ( OUTP_CT( 1) == 1.OR.OUTP_CT( 2) == 1.OR.OUTP_CT( 3) == 1
+     . .OR.OUTP_CT( 4) == 1.OR.OUTP_CT( 5) == 1.OR.OUTP_CT( 6) == 1
+     . .OR.OUTP_CT( 7) == 1.OR.OUTP_CT( 8) == 1.OR.OUTP_CT(91) == 1
+     . .OR.OUTP_CT(92) == 1.OR.OUTP_CT(93) == 1.OR.OUTP_CT(94) == 1
+     . .OR.COUNT>0.OR.OUTP_CT(95)==1.OR.OUTP_CT(96)==1)   THEN
+
+
+        CALL SPMD_REDUCE(SZP0,RSZP0,3*NSPGROUP+3,
+     .                   SPMD_SUM,IT_SPMD(1))
+
+! ------
+        IF ( OUTP_CT(95) == 1)   THEN
+         IF (ISPMD == 0) THEN
+           WASZP(2) = RSZP0(3*NSPGROUP+2) 
+           DO I=1,NSPGROUP
+            WASZ_WR(2) = MAX(WASZ_WR(2),RSZP0(NSPGROUP+I))
+           ENDDO
+         ELSE
+           WASZP(2) = 1
+           WASZ_WR(2) = 1
+         ENDIF
+        ENDIF
+! ------
+        IF ( OUTP_CT(96) == 1)   THEN
+         IF (ISPMD == 0) THEN
+           WASZP(3) = RSZP0(3*NSPGROUP+3)
+           DO I=1,NSPGROUP
+            WASZ_WR(3) = MAX(WASZ_WR(3),RSZP0(NSPGROUP+I))
+           ENDDO
+         ELSE
+           WASZP(3) = 1
+           WASZ_WR(3) = 1
+         ENDIF
+        ENDIF
+! ------
+        IF ( OUTP_CT( 1) == 1.OR.OUTP_CT( 2) == 1.OR.OUTP_CT( 3) == 1
+     . .OR.OUTP_CT( 4) == 1.OR.OUTP_CT( 5) == 1.OR.OUTP_CT( 6) == 1
+     . .OR.OUTP_CT( 7) == 1.OR.OUTP_CT( 8) == 1.OR.OUTP_CT(91) == 1
+     . .OR.OUTP_CT(92) == 1.OR.OUTP_CT(93) == 1.OR.OUTP_CT(94) == 1
+     . .OR.COUNT>0) THEN
+         IF (ISPMD == 0) THEN
+           WASZP(1) = RSZP0(3*NSPGROUP+1)
+           DO I=1,NSPGROUP
+            WASZ_WR(1) = MAX(WASZ_WR(1),RSZP0(I))
+           ENDDO
+           WASZ_WR(1) = WASZ_WR(1) + 6
+         ELSE
+           WASZP(1) = 1
+           WASZ_WR(1) = 1
+         ENDIF
+        ENDIF
+! ------
+      ENDIF
+C--------
+c-----------
+#endif
+      RETURN
+      END
+
+
+!||====================================================================
+!||    outp_arsz_rs    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp         ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_rs   ../engine/source/output/sty/outp_r_s.F
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_RS(IPARG,DD_IAD,WASZ,WASZP,WASZ_WR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "task_c.inc"
+#include      "scr16_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),WASZ,WASZP,WASZ_WR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER SZP0(NSPGROUP+1), RSZP0(NSPGROUP+1), 
+     . I
+
+      INTEGER IERROR
+C-----------------------------------------------
+
+      WASZP = 0
+      WASZ = 0
+      CALL COUNT_ARSZ_RS(IPARG,DD_IAD,WASZ,SZP0)
+
+      IF (OUTP_RS(1) == 1) THEN
+        CALL SPMD_REDUCE(SZP0,RSZP0,NSPGROUP+1,
+     .                 SPMD_SUM,IT_SPMD(1))
+
+        IF (ISPMD == 0) THEN
+         WASZP=RSZP0(NSPGROUP+1)
+         WASZ_WR = -1
+         DO I=1,NSPGROUP
+          WASZ_WR = MAX(WASZ_WR,RSZP0(I)) 
+         ENDDO
+         WASZ_WR = WASZ_WR + 6
+        ELSE
+         WASZP = 1
+         WASZ_WR = 1
+        END IF
+      ENDIF 
+
+#endif
+      RETURN
+      END
+!||====================================================================
+!||    outp_arsz_rt    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp         ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_rt   ../engine/source/output/sty/outp_r_t.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod     ../common_source/modules/elements/element_mod.F90
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_RT(IPARG,IGEO,GEO,IXR,DD_IAD,WASZ,WASZP,WASZ_WR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use element_mod , only : nixr
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "task_c.inc"
+#include      "scr16_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),WASZ,WASZP,
+     .           IXR(NIXR,*),IGEO(NPROPGI,*),WASZ_WR
+       my_real 
+     .   GEO(NPROPG,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER SZP0(NSPGROUP+1), RSZP0(NSPGROUP+1), 
+     . I
+
+      INTEGER IERROR
+C-----------------------------------------------
+
+      WASZP = 0
+      WASZ = 0
+      CALL COUNT_ARSZ_RT(IPARG,IGEO,GEO,IXR,DD_IAD,WASZ,SZP0)
+
+      IF (OUTP_RS(2) == 1) THEN          
+        CALL SPMD_REDUCE(SZP0,RSZP0,NSPGROUP+1,
+     .                 SPMD_SUM,IT_SPMD(1))
+
+        IF (ISPMD == 0) THEN
+         WASZP=RSZP0(NSPGROUP+1)
+         WASZ_WR = -1
+         DO I=1,NSPGROUP
+          WASZ_WR = MAX(WASZ_WR,RSZP0(I)) 
+         ENDDO
+         WASZ_WR = WASZ_WR + 6
+        ELSE
+         WASZP = 1
+         WASZ_WR = 1
+        END IF
+      ENDIF 
+#endif
+      RETURN
+      END
+!||====================================================================
+!||    outp_arsz_sps    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp          ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_sps   ../engine/source/output/sty/outp_sp_s.F
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod         ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_SPS(IPARG,DD_IAD,WASZ,WASZP,WASZ_WR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "task_c.inc"
+#include      "scr16_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),WASZ,WASZP,WASZ_WR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER SZP0(NSPGROUP+1), RSZP0(NSPGROUP+1), 
+     . I
+
+      INTEGER IERROR
+C-----------------------------------------------
+      WASZP = 0
+      WASZ = 0
+      CALL COUNT_ARSZ_SPS(IPARG,DD_IAD,WASZ,SZP0)
+
+      IF (OUTP_SPS( 1) == 1.OR.OUTP_SPS( 2) == 1.OR.
+     .    OUTP_SPS( 3) == 1.OR.OUTP_SPS( 4) == 1.OR.
+     .    OUTP_SPS( 5) == 1.OR.OUTP_SPS( 6) == 1.OR.
+     .    OUTP_SPS( 7) == 1.OR.OUTP_SPS(25) == 1.OR.
+     .    OUTP_SPS(20) == 1.OR.OUTP_SPS(21) == 1.OR.
+     .    OUTP_SPS(22) == 1.OR.OUTP_SPS(23) == 1.OR.
+     .    OUTP_SPS(24) == 1 ) THEN
+
+
+        CALL SPMD_REDUCE(SZP0,RSZP0,NSPGROUP+1,
+     .                 SPMD_SUM,IT_SPMD(1))
+
+        IF (ISPMD == 0) THEN
+         WASZP=RSZP0(NSPGROUP+1)
+         WASZ_WR = -1
+         DO I=1,NSPGROUP
+          WASZ_WR = MAX(WASZ_WR,RSZP0(I)) 
+         ENDDO
+         WASZ_WR = WASZ_WR + 6 
+        ELSE
+         WASZP = 1
+         WASZ_WR = 1
+        END IF
+      ENDIF 
+#endif
+      RETURN
+      END
+!||====================================================================
+!||    outp_arsz_spt    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp          ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_spt   ../engine/source/output/sty/outp_sp_t.F
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod         ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_SPT(IPARG,DD_IAD,WASZ,WASZP,WASZ_WR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "task_c.inc"
+#include      "scr16_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),WASZ,WASZP,WASZ_WR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER SZP0(NSPGROUP+1), RSZP0(NSPGROUP+1), 
+     . I
+
+      INTEGER IERROR
+C-----------------------------------------------
+      WASZP = 0
+      WASZ = 0
+      CALL COUNT_ARSZ_SPT(IPARG,DD_IAD,WASZ,SZP0)
+
+      IF (OUTP_SPT( 1) == 1 ) THEN
+        CALL SPMD_REDUCE(SZP0,RSZP0,NSPGROUP+1,
+     .                 SPMD_SUM,IT_SPMD(1))
+
+        IF (ISPMD == 0) THEN
+         WASZP=RSZP0(NSPGROUP+1)
+         WASZ_WR = -1
+         DO I=1,NSPGROUP
+          WASZ_WR = MAX(WASZ_WR,RSZP0(I)) 
+         ENDDO
+         WASZ_WR = WASZ_WR + 6 
+        ELSE
+         WASZP = 1 
+         WASZ_WR = 1
+        END IF
+      ENDIF 
+#endif
+      RETURN
+      END
+!||====================================================================
+!||    outp_arsz_sptt    ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    genoutp           ../engine/source/output/sty/genoutp.F
+!||--- calls      -----------------------------------------------------
+!||    count_arsz_sptt   ../engine/source/output/sty/outp_sp_t.F
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod          ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE OUTP_ARSZ_SPTT(IPARG,DD_IAD,WASZ,WASZP,WASZ_WR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M P I   I n c l u d e s
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "task_c.inc"
+#include      "scr16_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER IPARG(NPARG,*),DD_IAD(NSPMD+1,*),WASZ,WASZP,WASZ_WR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER SZP0(NSPGROUP+1), RSZP0(NSPGROUP+1), 
+     . I
+
+      INTEGER IERROR
+C-----------------------------------------------
+      WASZP = 0
+      WASZ = 0
+      CALL COUNT_ARSZ_SPTT(IPARG,DD_IAD,WASZ,SZP0)
+
+      IF (OUTP_SPT( 1) == 1 ) THEN
+
+        CALL SPMD_REDUCE(SZP0,RSZP0,NSPGROUP+1,
+     .                 SPMD_SUM,IT_SPMD(1))
+
+        IF (ISPMD /= 0) THEN
+         WASZP = 1
+         WASZ_WR = 1
+        ELSE
+         WASZ_WR = -1
+         DO I=1,NSPGROUP
+          WASZ_WR = MAX(WASZ_WR,RSZP0(I)) 
+         ENDDO
+         WASZP = RSZP0(NSPGROUP+1)
+        END IF
+      ENDIF 
+#endif
+      RETURN
+      END
+!||====================================================================
+!||    spmd_doutp_vgath     ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    outp_n_v             ../engine/source/output/sty/outp_n_v.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_get_count_int   ../engine/source/mpi/generic/spmd_get_count.F90
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod             ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       SUBROUTINE SPMD_DOUTP_VGATH(V,NODGLOB,WEIGHT,VGATH)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "spmd_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       my_real
+     .   V(3,*),VGATH(3,*)
+       INTEGER WEIGHT(*), NODGLOB(*)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),IERROR,MSGOFF
+      INTEGER SIZ,MSGTYP,I,K,NG,NREC,MSGOFF2
+
+      DATA MSGOFF/9001/
+      DATA MSGOFF2/9002/
+      my_real 
+     .       BUFSR(3,NUMNODM)
+      INTEGER IBUF(NUMNODM)
+C   Table used by Pro 0
+         
+       IF (ISPMD/=0) THEN
+
+         SIZ = 0
+         DO I=1,NUMNOD
+           IF (WEIGHT(I) == 1) THEN
+             SIZ = SIZ + 1
+             IBUF(SIZ) = NODGLOB(I)
+             BUFSR(1,SIZ) = V(1,I)
+             BUFSR(2,SIZ) = V(2,I) 
+             BUFSR(3,SIZ) = V(3,I) 
+           END IF
+         END DO
+
+C   Because of the simple precision version, we cannot put the integer
+C   In the floating buffer because there are only 2 24 bits available ~ 16 million
+C   of nodes at most
+
+         MSGTYP = MSGOFF2
+         CALL SPMD_SEND(IBUF(1:SIZ),SIZ,IT_SPMD(1),MSGTYP)
+
+         MSGTYP = MSGOFF
+         CALL SPMD_SEND(BUFSR(1:3,1:SIZ),3*SIZ,IT_SPMD(1),MSGTYP)
+
+          
+       ELSE
+
+          DO I=1,NUMNOD
+            IF (WEIGHT(I) == 1) THEN
+              NG = NODGLOB(I)
+              VGATH(1,NG) = V(1,I)
+              VGATH(2,NG) = V(2,I)
+              VGATH(3,NG) = V(3,I)
+            ENDIF
+          ENDDO
+
+
+          DO I=2,NSPMD
+
+C   Reception of the entire buffer of NODGLOB addresses
+            MSGTYP = MSGOFF2
+
+            CALL SPMD_PROBE(IT_SPMD(I),MSGTYP,STATUS)
+            CALL SPMD_GET_COUNT_INT(STATUS,SIZ)
+
+            CALL SPMD_RECV(IBUF(1:SIZ),SIZ,IT_SPMD(I),MSGTYP,
+     .                     STATUS)
+
+C   Reception of the double floating buffer of NODGLOB addresses
+
+            MSGTYP = MSGOFF
+            CALL SPMD_RECV(BUFSR(1:3,1:SIZ),3*SIZ,IT_SPMD(I),MSGTYP,
+     .                     STATUS)
+         
+           NREC = SIZ
+           DO K = 1, NREC
+             NG = IBUF(K)
+             VGATH(1,NG) = BUFSR(1,K)
+             VGATH(2,NG) = BUFSR(2,K)
+             VGATH(3,NG) = BUFSR(3,K)
+           ENDDO
+          ENDDO
+
+
+       ENDIF
+
+#endif
+       RETURN
+       END
+
+!||====================================================================
+!||    spmd_doutp_gath      ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    outp_no              ../engine/source/output/sty/outp_no.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_get_count_int   ../engine/source/mpi/generic/spmd_get_count.F90
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod             ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       SUBROUTINE SPMD_DOUTP_GATH(V,NODGLOB,WEIGHT,VGATH)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "spmd_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       my_real
+     .   V(*),VGATH(*)
+       INTEGER WEIGHT(*), NODGLOB(*)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),IERROR,MSGOFF
+      INTEGER SIZ,MSGTYP,I,K,NG,NREC,MSGOFF2
+
+      DATA MSGOFF/9003/
+      DATA MSGOFF2/9004/
+      my_real 
+     .       BUFSR(NUMNODM)
+      INTEGER IBUF(NUMNODM)
+C   Table used by Pro 0
+         
+       IF (ISPMD/=0) THEN
+
+         SIZ = 0
+         DO I=1,NUMNOD
+           IF (WEIGHT(I) == 1) THEN
+             SIZ = SIZ + 1
+             IBUF(SIZ) = NODGLOB(I)
+             BUFSR(SIZ) = V(I)
+           END IF
+         END DO
+
+C   Because of the simple precision version, we cannot put the integer
+C   In the floating buffer because there are only 2 24 bits available ~ 16 million
+C   of nodes at most
+
+         MSGTYP = MSGOFF2 
+         CALL SPMD_SEND(IBUF(1:SIZ),SIZ,IT_SPMD(1),MSGTYP)
+
+         MSGTYP = MSGOFF 
+         CALL SPMD_SEND(BUFSR(1:SIZ),SIZ,IT_SPMD(1),MSGTYP)
+  
+       ELSE
+
+          DO I=1,NUMNOD
+            IF (WEIGHT(I) == 1) THEN
+              NG = NODGLOB(I)
+              VGATH(NG) = V(I)
+            ENDIF
+          ENDDO
+
+          DO I=2,NSPMD
+
+C   Reception of the entire buffer of NODGLOB addresses
+            MSGTYP = MSGOFF2
+
+            CALL SPMD_PROBE(IT_SPMD(I),MSGTYP,STATUS)
+            CALL SPMD_GET_COUNT_INT(STATUS,SIZ)
+
+            CALL SPMD_RECV(IBUF(1:SIZ),SIZ,IT_SPMD(I),MSGTYP,
+     .                     STATUS)
+
+C   Reception of the double floating buffer of NODGLOB addresses
+
+            MSGTYP = MSGOFF
+            CALL SPMD_RECV(BUFSR(1:SIZ),SIZ,IT_SPMD(I),MSGTYP,
+     .                     STATUS)
+      
+           NREC = SIZ
+           DO K = 1, NREC
+             NG = IBUF(K)
+             VGATH(NG) = BUFSR(K)
+           ENDDO
+          ENDDO
+
+
+       ENDIF
+
+#endif
+       RETURN
+       END
+
+
+!||====================================================================
+!||    spmd_rgather9   ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_gatherv    ../engine/source/mpi/generic/spmd_gatherv.F
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod        ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       SUBROUTINE SPMD_RGATHER9(V,LEN,VP0,LENP0,IAD)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       INTEGER LEN,LENP0,IAD
+       my_real
+     .   V(LEN),VP0(LENP0)
+
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER IERROR, 
+     . I,LENP(NSPMD),DISP(NSPMD)
+
+C=======================================================================
+        CALL SPMD_GATHER(LEN,LENP,1,1,IT_SPMD(1))
+C
+        IAD=0
+        IF(ISPMD == 0)THEN
+          DO I=1,NSPMD
+            DISP(I) = IAD
+            IAD = IAD+LENP(I)
+          END DO
+        END IF
+C
+        CALL SPMD_GATHERV(V,LEN,VP0,LENP,DISP,IT_SPMD(1))
+c------------
+#endif
+       RETURN
+       END
+
+
+!||====================================================================
+!||    spmd_rgather9_dp   ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    dynain_c_strag     ../engine/source/output/dynain/dynain_c_strag.F
+!||    dynain_c_strsg     ../engine/source/output/dynain/dynain_c_strsg.F
+!||    dynain_shel_spmd   ../engine/source/output/dynain/dynain_shel_spmd.F
+!||    stat_c_auxf        ../engine/source/output/sta/stat_c_auxf.F
+!||    stat_c_epspf       ../engine/source/output/sta/stat_c_epspf.F
+!||    stat_c_fail        ../engine/source/output/sta/stat_c_fail.F
+!||    stat_c_off         ../engine/source/output/sta/stat_c_off.F
+!||    stat_c_orth_loc    ../engine/source/output/sta/stat_c_orth_loc.F
+!||    stat_c_straf       ../engine/source/output/sta/stat_c_straf.F
+!||    stat_c_strafg      ../engine/source/output/sta/stat_c_strafg.F
+!||    stat_c_strsf       ../engine/source/output/sta/stat_c_strsf.F
+!||    stat_c_strsfg      ../engine/source/output/sta/stat_c_strsfg.F
+!||    stat_c_thk         ../engine/source/output/sta/stat_c_thk.F
+!||    stat_p_aux         ../engine/source/output/sta/stat_p_aux.F
+!||    stat_p_full        ../engine/source/output/sta/stat_p_full.F
+!||    stat_r_full        ../engine/source/output/sta/stat_r_full.F
+!||    stat_s_auxf        ../engine/source/output/sta/stat_s_auxf.F
+!||    stat_s_eref        ../engine/source/output/sta/stat_s_eref.F
+!||    stat_s_fail        ../engine/source/output/sta/stat_s_fail.F
+!||    stat_s_ortho       ../engine/source/output/sta/stat_s_ortho.F
+!||    stat_s_straf       ../engine/source/output/sta/stat_s_straf.F
+!||    stat_s_strsf       ../engine/source/output/sta/stat_s_strsf.F
+!||    stat_shel_spmd     ../engine/source/output/sta/stat_shel_spmd.F
+!||    stat_sphcel_full   ../engine/source/output/sta/stat_sphcel_full.F90
+!||    stat_t_full        ../engine/source/output/sta/stat_t_full.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_gatherv       ../engine/source/mpi/generic/spmd_gatherv.F
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod           ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       SUBROUTINE SPMD_RGATHER9_DP(V,LEN,VP0,LENP0,IAD)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       INTEGER LEN,LENP0,IAD
+       double precision
+     .   V(LEN),VP0(LENP0)
+
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER IERROR, 
+     . I,LENP(NSPMD),DISP(NSPMD)
+
+
+
+         
+        CALL SPMD_GATHER(LEN,LENP,1,1,IT_SPMD(1))
+C
+        IAD=0
+        IF(ISPMD == 0)THEN
+          DO I=1,NSPMD
+            DISP(I) = IAD
+            IAD = IAD+LENP(I)
+          END DO
+        END IF
+C
+        CALL SPMD_GATHERV(V,LEN,VP0,LENP,DISP,IT_SPMD(1))
+#endif
+       RETURN
+       END
+
+!||====================================================================
+!||    spmd_outpitab        ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    gendynain            ../engine/source/output/dynain/gendynain.F
+!||    genh3d               ../engine/source/output/h3d/h3d_results/genh3d.F
+!||    genoutp              ../engine/source/output/sty/genoutp.F
+!||    genstat              ../engine/source/output/sta/genstat.F
+!||    spmd_vgath_err       ../engine/source/mpi/anim/spmd_vgath_err.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_get_count_int   ../engine/source/mpi/generic/spmd_get_count.F90
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod             ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       SUBROUTINE SPMD_OUTPITAB(V,WEIGHT,NODGLOB,VGLOB)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "spmd_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       INTEGER
+     .   VGLOB(*),V(*)
+
+       INTEGER WEIGHT(*), NODGLOB(*)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),IERROR,MSGOFF
+      INTEGER SIZ,MSGTYP,I,K,NG,NREC
+
+      DATA MSGOFF/9005/
+
+       INTEGER BUFSR(2,NUMNODM)
+         
+       IF (ISPMD/=0) THEN
+
+         SIZ = 0
+         DO I=1,NUMNOD
+           IF (WEIGHT(I) == 1) THEN
+             SIZ = SIZ + 1
+             BUFSR(1,SIZ) = NODGLOB(I)
+             BUFSR(2,SIZ) = V(I) 
+           END IF
+         END DO
+
+
+         MSGTYP = MSGOFF
+         CALL SPMD_SEND(BUFSR(1:2,1:SIZ),2*SIZ,IT_SPMD(1),MSGTYP)
+
+       ELSE
+          DO I=1,NUMNOD
+            IF (WEIGHT(I) == 1) THEN
+              NG = NODGLOB(I)
+              VGLOB(NG) = V(I)
+            ENDIF
+          ENDDO
+
+          DO I=2,NSPMD
+
+C   Reception of the entire buffer of NODGLOB addresses
+            MSGTYP = MSGOFF
+
+            CALL SPMD_PROBE(IT_SPMD(I),MSGTYP,STATUS)
+              CALL SPMD_GET_COUNT_INT(STATUS,SIZ)
+
+
+            CALL SPMD_RECV(BUFSR(1:2,1:SIZ/2),SIZ,IT_SPMD(I),MSGTYP,
+     .                     STATUS)
+         
+            NREC = SIZ/2
+ 
+            DO K = 1, NREC
+              NG = BUFSR(1,K)
+              VGLOB(NG) = BUFSR(2,K)
+            ENDDO
+          ENDDO
+
+       ENDIF
+
+#endif
+       RETURN
+       END
+!||====================================================================
+!||    spmd_rgather9_1comm   ../engine/source/mpi/interfaces/spmd_outp.F
+!||--- called by ------------------------------------------------------
+!||    outp_c_s              ../engine/source/output/sty/outp_c_s.F
+!||    outp_c_t              ../engine/source/output/sty/outp_c_t.F
+!||    outp_c_tf             ../engine/source/output/sty/outp_c_t.F
+!||    outp_r_s              ../engine/source/output/sty/outp_r_s.F
+!||    outp_r_t              ../engine/source/output/sty/outp_r_t.F
+!||    outp_s_s              ../engine/source/output/sty/outp_s_s.F
+!||    outp_s_t              ../engine/source/output/sty/outp_s_t.F
+!||    outp_s_tt             ../engine/source/output/sty/outp_s_t.F
+!||    outp_sp_s             ../engine/source/output/sty/outp_sp_s.F
+!||    outp_sp_t             ../engine/source/output/sty/outp_sp_t.F
+!||    outp_sp_tt            ../engine/source/output/sty/outp_sp_t.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod              ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+       SUBROUTINE SPMD_RGATHER9_1COMM(V,SIZV,LEN,VP0,SIZV0,ADRESS)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       INTEGER LEN(NSPGROUP),SIZV,SIZV0,ADRESS(NSPGROUP+1,NSPMD)
+       my_real
+     .   V(SIZV),VP0(*)!SIZV0,NSPMD)
+
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER IERROR, 
+     . I,DISP(NSPMD),
+     .        LENP(NSPMD*NSPGROUP),LENP_LOC(NSPMD)
+      INTEGER IAD, J
+C=======================================================================
+        CALL SPMD_GATHER(LEN,LENP,NSPGROUP,NSPGROUP,IT_SPMD(1))
+C
+C
+        IF(ISPMD == 0)THEN
+        IAD=0
+          DO I=1,NSPMD
+             LENP_LOC(I) = 0
+             DISP(I) = IAD
+             DO J=1,NSPGROUP
+              IAD = IAD+LENP((I-1)*NSPGROUP+J)
+              LENP_LOC(I) = LENP_LOC(I) + LENP((I-1)*NSPGROUP+J)
+             ENDDO
+          END DO
+
+          DO I=1,NSPMD
+           ADRESS(1,I) = DISP(I) + 1
+           DO J=2,NSPGROUP+1
+            ADRESS(J,I) = LENP((I-1)*NSPGROUP+J-1) + ADRESS(J-1,I)
+           ENDDO
+          ENDDO
+        END IF        ! end if(ispmd = 0)
+C
+        CALL MPI_GATHERV(
+     S    V             ,SIZV   ,REAL,
+     R    VP0          ,LENP_LOC ,DISP,REAL  ,IT_SPMD(1),
+     G    SPMD_COMM_WORLD,IERROR)
+
+c------------
+#endif
+       RETURN
+       END

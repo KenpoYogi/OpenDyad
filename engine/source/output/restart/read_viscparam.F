@@ -1,0 +1,132 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    read_viscparam         ../engine/source/output/restart/read_viscparam.F
+!||--- called by ------------------------------------------------------
+!||    read_matparam          ../engine/source/output/restart/read_matparam.F
+!||--- calls      -----------------------------------------------------
+!||    read_c_c               ../common_source/tools/input_output/write_routines.c
+!||    read_db                ../common_source/tools/input_output/read_db.F
+!||    read_i_c               ../common_source/tools/input_output/write_routines.c
+!||    read_mat_table         ../engine/source/materials/tools/read_mat_table.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod            ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod           ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod         ../common_source/tools/memory/my_dealloc.F90
+!||    names_and_titles_mod   ../common_source/modules/names_and_titles_mod.F
+!||    visc_param_mod         ../common_source/modules/mat_elem/visc_param_mod.F90
+!||====================================================================
+      SUBROUTINE READ_VISCPARAM(VISC)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE VISC_PARAM_MOD
+      USE NAMES_AND_TITLES_MOD
+      USE MY_ALLOC_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(VISC_PARAM_) ,INTENT(INOUT) :: VISC
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I,NUPARAM,NIPARAM,NUMTABL,IAD,LEN
+      INTEGER ,DIMENSION(NCHARTITLE) :: NAME
+      INTEGER ,DIMENSION(1) :: ILEN
+      INTEGER ,DIMENSION(:) ,ALLOCATABLE :: IBUF
+C-----------------------------------------------
+c     read viscosity model parameters
+C=======================================================================
+      CALL READ_I_C(ILEN, 1)
+      LEN = ILEN(1)
+      call my_alloc(IBUF, LEN, "IBUF")
+      CALL READ_I_C(IBUF, LEN)
+      IAD = 0
+c      
+      IAD = IAD+1
+        VISC%ILAW    = IBUF(IAD)
+      IAD = IAD+1
+        VISC%NUPARAM = IBUF(IAD)
+      IAD = IAD+1
+        VISC%NIPARAM = IBUF(IAD)
+      IAD = IAD+1
+        VISC%NUVAR   = IBUF(IAD)
+      IAD = IAD+1
+        VISC%NFUNC   = IBUF(IAD)
+      IAD = IAD+1
+        VISC%NTABLE  = IBUF(IAD)
+c
+      call my_dealloc(IBUF)
+      
+      IF (VISC%ILAW > 0) THEN
+c
+c       read material title
+
+        CALL READ_C_C(NAME,NCHARTITLE)
+        DO I=1,NCHARTITLE
+          VISC%TITLE(I:I) = CHAR(NAME(I))
+        END DO
+      
+c       read viscosity parameter arrays
+        NUPARAM = VISC%NUPARAM
+        NIPARAM = VISC%NIPARAM
+        call my_alloc(VISC%UPARAM, NUPARAM, "VISC%UPARAM")
+        call my_alloc(VISC%IPARAM, NIPARAM, "VISC%IPARAM")
+
+        IF (NUPARAM > 0) THEN
+          CALL READ_DB(VISC%UPARAM  ,NUPARAM)
+        END IF
+        IF (NIPARAM > 0) THEN
+          CALL READ_I_C(VISC%IPARAM ,NIPARAM)
+        END IF
+c
+c       read viscosity law function tables
+      
+        NUMTABL  = VISC%NTABLE        
+        IF (NUMTABL > 0) THEN
+          ALLOCATE (VISC%TABLE(NUMTABL))
+          CALL READ_MAT_TABLE(VISC%TABLE, NUMTABL)
+        END IF
+c      
+      ELSE ! initialize VISC structure 
+c
+        VISC%TITLE = " "
+        LEN = 0
+        call my_alloc(VISC%UPARAM, LEN, "VISC%UPARAM")
+        call my_alloc(VISC%IPARAM, LEN, "VISC%IPARAM")
+        call my_alloc(VISC%FUNC, LEN, "VISC%FUNC")
+        ALLOCATE (VISC%TABLE(LEN))
+        VISC%UPARAM = 0
+        VISC%IPARAM = 0
+
+      END IF    
+c-----------
+      RETURN
+      END

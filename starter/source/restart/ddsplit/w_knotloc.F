@@ -1,0 +1,96 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    w_knotloc     ../starter/source/restart/ddsplit/w_knotloc.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit       ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    w_knotlocpc   ../starter/source/restart/ddsplit/w_knotlocpc.F
+!||====================================================================
+      SUBROUTINE W_KNOTLOC(KXIG3D,NUMELIG3D_L,ISUMNIG3D_L,IXIG3D,CEP,
+     .                  PROC,NODLOCAL,LEN_IA,KNOTLOCPC,KNOTLOCEL,NUMNOD_L,
+     .                  NUMCONV,NUMRADIA)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "tabsiz_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ,INTENT(IN) :: NUMCONV
+      INTEGER ,INTENT(IN) :: NUMRADIA
+      INTEGER NUMELIG3D_L, PROC, ISUMNIG3D_L,LEN_IA,
+     .        KXIG3D(NIXIG3D,*), CEP(*), NODLOCAL(*), IXIG3D(*),NUMNOD_L
+      my_real
+     .        KNOTLOCPC(*),KNOTLOCEL(*)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, IAD, J, NNOD, IE_L, OFF,
+     .        KXIG3D_L(NIXIG3D,NUMELIG3D_L),MAXGEO
+      my_real
+     .        KNOTLOCPC_L(SKNOTLOCPC),KNOTLOCEL_L(SKNOTLOCEL)
+C
+      OFF = NUMELC+NUMELTG+NUMELS+NUMELQ+NUMELT+NUMELP+NUMELR+
+     .      NUMCONV+NUMRADIA+SLLOADP/4
+      IE_L = 0
+      MAXGEO=1
+C
+      DO I = 1, NUMELIG3D
+c        IF(CEP(OFF+I)==PROC) THEN
+          MAXGEO= MAX(MAXGEO,KXIG3D(2,I))
+C
+          NNOD  = KXIG3D(3,I)
+          IAD   = KXIG3D(4,I)
+C
+          IE_L = IE_L + 1
+          DO J = 1, NIXIG3D
+            KXIG3D_L(J,IE_L) = KXIG3D(J,I)
+          ENDDO
+c          DO J = 1, 6 !2*3
+c            KNOTLOCEL_L((IE_L-1)*6+J) = KNOTLOCEL(J,KXIG3D(J,I))
+c          ENDDO
+c        ENDIF
+      ENDDO
+
+      DO J = 1, SKNOTLOCEL
+        KNOTLOCEL_L(J) = KNOTLOCEL(J)
+      ENDDO
+C
+      KNOTLOCPC_L = 0  ! The other KNOT LCPC boxes must be empty for neodus are put to 0
+
+      CALL W_KNOTLOCPC(KNOTLOCPC,KNOTLOCPC_L,MAXGEO,NUMNOD_L,NODLOCAL)
+C
+      CALL WRITE_DB(KNOTLOCPC_L,SKNOTLOCPC)
+      CALL WRITE_DB(KNOTLOCEL_L,SKNOTLOCEL)
+C
+      RETURN
+      END

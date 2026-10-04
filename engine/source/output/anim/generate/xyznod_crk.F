@@ -1,0 +1,116 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    xyznod_crk0     ../engine/source/output/anim/generate/xyznod_crk.F
+!||--- called by ------------------------------------------------------
+!||    genani          ../engine/source/output/anim/generate/genani.F
+!||--- uses       -----------------------------------------------------
+!||    crackxfem_mod   ../engine/share/modules/crackxfem_mod.F
+!||====================================================================
+      SUBROUTINE XYZNOD_CRK0(ILEV)
+C-----------------------------------------------
+      USE CRACKXFEM_MOD        
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ILEV
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER ND,IAD
+C=======================================================================
+c     Copy phantom node coordinates to work table for crack intersections
+C-----------------------------------------------
+      DO ND=1,CRKNOD(ILEV)%CRKNUMNODS
+        IAD = CRKNOD(ILEV)%NOD2IAD(ND)
+        CRKAVX(ILEV)%XX(1,ND) = CRKAVX(ILEV)%X(1,IAD)
+        CRKAVX(ILEV)%XX(2,ND) = CRKAVX(ILEV)%X(2,IAD)
+        CRKAVX(ILEV)%XX(3,ND) = CRKAVX(ILEV)%X(3,IAD)
+      END DO
+C-----------
+      RETURN
+      END
+c
+!||====================================================================
+!||    xyznod_crk            ../engine/source/output/anim/generate/xyznod_crk.F
+!||--- called by ------------------------------------------------------
+!||    genani                ../engine/source/output/anim/generate/genani.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_wrt_crk_xyznod   ../engine/source/mpi/anim/spmd_wrt_crk_xyznod.F
+!||    write_r_c             ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    crackxfem_mod         ../engine/share/modules/crackxfem_mod.F
+!||    my_alloc_mod          ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod        ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE XYZNOD_CRK(ICRK,NFNOD_CRKXFEMG,NODGLOBXFE)
+C-----------------------------------------------
+      USE CRACKXFEM_MOD        
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ICRK,NFNOD_CRKXFEMG,NODGLOBXFE(*)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER ND,NNODE
+      REAL, DIMENSION(:,:), ALLOCATABLE :: XNODARRAY
+C=======================================================================
+c     Write phantom node coordinates to ANIM file
+C-----------------------------------------------
+      IF (NSPMD == 1) THEN
+        NNODE = CRKNOD(ICRK)%CRKNUMNODS
+        call my_alloc(XNODARRAY, 3, NNODE, "XNODARRAY")
+        DO ND=1,NNODE
+           XNODARRAY(1,ND) = CRKAVX(ICRK)%XX(1,ND)
+           XNODARRAY(2,ND) = CRKAVX(ICRK)%XX(2,ND)
+           XNODARRAY(3,ND) = CRKAVX(ICRK)%XX(3,ND)
+        END DO
+        CALL WRITE_R_C(XNODARRAY,3*NNODE)
+        call my_dealloc(XNODARRAY)
+      ELSE
+         IF (ISPMD == 0) THEN
+           CALL SPMD_WRT_CRK_XYZNOD(ICRK,NFNOD_CRKXFEMG,NODGLOBXFE)
+         ELSE
+           CALL SPMD_WRT_CRK_XYZNOD(ICRK,1,NODGLOBXFE)
+         ENDIF
+      ENDIF
+C-----------
+      RETURN
+      END

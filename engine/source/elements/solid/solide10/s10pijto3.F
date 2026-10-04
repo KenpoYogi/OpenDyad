@@ -1,0 +1,60 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    s10pijto3     ../engine/source/elements/solid/solide10/s10pijto3.F
+!||--- called by ------------------------------------------------------
+!||    s10forc3      ../engine/source/elements/solid/solide10/s10forc3.F
+!||    s10volnodt3   ../engine/source/elements/solid/solide4_sfem/s10volnodt3.F
+!||====================================================================
+      SUBROUTINE S10PIJTO3(PX,PY,PZ, PIJ,NEL)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NEL
+      my_real
+     .   PX(MVSIZ,10),PY(MVSIZ,10),PZ(MVSIZ,10),
+     .   PIJ(NEL,3,10)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J
+C-----------------------------------------------
+      DO J=1,10
+       DO I=1,NEL
+        PX(I,J) = PIJ(I,1,J)
+        PY(I,J) = PIJ(I,2,J)
+        PZ(I,J) = PIJ(I,3,J) 
+       END DO
+      END DO
+C-----------
+      RETURN
+      END

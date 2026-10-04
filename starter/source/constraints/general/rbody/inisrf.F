@@ -1,0 +1,104 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C=======================================================================
+C
+!||====================================================================
+!||    inisrf         ../starter/source/constraints/general/rbody/inisrf.F
+!||--- called by ------------------------------------------------------
+!||    initia         ../starter/source/elements/initia/initia.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg         ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod    ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE INISRF(X,V,VR,NPBY,RBY,IGRSURF,BUFSF)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE GROUPDEF_MOD
+      USE MESSAGE_MOD
+C=======================================================================
+C    * Verifies that there are not two RIGID BODIES (or two kinematic
+C      conditions) which define the movement of the same surface.
+C    * Initializes the position and velocities of the point where forces are calculated
+C      in the interfaces.
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NPBY(NNPBY,*)
+C     REAL
+      my_real
+     .   X(3,*),V(3,*),VR(3,*),RBY(NRBY,*),BUFSF(*)
+      TYPE (SURF_)   , DIMENSION(NSURF)   :: IGRSURF
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER N, ISU, ADRSRF, IM
+C-----------------------------------------------
+      DO 100 N=1,NRBYKIN
+        ISU=NPBY(8,N)
+        IF (ISU==0) GOTO 100
+        IF (IGRSURF(ISU)%NB_MADYMO/=0) GOTO 999
+C
+        IGRSURF(ISU)%NB_MADYMO=N
+        IGRSURF(ISU)%TYPE_MADYMO=1
+C
+        IM=NPBY(1,N)
+        ADRSRF=IGRSURF(ISU)%IAD_BUFR
+        BUFSF(ADRSRF+16)=X(1,IM)
+        BUFSF(ADRSRF+17)=X(2,IM)
+        BUFSF(ADRSRF+18)=X(3,IM)
+        BUFSF(ADRSRF+19)=V(1,IM)
+        BUFSF(ADRSRF+20)=V(2,IM)
+        BUFSF(ADRSRF+21)=V(3,IM)
+        BUFSF(ADRSRF+22)  =VR(1,IM)
+        BUFSF(ADRSRF+23)=VR(2,IM)
+        BUFSF(ADRSRF+24)=VR(3,IM)
+ 100  CONTINUE
+      GOTO 9999
+C-----------------------------------------------
+ 999  CONTINUE
+C      WRITE(ISTDO,*)' ** ERROR : MOTION OF SURFACE MULTIPLY DEFINED'
+C      WRITE(IOUT,*) ' ** ERROR : SURFACES MOTION DEFINITION :'
+C      WRITE(IOUT,*) ' ** ERROR : MOTION OF SURFACE MULTIPLY DEFINED :'
+C      WRITE(IOUT,*) '            MOTION OF SURFACE ',ISURF(1,ISU),
+C     .                 ' IS DEFINED BY MORE THAN ONE RIGID BODY.'
+C      IERR=IERR+1
+      CALL ANCMSG(MSGID=146,
+     .            MSGTYPE=MSGERROR,
+     .            ANMODE=ANINFO_BLIND_1,
+     .            I1=IGRSURF(ISU)%ID)
+C-----------------------------------------------
+ 9999 CONTINUE
+      RETURN
+      END

@@ -1,0 +1,66 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    ixyz      ../engine/source/input/ixyz.F
+!||--- called by ------------------------------------------------------
+!||    fralnk    ../engine/source/input/fralnk.F
+!||    fralnk2   ../engine/source/input/fralnk.F
+!||    frebcs    ../engine/source/input/frebcs.F
+!||    frelnk    ../engine/source/input/frelnk.F
+!||--- calls      -----------------------------------------------------
+!||    errmsg    ../engine/source/input/errmsg.F
+!||====================================================================
+      INTEGER FUNCTION IXYZ(CHR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      CHARACTER CHR*5
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IX, IY, IZ, IER, I
+C-----------------------------------------------
+      IX=0
+      IY=0
+      IZ=0
+      IER=0
+      DO 10 I=1,5
+       IF(CHR(I:I)=='X')THEN
+        IX=100
+       ELSEIF(CHR(I:I)=='Y')THEN
+        IY=10
+       ELSEIF(CHR(I:I)=='Z')THEN
+        IZ=1
+       ELSEIF(CHR(I:I)/=' ')THEN
+        IER=1
+       ENDIF
+ 10   CONTINUE
+      IF(IER==1)CALL ERRMSG(CHR)
+      IXYZ=IX+IY+IZ
+      RETURN
+      END

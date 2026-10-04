@@ -1,0 +1,232 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    count_remote_nb_elem_edge   ../engine/source/interfaces/interf/count_remote_nb_elem_edge.F
+!||--- called by ------------------------------------------------------
+!||    init_nodal_state            ../engine/source/interfaces/interf/init_nodal_state.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    element_mod                 ../common_source/modules/elements/element_mod.F90
+!||    my_alloc_mod                ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod              ../common_source/tools/memory/my_dealloc.F90
+!||    nodal_arrays_mod            ../common_source/modules/nodal_arrays.F90
+!||====================================================================
+        SUBROUTINE COUNT_REMOTE_NB_ELEM_EDGE( SIZE_BUFFER,BUFFER,GEO,IXS,IXC,
+     .                                 IXT,IXP,IXR,IXTG,ADDCNEL,NODES,CNEL,CHUNK,
+     .                                 IXS10)
+!$COMMENT
+!       COUNT_REMOTE_NB_ELEM_EDGE description
+!           check if a list of node is associated 
+!           to a deleted element : 
+!           - if it's true : need to deactivate the node from the interface
+!       COUNT_REMOTE_NB_ELEM_EDGE organization
+!           loop over the 2 or 4 nodes:
+!           - convert the global id to local id
+!           - check if a element is associated to the list of node (2 or 4 nodes)
+!           - if it's true, send to the remote processor "you need to deactivate
+!             the nodes from your interface!"
+!$ENDCOMMENT
+       USE nodal_arrays_mod
+       use element_mod , only : nixs,nixc,nixt,nixp,nixr,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER, INTENT(in) :: SIZE_BUFFER
+        INTEGER, INTENT(in) :: CHUNK
+! chunk size : 1-> interface id, 2-> surface id, 3:6-> node id (for type11, 5&6 values are equal to 0)
+        INTEGER, DIMENSION(SIZE_BUFFER), INTENT(inout) :: BUFFER
+        INTEGER, DIMENSION(NIXS,NUMELS),TARGET, INTENT(in) :: IXS   ! solid array
+        INTEGER, DIMENSION(NIXC,NUMELC),TARGET, INTENT(in) :: IXC   ! shell array
+        INTEGER, DIMENSION(NIXT,NUMELT),TARGET, INTENT(in) :: IXT! truss array
+        INTEGER, DIMENSION(NIXP,NUMELP),TARGET, INTENT(in) :: IXP! beam array
+        INTEGER, DIMENSION(NIXR,NUMELR),TARGET, INTENT(in) :: IXR! spring array
+        INTEGER, DIMENSION(NIXTG,NUMELTG),TARGET, INTENT(in) :: IXTG! triangle array
+        INTEGER, DIMENSION(0:NUMNOD+1), INTENT(in) :: ADDCNEL ! address for the CNEL array
+        TYPE(nodal_arrays_), intent(inout) :: NODES
+        my_real, DIMENSION(NPROPG,NUMGEO), INTENT(in) :: GEO
+        INTEGER, DIMENSION(0:LCNEL), INTENT(in) :: CNEL ! connectivity node-->element
+
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        INTEGER :: I,J,K
+        INTEGER :: N1,N2,N3,N4,NIN
+        INTEGER :: NUMBER_NODE
+        INTEGER, DIMENSION(4) :: LOCAL_NODE,GLOBAL_NODE
+        INTEGER :: ELEM_ID,NODE_ID
+        INTEGER :: OFFSET_SOLID,OFFSET_QUAD,OFFSET_SHELL
+        INTEGER :: OFFSET_TRUSS,OFFSET_BEAM,OFFSET_SPRING
+        INTEGER :: OFFSET_TRIANGLE,OFFSET_UR
+
+        INTEGER, DIMENSION(:), ALLOCATABLE :: TAG_NODE
+        INTEGER :: NUMBER_ELEMENT, NUMBER_ELEMENT_HERE
+        INTEGER, DIMENSION(:), ALLOCATABLE :: LIST_ELEMENT
+        LOGICAL, DIMENSION(:), ALLOCATABLE :: ALREADY_HERE
+        INTEGER, DIMENSION(6,NUMELS10), INTENT(in) :: IXS10!< tetra10 data
+
+C-----------------------------------------------
+        ! --------------------------
+        OFFSET_SOLID = 0
+        OFFSET_QUAD=OFFSET_SOLID+NUMELS
+        OFFSET_SHELL=OFFSET_QUAD+NUMELQ
+        OFFSET_TRUSS=OFFSET_SHELL+NUMELC
+        OFFSET_BEAM=OFFSET_TRUSS+NUMELT
+        OFFSET_SPRING=OFFSET_BEAM+NUMELP
+        OFFSET_TRIANGLE=OFFSET_SPRING+NUMELR
+        OFFSET_UR=OFFSET_TRIANGLE+NUMELTG       
+        ! --------------------------
+        ! allocation of already_here array 
+        ! cnel is not bijective (2 differents index can give the same cnel(i) value)
+        ! --> need to tag the elements to avoid a duplication
+        NUMBER_ELEMENT = NUMELS + NUMELQ + NUMELC + NUMELT + NUMELP + NUMELR + NUMELTG
+        call my_alloc(LIST_ELEMENT, NUMBER_ELEMENT, "LIST_ELEMENT")
+! <-- list of element to flush only the modified cells
+        call my_alloc(ALREADY_HERE, NUMBER_ELEMENT, "ALREADY_HERE") ! <-- boolean to avoid any element duplications
+        ALREADY_HERE(1:NUMBER_ELEMENT) = .FALSE.
+        NUMBER_ELEMENT_HERE = 0
+
+        call my_alloc(TAG_NODE, NUMNOD+1, "TAG_NODE")
+        TAG_NODE(1:NUMNOD+1) = 0
+        DO J=1,SIZE_BUFFER,CHUNK
+            NIN = BUFFER(J)
+            GLOBAL_NODE(1:4) = BUFFER(J+2:J+CHUNK-1)
+            LOCAL_NODE(1) = GET_LOCAL_NODE_ID(NODES,GLOBAL_NODE(1))
+            LOCAL_NODE(2) = GET_LOCAL_NODE_ID(NODES,GLOBAL_NODE(2))
+            LOCAL_NODE(3:4) = NUMNOD+1
+            NUMBER_NODE = 2 ! for type 11, there are 2 nodes per segments
+            IF(GLOBAL_NODE(3)/=0) LOCAL_NODE(3) = GET_LOCAL_NODE_ID(NODES, GLOBAL_NODE(3))
+            IF(GLOBAL_NODE(4)/=0) LOCAL_NODE(4) = GET_LOCAL_NODE_ID(NODES, GLOBAL_NODE(4)) 
+            IF((GLOBAL_NODE(3)/=0).AND.(GLOBAL_NODE(4)/=0)) NUMBER_NODE = 4 ! for type 7, there are 4 nodes per segments
+            BUFFER(J+2:J+3) = 0
+            N1 = LOCAL_NODE(1)
+            N2 = LOCAL_NODE(2)
+            N3 = LOCAL_NODE(3)
+            N4 = LOCAL_NODE(4)
+            NUMBER_ELEMENT_HERE = 0
+            ! ---------------
+            ! loop over the elements connected to N1 
+            DO I=ADDCNEL(N1),ADDCNEL(N1+1)-1
+                ELEM_ID = CNEL(I)   ! <-- element id
+                TAG_NODE(N1) = 0
+                TAG_NODE(N2) = 0
+                TAG_NODE(N3) = 0
+                TAG_NODE(N4) = 0
+                ! -----------------
+                ! solid element
+                IF(ELEM_ID<=OFFSET_SHELL) THEN
+                    DO K=2,9
+                        NODE_ID = IXS(K,ELEM_ID)
+                        TAG_NODE(NODE_ID) = 1
+                    ENDDO
+                    IF(ELEM_ID>NUMELS8.AND.ELEM_ID<=NUMELS8+NUMELS10) THEN
+                      DO K=1,6
+                        NODE_ID = IXS10(K,ELEM_ID-NUMELS8)
+                        TAG_NODE(NODE_ID) = 1
+                      ENDDO
+                    ENDIF
+                ELSEIF(ELEM_ID>OFFSET_SHELL.AND.ELEM_ID<=OFFSET_TRUSS) THEN
+                ! -----------------
+                ! shell element
+                    DO K=2,5
+                        NODE_ID = IXC(K,ELEM_ID-OFFSET_SHELL)
+                        TAG_NODE(NODE_ID) = 1
+                    ENDDO
+                ELSEIF(ELEM_ID>OFFSET_TRUSS.AND.ELEM_ID<=OFFSET_BEAM) THEN
+                ! -----------------
+                ! truss
+                    DO K=2,3
+                        NODE_ID = IXT(K,ELEM_ID-OFFSET_TRUSS)
+                        TAG_NODE(NODE_ID) = 1
+                    ENDDO
+                ELSEIF(ELEM_ID>OFFSET_BEAM.AND.ELEM_ID<=OFFSET_SPRING) THEN
+                ! -----------------
+                ! beam element
+                    DO K=2,3
+                        NODE_ID = IXP(K,ELEM_ID-OFFSET_BEAM)
+                        TAG_NODE(NODE_ID) = 1
+                    ENDDO
+                ELSEIF(ELEM_ID>OFFSET_SPRING.AND.ELEM_ID<=OFFSET_TRIANGLE) THEN
+                ! -----------------
+                ! spring element
+                    DO K=2,3
+                        NODE_ID = IXR(K,ELEM_ID-OFFSET_SPRING)
+                        TAG_NODE(NODE_ID) = 1
+                    ENDDO
+
+                    IF(NINT(GEO(12,IXR(1,ELEM_ID-OFFSET_SPRING))) == 12) THEN
+                        NODE_ID = IXR(4,ELEM_ID-OFFSET_SPRING)
+                        TAG_NODE(NODE_ID) = 1 
+                    ENDIF
+                ELSEIF(ELEM_ID>OFFSET_TRIANGLE.AND.ELEM_ID<=OFFSET_UR) THEN
+                ! -----------------
+                ! triangle element
+                    DO K=2,4
+                        NODE_ID = IXTG(K,ELEM_ID-OFFSET_TRIANGLE)
+                        TAG_NODE(NODE_ID) = 1
+                    ENDDO
+                ENDIF
+                ! ----------------- 
+                ! -----------------
+                ! check if the element has N1 & N2 & N3 & N4 (if N3 and N4 are real nodes)
+                IF( (TAG_NODE(N1)+TAG_NODE(N2)+TAG_NODE(N3)+TAG_NODE(N4)) == NUMBER_NODE) THEN
+                    IF( .NOT.ALREADY_HERE(ELEM_ID) ) THEN ! check if the element is already taken into account
+                        BUFFER(J+2) = BUFFER(J+2) + 1
+                        ALREADY_HERE(ELEM_ID) = .TRUE. ! <-- the element is now taken into account
+                        NUMBER_ELEMENT_HERE = NUMBER_ELEMENT_HERE  + 1
+                        LIST_ELEMENT(NUMBER_ELEMENT_HERE) = ELEM_ID
+                    ENDIF
+                ENDIF
+
+                ! -----------------
+            ENDDO
+            ! ---------------
+
+            ! ---------------
+            ! re-initialization of already_here array for the next node
+            DO I=1,NUMBER_ELEMENT_HERE
+                ELEM_ID = LIST_ELEMENT(I)
+                ALREADY_HERE(ELEM_ID) = .FALSE.
+            ENDDO
+            ! ---------------
+        ENDDO
+
+        call my_dealloc(TAG_NODE)
+        call my_dealloc(LIST_ELEMENT)
+        call my_dealloc(ALREADY_HERE)
+
+        RETURN
+        END SUBROUTINE COUNT_REMOTE_NB_ELEM_EDGE
+

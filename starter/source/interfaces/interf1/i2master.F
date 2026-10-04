@@ -1,0 +1,111 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    i2main          ../starter/source/interfaces/interf1/i2master.F
+!||--- called by ------------------------------------------------------
+!||    inint2          ../starter/source/interfaces/inter2d1/inint2.F
+!||    inint3          ../starter/source/interfaces/inter3d1/inint3.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE I2MAIN(NSV,MSR,IRECTM,IPARI,
+     .                   TAG,MSRU,INTBUF_TAB)
+C-----------------------------------------------
+C   M o d u l e s
+C----------------------------------------------- 
+      USE INTBUFDEF_MOD 
+C-----------------------------------------------------------------------
+C reconstructing MSR and Irectm as a function of useful nodes
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NSV(*), MSR(*), IRECTM(4,*), IPARI(*)
+      INTEGER TAG(*), MSRU(*)
+
+      TYPE(INTBUF_STRUCT_) INTBUF_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NRTS, NRTM, NSN, NMN, NTY, I, J, NIR,
+     .        K, M, NM, NMNU
+C-----------------------------------------------
+      NRTS=IPARI(3)
+      NRTM=IPARI(4)
+      NSN =IPARI(5)
+      NMN =IPARI(6)
+      NTY =IPARI(7)
+      NMNU = 0
+C
+      DO I = 1, NUMNOD
+        TAG(I) = 0
+      ENDDO
+C
+      IF (N2D==0) THEN
+        NIR = 4
+      ELSE
+        NIR = 2
+      ENDIF
+C Dettermination of the nodes actually used
+      DO I = 1, NSN
+        J = INTBUF_TAB%IRTLM(I)
+        DO K = 1, NIR
+          M = IRECTM(K,J)
+          IF (TAG(M)==0) THEN
+            NMNU = NMNU + 1
+            TAG(M) = NMNU
+            MSRU(NMNU) = MSR(M)
+          ENDIF
+        ENDDO
+      ENDDO
+C MSR update
+      DO I = 1, NMNU
+        MSR(I) = MSRU(I)
+      ENDDO
+C Irectm update
+C---------------------------------------------------------------
+C     THE LOCAL NODE IS REPLACED BY THE GLOBAL NODE IN IRECT
+C---------------------------------------------------------------
+      DO I = 1, NRTM
+        DO K = 1, NIR
+          M = IRECTM(K,I)
+          NM = TAG(M)
+          IF (NM==0) THEN
+            IRECTM(K,I) = 1
+          ELSE
+CGW            IRECTM(K,I) = NM
+            IRECTM(K,I) = MSR(NM)
+          ENDIF
+        ENDDO
+      ENDDO 
+C update of IPARI and offset of IRTLM
+      IPARI(6) = NMNU
+C
+      RETURN
+      END

@@ -1,0 +1,139 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    spmd_lagbounds_exch_i22   ../engine/source/mpi/interfaces/spmd_lagbounds_exch_i22.F
+!||--- called by ------------------------------------------------------
+!||    i22main_tri               ../engine/source/interfaces/intsort/i22main_tri.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    message_mod               ../engine/share/message_module/message_mod.F
+!||    spmd_mod                  ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE SPMD_LAGBOUNDS_EXCH_I22(
+     1   BMINMAL_SPMD, BMINMAL   ,ISENDTO, IRCVFROM , NIN    )  
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "timeri_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ::
+     .        ISENDTO(NINTER+1,*), IRCVFROM(NINTER+1,*), NIN
+
+      my_real
+     .        BMINMAL(6), BMINMAL_SPMD(6, NSPMD)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER MSGTYP, LOC_PROC,P, MSGOFF,
+     .        STATUS(MPI_STATUS_SIZE),IERROR,REQ_SB(NSPMD),
+     .        REQ_RB(NSPMD),KK,NBIRECV,IRINDEXI(NSPMD),
+     .        REQ_RD(NSPMD),REQ_SD(NSPMD),REQ_SD2(NSPMD),
+     .        REQ_RC(NSPMD),REQ_SC(NSPMD),
+     .        ISINDEXI(NSPMD),
+     .        NBX,NBY,NBZ
+      my_real
+     .        BMINMA(6,NSPMD),
+     .        XMAXB,YMAXB,ZMAXB,XMINB,YMINB,ZMINB
+      my_real ::
+     .        DX, DY, DZ,
+     .        XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX
+      LOGICAL ::
+     .        TEST
+      DATA MSGOFF/142/
+
+C-----------------------------------------------
+C   S o u r c e  L i n e s
+C-----------------------------------------------
+C
+C=======================================================================
+C     Exchanging each local lagrangian bounds.
+C=======================================================================
+      IF(NSPMD == 1)RETURN      !precondition
+      LOC_PROC = ISPMD + 1
+      !-------------------------------------------!
+      !    Domain Bounds from i22xsave            !
+      !-------------------------------------------!
+      BMINMA(1,LOC_PROC) = BMINMAL(1)
+      BMINMA(2,LOC_PROC) = BMINMAL(2)
+      BMINMA(3,LOC_PROC) = BMINMAL(3)
+      BMINMA(4,LOC_PROC) = BMINMAL(4)
+      BMINMA(5,LOC_PROC) = BMINMAL(5)
+      BMINMA(6,LOC_PROC) = BMINMAL(6)
+      !-------------------------------------------!
+      !  Local Lagrangian Domain Bounds Sending   !
+      !-------------------------------------------!
+      DO P = 1, NSPMD
+        IF(P/=LOC_PROC) THEN
+          MSGTYP = MSGOFF
+          CALL SPMD_ISEND(
+     .      BMINMA(1:6,LOC_PROC),6,IT_SPMD(P),MSGTYP,REQ_SB(P))
+        ENDIF
+      ENDDO
+      !-------------------------------------------!
+      ! Remote Lagrangian Domain Bounds Receiving !
+      !-------------------------------------------!
+      NBIRECV=0
+      DO P = 1, NSPMD
+        IF(LOC_PROC/=P) THEN
+          NBIRECV=NBIRECV+1
+          IRINDEXI(NBIRECV)=P
+          MSGTYP = MSGOFF
+          CALL SPMD_RECV(
+     .      BMINMA(1:6,P),6,IT_SPMD(P),MSGTYP,STATUS)
+        ENDIF
+      ENDDO
+      !-------------------------------------------!
+      !     MPI_WAITING                           !
+      !-------------------------------------------!
+      DO P = 1, NSPMD
+        IF(P/=LOC_PROC) THEN
+          CALL SPMD_WAIT(REQ_SB(P),STATUS)
+        ENDIF
+      ENDDO
+      !-------------------------------------------!
+      ! Returning complete bounds data
+      BMINMAL_SPMD = BMINMA
+#endif
+      RETURN
+      END

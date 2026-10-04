@@ -1,0 +1,272 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    i25trc_e2s    ../engine/source/interfaces/intsort/i25trc_e2s.F
+!||--- called by ------------------------------------------------------
+!||    i25main_tri   ../engine/source/interfaces/intsort/i25main_tri.F
+!||--- uses       -----------------------------------------------------
+!||    tri7box       ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE I25TRC_E2S(
+     1      NEDGE,I_STOK,CAND_S,CAND_M,
+     2      CAND_P,CAND_A,NIN,NEDGE_L,
+     3      LEDGE,IFQ,CAND_FX ,
+     4      CAND_FY,CAND_FZ,IFPEN,
+     5      PENE_OLD_E2S,STIF_OLD_E2S,SIZ_E2S)
+C-----------------------------------------------
+      USE TRI7BOX
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "assert.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   role of the routine:
+C   ===================
+C   sorting on N of CAND_S CAND_M CAND_F
+C   and elimination of bouncing nodes
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER I_STOK,NEDGE,NIN,NEDGE_L,IFQ
+      INTEGER CAND_S(I_STOK),CAND_M(I_STOK),CAND_A(*),IFPEN(*)
+      INTEGER LEDGE(NLEDGE,NEDGE)
+      my_real
+     .        CAND_P(4,*),CAND_FX(4,*) ,CAND_FY(4,*) ,CAND_FZ(4,*)
+      INTEGER , INTENT(IN) ::SIZ_E2S
+      my_real , INTENT(INOUT) :: PENE_OLD_E2S(4,SIZ_E2S/4),STIF_OLD_E2S(4,SIZ_E2S/4) 
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,N,NN,K,E,CAND_X,
+     .        IGET(I_STOK),IPUT(I_STOK)
+      my_real
+     .        CAND_XF
+C=======================================================================
+C
+
+      DO N=1,NEDGE+3
+        CAND_A(N) = 0
+      ENDDO
+
+      DO I=1,I_STOK
+        NN = CAND_S(I)
+        E  = CAND_M(I)
+
+        ASSERT(CAND_S(I) > 0)
+        ASSERT(CAND_S(I) <= NEDGE) ! ici nedge = nedge + nedge_remote
+        DEBUG_E2E(EIDS == D_ES,CAND_P(1,I))
+        DEBUG_E2E(EIDS == D_ES,CAND_P(2,I))
+        DEBUG_E2E(EIDS == D_ES,CAND_P(3,I))
+        DEBUG_E2E(EIDS == D_ES,CAND_P(4,I))
+
+C       IF(NN<=NEDGE_L)THEN
+        IF (IFQ == 0) THEN
+          IF(CAND_P(1,I)==ZERO.AND.
+     .       CAND_P(2,I)==ZERO.AND.
+     .       CAND_P(3,I)==ZERO.AND.
+     .       CAND_P(4,I)==ZERO)THEN
+            CAND_S(I) = NEDGE+1
+          ENDIF
+        ELSE
+         IF(IFPEN(I)==0.AND.CAND_P(1,I)==ZERO.AND.
+     .       CAND_P(2,I)==ZERO.AND.
+     .       CAND_P(3,I)==ZERO.AND.
+     .       CAND_P(4,I)==ZERO)THEN
+            CAND_S(I) = NEDGE+1
+          ENDIF 
+        ENDIF
+C       ELSE ! remote
+C       ENDIF
+      ENDDO
+
+C=======================================================================
+C     CAND_A : DENOMBREMENT DE CHAQUE NODE C     APRES 300 CAND_A[3:NEDGE+3] : occurrence DES NODES [1:NEDGE+1] 
+C=======================================================================
+      DO I=1,I_STOK
+        NN = CAND_S(I) + 2
+        CAND_A(NN) = CAND_A(NN) + 1
+      ENDDO
+      
+C=======================================================================
+C     CAND_A : ADDRESS DE CHAQUE NODE C     APRES 400 CAND_A[2:NEDGE+2] : ADDRESS DES NODES [1:NEDGE+1] 
+C=======================================================================
+      CAND_A(1) = 1
+      CAND_A(2) = 1
+      DO  N=3,NEDGE+2
+        CAND_A(N) = CAND_A(N) + CAND_A(N-1)
+      ENDDO
+C=======================================================================
+C     IPUT(I) ADDRESS OU DOIT ALLER I
+C     IGET(K) ADDRESS D'OU DOIT VENIR K
+C     APRES 500 CAND_A[1:NEDGE+1] : ADDRESS DES NODES [1:NEDGE+1] 
+C=======================================================================
+      DO I=1,I_STOK
+        NN = CAND_S(I) + 1
+        K = CAND_A(NN)
+        ASSERT(K > 0)
+        ASSERT(NN > 0)
+        IPUT(I) = K
+        IGET(K) = I
+        CAND_A(NN) = CAND_A(NN) + 1
+      ENDDO
+C=======================================================================
+C     TRI DE CAND_S CAND_M CAND_P
+C     on increasing N
+C     PERMUTATION 1 PASSE
+C============================================= 
+        DO K=1,I_STOK
+          I = IGET(K)
+          ASSERT(I > 0)
+C
+          CAND_X    = CAND_S(K)
+          CAND_S(K) = CAND_S(I)
+          CAND_S(I) = CAND_X
+C
+          CAND_X    = CAND_M(K)
+          CAND_M(K) = CAND_M(I)
+          CAND_M(I) = CAND_X
+C
+          CAND_XF   = CAND_P(1,K)
+          CAND_P(1,K) = CAND_P(1,I)
+          CAND_P(1,I) = CAND_XF
+C
+          CAND_XF   = CAND_P(2,K)
+          CAND_P(2,K) = CAND_P(2,I)
+          CAND_P(2,I) = CAND_XF
+C
+          CAND_XF   = CAND_P(3,K)
+          CAND_P(3,K) = CAND_P(3,I)
+          CAND_P(3,I) = CAND_XF
+C
+          CAND_XF   = CAND_P(4,K)
+          CAND_P(4,K) = CAND_P(4,I)
+          CAND_P(4,I) = CAND_XF
+C
+          CAND_XF   = CAND_FX(1,K)
+          CAND_FX(1,K) = CAND_FX(1,I)
+          CAND_FX(1,I) = CAND_XF
+C
+          CAND_XF   = CAND_FX(2,K)
+          CAND_FX(2,K) = CAND_FX(2,I)
+          CAND_FX(2,I) = CAND_XF
+C
+          CAND_XF   = CAND_FX(3,K)
+          CAND_FX(3,K) = CAND_FX(3,I)
+          CAND_FX(3,I) = CAND_XF
+C
+          CAND_XF   = CAND_FX(4,K)
+          CAND_FX(4,K) = CAND_FX(4,I)
+          CAND_FX(4,I) = CAND_XF
+C
+          CAND_XF   = CAND_FY(1,K)
+          CAND_FY(1,K) = CAND_FY(1,I)
+          CAND_FY(1,I) = CAND_XF
+C
+          CAND_XF   = CAND_FY(2,K)
+          CAND_FY(2,K) = CAND_FY(2,I)
+          CAND_FY(2,I) = CAND_XF
+C
+          CAND_XF   = CAND_FY(3,K)
+          CAND_FY(3,K) = CAND_FY(3,I)
+          CAND_FY(3,I) = CAND_XF
+C
+          CAND_XF   = CAND_FY(4,K)
+          CAND_FY(4,K) = CAND_FY(4,I)
+          CAND_FY(4,I) = CAND_XF
+C
+          CAND_XF   = CAND_FZ(1,K)
+          CAND_FZ(1,K) = CAND_FZ(1,I)
+          CAND_FZ(1,I) = CAND_XF
+C
+          CAND_XF   = CAND_FZ(2,K)
+          CAND_FZ(2,K) = CAND_FZ(2,I)
+          CAND_FZ(2,I) = CAND_XF
+C
+          CAND_XF   = CAND_FZ(3,K)
+          CAND_FZ(3,K) = CAND_FZ(3,I)
+          CAND_FZ(3,I) = CAND_XF
+C
+          CAND_XF   = CAND_FZ(4,K)
+          CAND_FZ(4,K) = CAND_FZ(4,I)
+          CAND_FZ(4,I) = CAND_XF
+C
+          CAND_X    = IFPEN(K)
+          IFPEN(K)  = IFPEN(I)
+          IFPEN(I)  = CAND_X
+C
+          CAND_XF   = PENE_OLD_E2S(1,K)
+          PENE_OLD_E2S(1,K) = PENE_OLD_E2S(1,I)
+          PENE_OLD_E2S(1,I) = CAND_XF
+C
+          CAND_XF   = PENE_OLD_E2S(2,K)
+          PENE_OLD_E2S(2,K) = PENE_OLD_E2S(2,I)
+          PENE_OLD_E2S(2,I) = CAND_XF
+C
+          CAND_XF   = PENE_OLD_E2S(3,K)
+          PENE_OLD_E2S(3,K) = PENE_OLD_E2S(3,I)
+          PENE_OLD_E2S(3,I) = CAND_XF
+C
+          CAND_XF   = PENE_OLD_E2S(4,K)
+          PENE_OLD_E2S(4,K) = PENE_OLD_E2S(4,I)
+          PENE_OLD_E2S(4,I) = CAND_XF
+C
+          CAND_XF   = STIF_OLD_E2S(1,K)
+          STIF_OLD_E2S(1,K) = STIF_OLD_E2S(1,I)
+          STIF_OLD_E2S(1,I) = CAND_XF
+C
+          CAND_XF   = STIF_OLD_E2S(2,K)
+          STIF_OLD_E2S(2,K) = STIF_OLD_E2S(2,I)
+          STIF_OLD_E2S(2,I) = CAND_XF
+C
+          CAND_XF   = STIF_OLD_E2S(3,K)
+          STIF_OLD_E2S(3,K) = STIF_OLD_E2S(3,I)
+          STIF_OLD_E2S(3,I) = CAND_XF
+C
+          CAND_XF   = STIF_OLD_E2S(4,K)
+          STIF_OLD_E2S(4,K) = STIF_OLD_E2S(4,I)
+          STIF_OLD_E2S(4,I) = CAND_XF
+C 
+          IPUT(I) = IPUT(K)
+        
+          ASSERT(IPUT(I) > 0)
+          ASSERT(IPUT(I) <= I_STOK)
+
+          IGET(IPUT(I)) = I
+        ENDDO
+C=======================================================================
+C     CAND_A[NEDGE+1] : ADDRESS DE NEDGE+1 
+C=======================================================================
+      I_STOK = CAND_A(NEDGE+1) - 1
+      CAND_A(NEDGE+2) = CAND_A(NEDGE+1)
+C
+      RETURN
+      END

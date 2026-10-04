@@ -1,0 +1,280 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    m15cplrc    ../engine/source/materials/mat/mat015/m15cplrc.F
+!||--- called by ------------------------------------------------------
+!||    sigeps15c   ../engine/source/materials/mat/mat015/sigeps15c.F
+!||====================================================================
+      SUBROUTINE M15CPLRC(NEL    ,PM     ,WPLA   ,
+     2                    IMATLY ,DAMT   ,SHF    ,NGL    ,SIGE  ,
+     3                    DEPSXX ,DEPSYY ,DEPSXY ,DEPSYZ ,DEPSZX,
+     4                    SIGOXX ,SIGOYY ,SIGOXY ,SIGOYZ ,SIGOZX,
+     5                    SIGNXX ,SIGNYY ,SIGNXY ,SIGNYZ ,SIGNZX,
+     6                    EPSD_PG,EPSD   ,ISRATE ,ASRATE ,TSAIWU )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com08_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NGL(MVSIZ)
+      INTEGER NEL, ISRATE
+C     REAL
+      my_real
+     .   PM(NPROPM,*),WPLA(*),DAMT(NEL,2),SHF(*),
+     .   SIGE(MVSIZ,5),
+     .   DEPSXX(MVSIZ),DEPSYY(MVSIZ),DEPSXY(MVSIZ),DEPSYZ(MVSIZ),
+     .   DEPSZX(MVSIZ),
+     .   SIGOXX(NEL),SIGOYY(NEL),
+     .   SIGOXY(NEL),SIGOYZ(NEL),SIGOZX(NEL),
+     .   SIGNXX(NEL),SIGNYY(NEL),SIGNXY(NEL),
+     .   SIGNYZ(NEL),SIGNZX(NEL),TSAIWU(NEL)
+      my_real, DIMENSION(NEL), INTENT(IN)    :: EPSD_PG  ! global element strain rate
+      my_real, DIMENSION(NEL), INTENT(INOUT) :: EPSD     ! lbuf%epsd
+      my_real, INTENT(IN)    :: ASRATE
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, IMATLY
+      INTEGER ICC(MVSIZ)
+      my_real
+     .   DP1(MVSIZ), DP2(MVSIZ), DP3(MVSIZ),CB(MVSIZ),CN(MVSIZ),
+     .   E11(MVSIZ), E22(MVSIZ), NU12(MVSIZ), NU21(MVSIZ),
+     .   G12(MVSIZ), G23(MVSIZ), G31(MVSIZ), FMAX(MVSIZ),
+     .   S1(MVSIZ), S2(MVSIZ), S3(MVSIZ), S4(MVSIZ), S5(MVSIZ),
+     .   DS1(MVSIZ), DS2(MVSIZ), DS3(MVSIZ), DE(MVSIZ),
+     .   DE1(MVSIZ), DE2(MVSIZ), WVEC(MVSIZ), T1(MVSIZ),
+     .   T2(MVSIZ), T3(MVSIZ),LAMDA(MVSIZ), COEF(MVSIZ), 
+     .   A11(MVSIZ), A12(MVSIZ), A22(MVSIZ),
+     .   SO1(MVSIZ), SO2(MVSIZ), SO3(MVSIZ),WPLAMX(MVSIZ),
+     .   CC(MVSIZ),EPDR(MVSIZ), FYLD(MVSIZ),
+     .   F1(MVSIZ), F2(MVSIZ), F12(MVSIZ), F11(MVSIZ), F22(MVSIZ), 
+     . F33(MVSIZ),WPLAREF(MVSIZ),BETA(MVSIZ),
+     . SCALE, CNN, SCALE1, SCALE2
+C=======================================================================       
+      DO I=1,NEL
+        DE(I)     =PM(44,IMATLY)
+        E11(I)    =PM(33,IMATLY)
+        E22(I)    =PM(34,IMATLY)
+        NU12(I)   =PM(35,IMATLY)
+        NU21(I)   =PM(36,IMATLY)
+        G12(I)    =PM(37,IMATLY)
+        G23(I)    =PM(38,IMATLY)
+        G31(I)    =PM(39,IMATLY)
+        F1(I)     =PM(54,IMATLY)
+        F2(I)     =PM(55,IMATLY)
+        F11(I)    =PM(56,IMATLY)
+        F22(I)    =PM(57,IMATLY)
+        F33(I)    =PM(58,IMATLY)
+        F12(I)    =PM(59,IMATLY)
+        WPLAMX(I) =PM(41,IMATLY)
+        WPLAREF(I)=PM(68,IMATLY)
+        CB(I)     =PM(46,IMATLY)
+        CN(I)     =PM(47,IMATLY)
+        FMAX(I)   =PM(49,IMATLY)
+        CC(I)     =PM(50,IMATLY)
+        EPDR(I)   =PM(51,IMATLY)
+        ICC(I)    =NINT(PM(53,IMATLY))
+        IF (TT == ZERO) DAMT(I,1)=ONE
+        IF (TT == ZERO) DAMT(I,2)=ONE
+      ENDDO
+C-------------------------------------------------------------------
+C     reduction of sig based on the criterion wpla_old >= wplamx
+C-------------------------------------------------------------------
+C-------------------------------------------------------------------
+C     DEFORMATIONS ELASTIQUES
+C-----------------------------
+      DO I=1,NEL
+        DE1(I)=ONE
+        DE2(I)=ONE
+        SCALE =ONE         
+        IF (DAMT(I,2) < ONE) THEN
+           NU12(I)=EM20
+           NU21(I)=EM20 
+        ENDIF
+        S1(I) = SIGOXX(I)/DE1(I)-NU12(I)*SIGOYY(I)*SCALE
+        S2(I) = SIGOYY(I)/DE2(I)-NU21(I)*SIGOXX(I)*SCALE
+        S1(I) = S1(I)/E11(I)
+        S2(I) = S2(I)/E22(I)
+        S3(I) = SIGOXY(I)/DE1(I)/DE2(I)/G12(I)
+        S4(I) = SIGOYZ(I)/MAX(DE2(I)*G23(I)*SHF(I),EM30)
+        S5(I) = SIGOZX(I)/MAX(DE1(I)*G31(I)*SHF(I),EM30)
+      ENDDO
+C
+      DO I=1,NEL
+        S1(I)=S1(I)+DEPSXX(I)
+        S2(I)=S2(I)+DEPSYY(I)
+        S3(I)=S3(I)+DEPSXY(I)
+        S4(I)=S4(I)+DEPSYZ(I)
+        S5(I)=S5(I)+DEPSZX(I)
+      ENDDO
+C
+      DO I=1,NEL
+        DE1(I)=ONE
+        DE2(I)=ONE
+        SCALE1=ONE
+        SCALE2 = ONE-NU12(I)*NU21(I)*SCALE1
+        IF (DAMT(I,2) < ONE) THEN
+           E22(I)=EM20
+           NU12(I)=EM20
+           NU21(I)=EM20           
+        ENDIF
+        A11(I) = E11(I)*DE1(I)/SCALE2
+        A22(I) = E22(I)*DE2(I)/SCALE2
+        A12(I) = NU21(I)*A11(I)*SCALE1
+      ENDDO
+C-----------------------------
+C     ELASTIC STRESSES
+C-----------------------------
+      DO I=1,NEL
+        T1(I)   = A11(I)*S1(I)+A12(I)*S2(I)
+        T2(I)   = A12(I)*S1(I)+A22(I)*S2(I)
+        T3(I)   = DE1(I)*DE2(I)*G12(I)*S3(I)
+        SIGNYZ(I)= DE2(I)*G23(I)*SHF(I)*S4(I)
+        SIGNZX(I)= DE1(I)*G31(I)*SHF(I)*S5(I)
+      ENDDO
+C-------------------------------------------------------------------
+C     STRAIN RATE
+C-------------------------------------------------------------------
+      DO I=1,NEL
+        IF (ISRATE == 0) THEN
+          EPSD(I) = MAX(ABS(DEPSXX(I)),ABS(DEPSYY(I)),ABS(DEPSXY(I)),
+     .                  ABS(DEPSYZ(I)),ABS(DEPSZX(I))) / MAX(DT1,EM20)
+        ELSE
+          EPSD(I) = ASRATE*EPSD_PG(I) + (ONE-ASRATE)*EPSD(I)
+        END IF
+        IF (EPSD(I) > EPDR(I)) THEN
+          EPSD(I)=LOG(EPSD(I)/EPDR(I))
+        ELSE
+          EPSD(I)=ZERO
+        ENDIF
+        COEF(I)=ZERO
+      ENDDO
+C
+      DO I=1,NEL
+        EPSD(I) = ONE + CC(I) * EPSD(I)
+        FYLD(I) = (ONE+CB(I)*WPLA(I)**CN(I))*EPSD(I)
+        IF (ICC(I) == 1 .OR. ICC(I) == 3) THEN
+          FMAX(I) = FMAX(I)*EPSD(I)
+        ENDIF
+        IF (ICC(I) == 3 .OR. ICC(I) == 4) THEN
+          WPLAMX(I) = WPLAMX(I)*EPSD(I)
+        ENDIF
+        FYLD(I)= MIN(FMAX(I),FYLD(I))
+      ENDDO
+C-------------------------------------------------------------------
+C     PLASTICITE
+C-------------------------------------------------------------------
+      DO I=1,NEL
+        WVEC(I)=F1(I) *T1(I)       + F2(I) *T2(I) +
+     .          F11(I)*T1(I)*T1(I) + F22(I)*T2(I)*T2(I) +
+     .          F33(I)*T3(I)*T3(I) + TWO*F12(I)*T1(I)*T2(I)
+        TSAIWU(I) = MAX(MIN(WVEC(I)/FYLD(I),ONE),TSAIWU(I))
+      ENDDO
+C
+      DO I=1,NEL
+        CNN=CN(I)-ONE
+        WVEC(I)=ZERO
+        IF (WPLA(I) > ZERO .AND. FYLD(I) < FMAX(I)) 
+     .      WVEC(I)=EPSD(I)*WPLA(I)**CNN
+      ENDDO
+C
+      DO I=1,NEL
+        BETA(I) = ONE
+        SO1(I)=BETA(I)*SIGOXX(I)
+        SO2(I)=BETA(I)*SIGOYY(I)
+        SO3(I)=BETA(I)*SIGOXY(I)
+      ENDDO
+C
+      DO I=1,NEL
+        DP1(I)=F1(I)+2*F11(I)*SO1(I)+2*F12(I)*SO2(I)
+        DP2(I)=F2(I)+2*F22(I)*SO2(I)+2*F12(I)*SO1(I)
+        DP3(I)=2*F33(I)*SO3(I)
+      ENDDO
+C
+      DO I=1,NEL
+        DS1(I)=T1(I)-SO1(I)
+        DS2(I)=T2(I)-SO2(I)
+        DS3(I)=T3(I)-SO3(I)
+      ENDDO
+C 
+      DO I=1,NEL
+        LAMDA(I)=(DP1(I)*DS1(I)+DP2(I)*DS2(I)+DP3(I)*DS3(I))*COEF(I)
+        IF (LAMDA(I) == ZERO) CYCLE
+        LAMDA(I)=LAMDA(I)*COEF(I)/
+     .          (DP1(I)*(A11(I)*DP1(I)+A12(I)*DP2(I))+
+     .           DP2(I)*(A12(I)*DP1(I)+A22(I)*DP2(I))+
+     .       TWO*DP3(I)*G12(I)*DE1(I)*DE2(I)*DP3(I) +
+     .      (SO1(I)*DP1(I)+SO2(I)*DP2(I)+2.*SO3(I)*DP3(I))
+     .       *CN(I)*CB(I)*WVEC(I))
+      ENDDO
+C
+      DO I=1,NEL
+        DP1(I)=LAMDA(I)*DP1(I)
+        DP2(I)=LAMDA(I)*DP2(I)
+        DP3(I)=LAMDA(I)*DP3(I)
+      ENDDO
+C
+      DO I=1,NEL
+        T1(I)=T1(I)-A11(I)*DP1(I)-A12(I)*DP2(I)
+        T2(I)=T2(I)-A12(I)*DP1(I)-A22(I)*DP2(I)
+        T3(I)=T3(I)-G12(I)*DE1(I)*DE2(I)*DP3(I)*TWO
+      ENDDO
+C
+      DO I=1,NEL
+        WPLA(I)=WPLA(I)+HALF*(DP1(I)*(T1(I)+SO1(I))+
+     .                          DP2(I)*(T2(I)+SO2(I))+
+     .                     TWO*DP3(I)*(T3(I)+SO3(I)))
+        WPLA(I)= MAX(WPLA(I),ZERO) / WPLAREF(I)
+      ENDDO
+C
+      DO I=1,NEL
+        SIGNXX(I)=T1(I)
+        SIGNYY(I)=T2(I)
+        SIGNXY(I)=T3(I)
+      ENDDO
+C-------------------
+C     PLASTICITY END
+C-------------------
+      DO I=1,NEL
+        SIGE(I,1)=SIGNXX(I)
+        SIGE(I,2)=SIGNYY(I)
+        SIGE(I,3)=SIGNXY(I)
+        SIGE(I,4)=SIGNYZ(I)
+        SIGE(I,5)=SIGNZX(I)
+      ENDDO
+!---
+      RETURN
+      END

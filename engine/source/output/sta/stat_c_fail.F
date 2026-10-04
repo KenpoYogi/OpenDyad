@@ -1,0 +1,577 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    stat_c_fail         ../engine/source/output/sta/stat_c_fail.F
+!||--- called by ------------------------------------------------------
+!||    genstat             ../engine/source/output/sta/genstat.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_rgather9_dp    ../engine/source/mpi/interfaces/spmd_outp.F
+!||    spmd_stat_pgather   ../engine/source/mpi/output/spmd_stat.F
+!||    strs_txt50          ../engine/source/output/sta/sta_txt.F
+!||    tab_strs_txt50      ../engine/source/output/sta/sta_txt.F
+!||--- uses       -----------------------------------------------------
+!||    element_mod         ../common_source/modules/elements/element_mod.F90
+!||    mat_elem_mod        ../common_source/modules/mat_elem/mat_elem_mod.F90
+!||    my_alloc_mod        ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod      ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE STAT_C_FAIL(ELBUF_TAB ,IPARG ,IPM ,IGEO ,IXC ,
+     2                       IXTG  ,WA,WAP0 ,IPARTC, IPARTTG,
+     3                       IPART_STATE,STAT_INDXC,STAT_INDXTG,SIZP0,
+     4                       NUMMAT,MAT_PARAM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MAT_ELEM_MOD         
+      USE MY_ALLOC_MOD
+      use element_mod , only : nixc,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "param_c.inc"
+#include      "units_c.inc"
+#include      "task_c.inc"
+#include      "scr14_c.inc"
+#include      "scr16_c.inc"
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER SIZP0
+      INTEGER IXC(NIXC,*),IXTG(NIXTG,*),
+     .        IPARG(NPARG,*),IPM(NPROPMI,*),IGEO(NPROPGI,*),
+     .        IPARTC(*), IPARTTG(*), IPART_STATE(*),
+     .        STAT_INDXC(*), STAT_INDXTG(*)
+      TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+      TYPE (MATPARAM_STRUCT_) ,DIMENSION(NUMMAT) ,INTENT(IN) :: MAT_PARAM
+      double precision WA(*),WAP0(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER ,INTENT(IN) :: NUMMAT
+      INTEGER I, N, J, K, L, II, JJ, ID, IE, LEN, NG, NEL, NFT, ITY, LFT, LLT, 
+     .   MLW,IPRT0,IPRT,IMAT,
+     .   NPG,IPG,NLAY,NPTR,NPTS,NPTT,IL,IR,IS,IT,IC,IFAIL,NV,
+     .   NFAIL,NVAR_RUPT,NPTG,IRUPT,IRUPT_TYPE,ISUBSTACK
+ 
+      INTEGER,DIMENSION(:),ALLOCATABLE :: PTWA
+      INTEGER,DIMENSION(:),ALLOCATABLE :: PTWA_P0
+
+      CHARACTER*100 DELIMIT,LINE
+C----  
+ 
+      TYPE(G_BUFEL_) ,POINTER :: GBUF     
+ 
+      TYPE(BUF_FAIL_),POINTER :: FBUF  
+      my_real,
+     .  DIMENSION(:), POINTER  :: UVARF,DFMAX
+C----  
+      DATA DELIMIT(1:60)
+     ./'#---1----|----2----|----3----|----4----|----5----|----6----|'/
+      DATA DELIMIT(61:100)
+     ./'----7----|----8----|----9----|----10---|'/
+C=======================================================================
+C     4-NODE SHELLS
+C-----------------------------------------------
+      call my_alloc(PTWA, MAX(STAT_NUMELC ,STAT_NUMELTG), "PTWA")
+      ALLOCATE(PTWA_P0(0:MAX(1,STAT_NUMELC_G,STAT_NUMELTG_G)))
+! TODO: non-default lower bound, convert manually
+C-----------------------------------------------
+      JJ = 0
+      ISUBSTACK = 0
+      IF (STAT_NUMELC==0) GOTO 200
+C
+      IE=0
+      DO NG=1,NGROUP
+        ITY = IPARG(5,NG)
+        IF (ITY == 3) THEN
+          MLW   =IPARG(1,NG)
+          NEL   =IPARG(2,NG)
+          NFT   =IPARG(3,NG)
+          LFT=1
+          LLT=NEL
+C
+c          DO I=1,NEL
+c            MAT(I) = IXC(1,I)
+c            PID(I) = IXC(6,I)
+c          ENDDO
+C
+          GBUF => ELBUF_TAB(NG)%GBUF
+          NLAY = ELBUF_TAB(NG)%NLAY                   
+          NPTR = ELBUF_TAB(NG)%NPTR                        
+          NPTS = ELBUF_TAB(NG)%NPTS                        
+c         NPTT = ELBUF_TAB(NG)%NPTT
+c         NPT  = NPTT * NLAY
+          NPG  = NPTR*NPTS
+          ISUBSTACK = IPARG(71,NG)
+c
+c-------------------------------------------------------
+c
+          DO I=LFT,LLT
+            N = I+NFT
+            IPRT=IPARTC(N)
+            IF (IPART_STATE(IPRT)==0) CYCLE
+C
+            JJ = JJ + 1
+            IF (MLW /= 0 .AND. MLW /= 13) THEN
+              WA(JJ) = GBUF%OFF(I)
+            ELSE
+              WA(JJ) = ZERO
+            ENDIF
+            JJ = JJ + 1
+            WA(JJ) = IPRT
+            JJ = JJ + 1
+            WA(JJ) = IXC(NIXC,N)
+            JJ = JJ + 1
+            WA(JJ) = NLAY
+cc           JJ = JJ + 1
+cc           WA(JJ) = NPTT
+            JJ = JJ + 1
+            WA(JJ) = NPG
+c
+            DO IL = 1,NLAY
+              NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL             
+              IMAT  = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+              FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(1,1,1)   
+              NPTT = ELBUF_TAB(NG)%BUFLY(IL)%NPTT
+              JJ = JJ + 1
+              WA(JJ) = NFAIL
+              JJ = JJ + 1  
+              IMAT  = ELBUF_TAB(NG)%BUFLY(IL)%IMAT           
+              WA(JJ) = IPM(1,IMAT)   
+              JJ = JJ + 1
+              WA(JJ) = NPTT
+c
+              DO IFAIL = 1,NFAIL 
+                IRUPT = MAT_PARAM(IMAT)%FAIL(IFAIL)%FAIL_ID 
+                IRUPT_TYPE = MAT_PARAM(IMAT)%FAIL(IFAIL)%IRUPT 
+                NVAR_RUPT = FBUF%FLOC(IFAIL)%NVAR                      
+                JJ = JJ + 1
+                WA(JJ) = NVAR_RUPT + 1
+                JJ = JJ + 1
+                WA(JJ) = IRUPT
+                JJ = JJ + 1
+                WA(JJ) = IRUPT_TYPE      
+!
+                IF (IRUPT == 0) CYCLE
+!
+                DO IT=1,NPTT  
+                  DO IS=1,NPTS               
+                    DO IR=1,NPTR         
+                      FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)             
+                      UVARF => FBUF%FLOC(IFAIL)%VAR 
+                      DFMAX => FBUF%FLOC(IFAIL)%DAMMX   
+                      JJ = JJ + 1
+                      WA(JJ) = DFMAX(I)
+                      DO NV=1,NVAR_RUPT
+                        JJ = JJ + 1
+                        WA(JJ) = UVARF((NV-1)*LLT+I)
+                      ENDDO
+                    ENDDO
+                  ENDDO
+                ENDDO
+              ENDDO  ! IFAIL = 1,NFAIL
+c
+            ENDDO      ! IL = 1,NLAY
+c                                                          
+            IE=IE+1
+C       end-of-zone pointer
+            PTWA(IE)=JJ
+          ENDDO        ! I=LFT,LLT
+c--------------
+        ENDIF    !  ITY == 3
+      ENDDO       !  NG = 1,NGROUP
+C
+ 200  CONTINUE
+c
+c-----------------------------------------------------------------------
+c
+      IF (NSPMD == 1) THEN
+        PTWA_P0(0)=0
+        DO N=1,STAT_NUMELC
+          PTWA_P0(N)=PTWA(N)
+        ENDDO
+        LEN=JJ
+        DO J=1,LEN
+          WAP0(J)=WA(J)
+        ENDDO
+      ELSE
+C       builds the pointers in the global array wap0
+        CALL SPMD_STAT_PGATHER(PTWA,STAT_NUMELC,PTWA_P0,STAT_NUMELC_G)
+        LEN = 0
+        CALL SPMD_RGATHER9_DP(WA,JJ,WAP0,SIZP0,LEN)
+      ENDIF
+c
+c-----------------------------------------------------------------------
+c
+      IF (ISPMD == 0.AND.LEN > 0) THEN
+        IPRT0=0
+        DO N=1,STAT_NUMELC_G
+C         find the nieme elt in the order of an increasing id
+          K=STAT_INDXC(N)
+C         Find the address in WAP0
+          J=PTWA_P0(K-1)
+          IPRT  = NINT(WAP0(J + 2))
+          IF (IPRT /= IPRT0) THEN 
+            IF (IZIPSTRS == 0) THEN
+              WRITE(IUGEO,'(A)') DELIMIT
+              WRITE(IUGEO,'(A)')'/INISHE/FAIL'
+              WRITE(IUGEO,'(A)')
+     .'#------------------------ REPEAT --------------------------' 
+              WRITE(IUGEO,'(A)')
+     .'#  SHELLID      NLAY       NPG      NPTT      ILAY     IRUPT IRUPT_TYP     NUVAR      IMAT'
+              WRITE(IUGEO,'(A/A/A)')
+     .'# REPEAT K=1,NPG                                     ',
+     .'#    UVAR(1,I) .............                         ',
+     .'#    ...............              UVAR(NUVAR,I)      '
+              WRITE(IUGEO,'(A)')
+     .'#---------------------- END REPEAT ------------------------' 
+              WRITE(IUGEO,'(A)') DELIMIT
+            ELSE
+              WRITE(LINE,'(A)') DELIMIT
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')'/INISHE/FAIL'
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')
+     .'#------------------------ REPEAT --------------------------' 
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')
+     .'#  SHELLID      NLAY       NPG      NPTT      ILAY     IRUPT IRUPT_TYP     NUVAR      IMAT'
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')
+     .'# REPEAT K=1,NPG                                           '
+              CALL STRS_TXT50(LINE,100)
+              WRITE(LINE,'(A)')
+     .'#  UVAR(1,I) .............                                 '
+              CALL STRS_TXT50(LINE,100)
+              WRITE(LINE,'(A)')
+     .'#    ...............              UVAR(NUVAR,I)            '
+              CALL STRS_TXT50(LINE,100)
+              WRITE(LINE,'(A)')
+     .'#---------------------- END REPEAT ------------------------' 
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)') DELIMIT
+              CALL STRS_TXT50(LINE,100) 
+            ENDIF  ! IF (IZIPSTRS == 0)
+            IPRT0=IPRT
+          ENDIF  ! IF (IPRT /= IPRT0)
+c
+          ID     = NINT(WAP0(J+3)) 
+          NLAY   = NINT(WAP0(J+4)) 
+cc            NPTT   = NINT(WAP0(J+5))                               
+          NPTG   = NINT(WAP0(J+5)) 
+          J = J + 5
+c
+          DO IL=1,NLAY                  
+            IC = NINT(WAP0(J+1))
+            J = J + 1                    
+            IMAT = NINT(WAP0(J+1))
+            J = J + 1   
+            NPTT = NINT(WAP0(J+1))
+            J = J + 1
+            DO II=1,IC 
+              NVAR_RUPT = NINT(WAP0(J+1))
+              J = J + 1
+              IRUPT = NINT(WAP0(J+1))
+              J = J + 1
+              IRUPT_TYPE = NINT(WAP0(J+1))
+              J = J + 1
+!
+              IF (IRUPT == 0) CYCLE
+!
+              IF (IZIPSTRS == 0) THEN
+               WRITE(IUGEO,'(9I10)') ID,NLAY,NPTG,NPTT,IL,IRUPT,IRUPT_TYPE,NVAR_RUPT,
+     .                               IMAT
+              ELSE
+                WRITE(LINE,'(9I10)') ID,NLAY,NPTG,NPTT,IL,IRUPT,IRUPT_TYPE,NVAR_RUPT,
+     .                               IMAT
+                CALL STRS_TXT50(LINE,100)
+              ENDIF
+              IF (IRUPT /= 0 .AND. NVAR_RUPT /= 0) THEN
+                IF (IZIPSTRS == 0) THEN      
+                  DO IT=1,NPTT  
+                    DO IPG=1,NPTG
+                      WRITE(IUGEO,'(1P3E20.13)')(WAP0(J + L),L=1,NVAR_RUPT)
+                       J = J + NVAR_RUPT
+                    ENDDO
+                  ENDDO
+                ELSE      
+                  DO IT=1,NPTT  
+                    DO IPG=1,NPTG
+                      CALL TAB_STRS_TXT50(WAP0(1),NVAR_RUPT,J,SIZP0,3)
+                      J = J + NVAR_RUPT
+                    ENDDO
+                  ENDDO
+                ENDIF  ! IF (IZIPSTRS == 0)
+              ENDIF  ! IF (IRUPT /= 0 .AND. NVAR_RUPT /= 0)
+            ENDDO  !  DO II=1,IC
+          ENDDO  ! DO IL=1,NLAY
+        ENDDO  !  DO N=1,STAT_NUMELC_G
+      ENDIF  ! IF (ISPMD == 0.AND.LEN > 0)
+C-----------------------------------------------
+C     3-NODE SHELLS
+C-----------------------------------------------
+      JJ = 0
+      ISUBSTACK = 0
+      IF (STAT_NUMELTG==0) GOTO 300
+C
+      IE=0
+      DO NG=1,NGROUP
+        ITY     =IPARG(5,NG)
+        IF (ITY == 7) THEN
+          MLW   =IPARG(1,NG)
+          NEL   =IPARG(2,NG)
+          NFT   =IPARG(3,NG)
+          LFT=1
+          LLT=NEL
+C
+c          DO I=1,NEL
+c            MAT(I) = IXTG(1,I)
+c            PID(I) = IXTG(6,I)
+c          ENDDO
+C
+          GBUF => ELBUF_TAB(NG)%GBUF
+          NLAY = ELBUF_TAB(NG)%NLAY                   
+          NPTR = ELBUF_TAB(NG)%NPTR                        
+          NPTS = ELBUF_TAB(NG)%NPTS                        
+c          NPTT = ELBUF_TAB(NG)%NPTT
+c          NPT  = NPTT * NLAY
+          NPG  = NPTR*NPTS
+          ISUBSTACK = IPARG(71,NG)
+c
+c-------------------------------------------------------
+c
+          DO I=LFT,LLT
+            N = I+NFT
+            IPRT=IPARTTG(N)
+            IF (IPART_STATE(IPRT)==0) CYCLE
+C
+            JJ = JJ + 1
+            IF (MLW /= 0 .AND. MLW /= 13) THEN
+              WA(JJ) = GBUF%OFF(I)
+            ELSE
+              WA(JJ) = ZERO
+            ENDIF
+            JJ = JJ + 1
+            WA(JJ) = IPRT
+            JJ = JJ + 1
+            WA(JJ) = IXTG(NIXTG,N)
+            JJ = JJ + 1
+            WA(JJ) = NLAY
+cc           JJ = JJ + 1
+cc           WA(JJ) = NPTT
+            JJ = JJ + 1
+            WA(JJ) = NPG
+c
+            DO IL = 1,NLAY
+              NFAIL = ELBUF_TAB(NG)%BUFLY(IL)%NFAIL             
+              IMAT = ELBUF_TAB(NG)%BUFLY(IL)%IMAT
+              FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(1,1,1)   
+              NPTT = ELBUF_TAB(NG)%BUFLY(IL)%NPTT
+              JJ = JJ + 1
+              WA(JJ) = NFAIL
+              JJ = JJ + 1  
+              IMAT  = ELBUF_TAB(NG)%BUFLY(IL)%IMAT                            
+              WA(JJ) = IPM(1,IMAT)  
+              JJ = JJ + 1
+              WA(JJ) = NPTT 
+c
+              DO IFAIL = 1,NFAIL 
+                IRUPT = MAT_PARAM(IMAT)%FAIL(IFAIL)%FAIL_ID 
+                IRUPT_TYPE = MAT_PARAM(IMAT)%FAIL(IFAIL)%IRUPT 
+                    NVAR_RUPT  = FBUF%FLOC(IFAIL)%NVAR                   
+                    JJ = JJ + 1
+                    WA(JJ) = NVAR_RUPT + 1
+                    JJ = JJ + 1
+                    WA(JJ) = IRUPT
+                    JJ = JJ + 1
+                    WA(JJ) = IRUPT_TYPE 
+!
+                IF (IRUPT == 0) CYCLE
+!
+                DO IT = 1,NPTT               
+                    DO IS=1,NPTS                                               
+                    DO IR=1,NPTR                     
+                  FBUF => ELBUF_TAB(NG)%BUFLY(IL)%FAIL(IR,IS,IT)                                       
+                      UVARF => FBUF%FLOC(IFAIL)%VAR  
+                  DFMAX => FBUF%FLOC(IFAIL)%DAMMX   
+                  JJ = JJ + 1
+                  WA(JJ) = DFMAX(I)
+                  DO NV=1,NVAR_RUPT
+                    JJ = JJ + 1
+                    WA(JJ) = UVARF((NV-1)*LLT+I)
+                  ENDDO
+                ENDDO
+                ENDDO
+                ENDDO    ! IT = 1,NPTT
+              ENDDO  ! IFAIL = 1,NFAIL
+            ENDDO      ! IL = 1,NLAY
+c                                                          
+            IE=IE+1
+C       end-of-zone pointer
+            PTWA(IE)=JJ
+          ENDDO        ! I=LFT,LLT
+c--------------
+        ENDIF    !  ITY == 7
+      ENDDO       !  NG = 1,NGROUP
+C
+ 300  CONTINUE
+c
+c-----------------------------------------------------------------------
+c
+      IF (NSPMD == 1) THEN
+        PTWA_P0(0)=0
+        DO N=1,STAT_NUMELTG
+          PTWA_P0(N)=PTWA(N)
+        ENDDO
+        LEN=JJ
+        DO J=1,LEN
+          WAP0(J)=WA(J)
+        ENDDO
+      ELSE
+C       builds the pointers in the global array wap0
+        CALL SPMD_STAT_PGATHER(PTWA,STAT_NUMELTG,PTWA_P0,STAT_NUMELTG_G)
+        LEN = 0
+        CALL SPMD_RGATHER9_DP(WA,JJ,WAP0,SIZP0,LEN)
+      ENDIF
+c
+c-----------------------------------------------------------------------
+c
+      IF (ISPMD == 0.AND.LEN > 0) THEN
+        IPRT0=0
+        DO N=1,STAT_NUMELTG_G
+C         find the nieme elt in the order of an increasing id
+          K=STAT_INDXTG(N)
+C         Find the address in WAP0
+          J=PTWA_P0(K-1)
+          IPRT = NINT(WAP0(J + 2))
+          IF (IPRT /= IPRT0) THEN 
+            IF (IZIPSTRS == 0) THEN
+              WRITE(IUGEO,'(A)') DELIMIT
+              WRITE(IUGEO,'(A)')'/INISH3/FAIL'
+              WRITE(IUGEO,'(A)')
+     .'#------------------------ REPEAT --------------------------' 
+              WRITE(IUGEO,'(A)')
+     .'#  SHELLID      NLAY       NPG     NPTT      ILAY     IRUPT IRUPT_TYP     NUVAR      IMAT'
+              WRITE(IUGEO,'(A/A/A)')
+     .'# REPEAT K=1,NPG                                     ',
+     .'#    UVAR(1,I) .............                         ',
+     .'#    ...............              UVAR(NUVAR,I)      '
+              WRITE(IUGEO,'(A)')
+     .'#---------------------- END REPEAT ------------------------' 
+              WRITE(IUGEO,'(A)') DELIMIT
+            ELSE
+              WRITE(LINE,'(A)') DELIMIT
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')'/INISH3/FAIL'
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')
+     .'#------------------------ REPEAT --------------------------' 
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')
+     .'#  SHELLID      NLAY       NPG      NPTT      ILAY     IRUPT IRUPT_TYP     NUVAR      IMAT'
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)')
+     .'# REPEAT K=1,NPG                                           '
+              CALL STRS_TXT50(LINE,100)
+              WRITE(LINE,'(A)')
+     .'#  UVAR(1,I) .............                                 '
+              CALL STRS_TXT50(LINE,100)
+              WRITE(LINE,'(A)')
+     .'#    ...............              UVAR(NUVAR,I)            '
+              CALL STRS_TXT50(LINE,100)
+              WRITE(LINE,'(A)')
+     .'#---------------------- END REPEAT ------------------------' 
+              CALL STRS_TXT50(LINE,100) 
+              WRITE(LINE,'(A)') DELIMIT
+              CALL STRS_TXT50(LINE,100) 
+            ENDIF  !  IF (IZIPSTRS == 0)
+            IPRT0=IPRT
+          ENDIF  !  IF (IPRT /= IPRT0)
+c
+          ID     = NINT(WAP0(J+3)) 
+          NLAY   = NINT(WAP0(J+4)) 
+cc            NPTT   = NINT(WAP0(J+5))                               
+          NPTG   = NINT(WAP0(J+5)) 
+          J = J + 5
+c
+          DO IL=1,NLAY                 
+            IC = NINT(WAP0(J+1))
+            J = J + 1                    
+            IMAT = NINT(WAP0(J+1))
+            J = J + 1   
+            NPTT = NINT(WAP0(J+1))
+            J = J + 1
+            DO II=1,IC 
+              NVAR_RUPT = NINT(WAP0(J+1))
+              J = J + 1
+              IRUPT = NINT(WAP0(J+1))
+              J = J + 1
+              IRUPT_TYPE = NINT(WAP0(J+1))
+              J = J + 1
+!
+              IF (IRUPT == 0) CYCLE
+!
+              IF (IZIPSTRS == 0) THEN
+               WRITE(IUGEO,'(9I10)') ID,NLAY,NPTG,NPTT,IL,IRUPT,IRUPT_TYPE,NVAR_RUPT,
+     .                               IMAT
+              ELSE
+                WRITE(LINE,'(9I10)') ID,NLAY,NPTG,NPTT,IL,IRUPT,IRUPT_TYPE,NVAR_RUPT,
+     .                               IMAT
+                CALL STRS_TXT50(LINE,100)
+              ENDIF  
+              IF (IRUPT /= 0 .AND. NVAR_RUPT /= 0) THEN
+                IF (IZIPSTRS == 0) THEN        
+                  DO IT=1,NPTT 
+                    DO IPG=1,NPTG
+                      WRITE(IUGEO,'(1P3E20.13)')(WAP0(J + L),L=1,NVAR_RUPT)
+                       J = J + NVAR_RUPT
+                     ENDDO
+                  ENDDO
+                ELSE        
+                  DO IT=1,NPTT 
+                    DO IPG=1,NPTG
+                      CALL TAB_STRS_TXT50(WAP0(1),NVAR_RUPT,J,SIZP0,3)
+                      J = J + NVAR_RUPT
+                    ENDDO
+                  ENDDO
+                ENDIF
+              ENDIF  !  IF (IRUPT /= 0 .AND. NVAR_RUPT /= 0) 
+            ENDDO  !  DO II=1,IC
+          ENDDO  !  DO IL=1,NLAY
+        ENDDO  !  DO N=1,STAT_NUMELTG_G
+      ENDIF  !  IF (ISPMD == 0.AND.LEN > 0)
+C
+c-----------
+      call my_dealloc(PTWA)
+      call my_dealloc(PTWA_P0)
+c-----------
+      RETURN
+      END

@@ -1,0 +1,164 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    thprin                 ../starter/source/output/th/thprin.F
+!||--- called by ------------------------------------------------------
+!||    hm_read_thgrou         ../starter/source/output/th/hm_read_thgrou.F
+!||--- calls      -----------------------------------------------------
+!||    fretitl2               ../starter/source/starter/freform.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE THPRIN(
+     1      KEY    ,IPASU  ,NPASU ,NID   ,
+     2      NVPS  ,ITHBUF ,VARE   ,NUM   )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+        USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+        USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scr17_c.inc"
+#include      "scr03_c.inc"
+#include      "units_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NPASU,NUM,NID,NVPS,
+     .        IPASU(NPASU,*),ITHBUF(*)
+      CHARACTER*10 VARE(*),KEY
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER J,ID,
+     .        NVAR,N,IAD1
+      CHARACTER(LEN=NCHARTITLE) :: TITR
+      CHARACTER MESS*40
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+      DATA MESS/'TH GROUP DEFINITION                     '/
+C-----------------------------------------------
+C
+C
+C-----------------------------------------------
+C=======================================================================
+C PRINTOUT
+C=======================================================================
+      IF(IPRI<1)RETURN
+C
+        WRITE(IOUT,'(//)')
+        WRITE(IOUT,'(2A)')' TH GROUP: ',KEY
+        WRITE(IOUT,'(A)') ' ---------'
+
+        DO N=1,NUM
+          NVAR=IPASU(NVPS,N)
+          IF(NVAR>0)THEN
+            IAD1=IPASU(NVPS+1,N)
+            ID=IPASU(NID,N)
+            CALL FRETITL2(TITR,IPASU(NPASU-LTITR+1,N),LTITR)
+            WRITE(IOUT,'(/,3A,I10,3A,I3,A)')' TH ',KEY,':',ID,',',TRIM(TITR),',',NVAR,' VAR:'
+            WRITE(IOUT,'(10A10)')(VARE(ITHBUF(J)),J=IAD1,IAD1+NVAR-1)
+          ENDIF
+        ENDDO
+C
+      RETURN
+      END
+!||====================================================================
+!||    thprin_sub             ../starter/source/output/th/thprin.F
+!||--- called by ------------------------------------------------------
+!||    hm_read_thgrou         ../starter/source/output/th/hm_read_thgrou.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE THPRIN_SUB(
+     1      KEY    ,SUBSET ,ITHFLAG ,NID   ,
+     2      NVPS   ,ITHBUF ,VARE    ,NUM   )
+C-----------------------------------------------
+      USE GROUPDEF_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scr03_c.inc"
+#include      "com04_c.inc"
+#include      "units_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NUM,NID,NVPS,
+     .        ITHBUF(*),ITHFLAG
+      CHARACTER*10 VARE(*),KEY
+!
+      TYPE (SUBSET_) , DIMENSION(NSUBS) :: SUBSET
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER J,ID,
+     .        NVAR,N,IAD1
+      CHARACTER(LEN=NCHARTITLE) :: TITR
+      CHARACTER :: MESS*40
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+      DATA MESS/'TH GROUP DEFINITION                     '/
+C-----------------------------------------------
+C
+C
+C-----------------------------------------------
+C=======================================================================
+C PRINTOUT
+C=======================================================================
+      IF(IPRI<1)RETURN
+C
+        WRITE(IOUT,'(//)')
+        WRITE(IOUT,'(2A)')' TH GROUP: ',KEY
+        WRITE(IOUT,'(A)') ' ---------'
+
+        DO N=1,NUM
+          NVAR = SUBSET(N)%NVARTH(ITHFLAG)
+          IF(NVAR>0)THEN
+            IAD1=SUBSET(N)%THIAD
+            ID=SUBSET(N)%ID
+            TITR=SUBSET(N)%TITLE
+            WRITE(IOUT,'(/,3A,I10,3A,I3,A)')' TH ',KEY,':',ID,',',TRIM(TITR),',',NVAR,' VAR:'
+            WRITE(IOUT,'(10A10)')(VARE(ITHBUF(J)),J=IAD1,IAD1+NVAR-1)
+          ENDIF
+        ENDDO
+C
+      RETURN
+      END
+
+

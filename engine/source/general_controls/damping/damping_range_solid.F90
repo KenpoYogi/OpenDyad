@@ -1,0 +1,187 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    damping_range_solid_mod   ../engine/source/general_controls/damping/damping_range_solid.F90
+!||--- called by ------------------------------------------------------
+!||    viscmain                  ../engine/source/materials/visc/viscmain.F
+!||====================================================================
+      module damping_range_solid_mod
+      implicit none
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!
+!=======================================================================================================================
+!!\brief This subroutine computes damping forces for /DAMP/FREQ_RANGE for solid elements
+!=======================================================================================================================
+!
+!||====================================================================
+!||    damping_range_solid   ../engine/source/general_controls/damping/damping_range_solid.F90
+!||--- called by ------------------------------------------------------
+!||    viscmain              ../engine/source/materials/visc/viscmain.F
+!||--- uses       -----------------------------------------------------
+!||    constant_mod          ../common_source/modules/constant_mod.F
+!||    elbufdef_mod          ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    precision_mod         ../common_source/modules/precision_mod.F90
+!||====================================================================
+        subroutine damping_range_solid(damp_buf,nel     ,nvarvis ,uvarvis ,nvar_damp,et     , &
+          epspxx  ,epspyy  ,epspzz  ,epspxy  ,epspyz  ,epspzx  , &
+          sv1     ,sv2     ,sv3     ,sv4     ,sv5     ,sv6     , &
+          timestep,rho     ,soundsp ,young   ,shear_modulus)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use constant_mod , only: one,zero, third, four_over_3, half, two
+          use elbufdef_mod , only: buf_damp_range_
+          use precision_mod , only: WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,                                   intent(in)    :: nel                      !< number of elements
+          integer,                                   intent(in)    :: nvarvis                  !< number of variables in buf_visc
+          integer,                                   intent(in)    :: nvar_damp                !< number of variables in buf_visc used for damping
+          real(kind=WP), dimension(nel,nvarvis) ,          intent(inout) :: uvarvis                  !< buffer for viscous variables
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: et                       !< tangent young modulus coefficient
+          real(kind=WP),                                   intent(in)    :: timestep                 !< time step
+          real(kind=WP),                                   intent(in)    :: young                    !< young modulus
+          real(kind=WP),                                   intent(in)    :: shear_modulus            !< shear modulus
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: epspxx                   !< strain xx
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: epspyy                   !< strain yy
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: epspzz                   !< strain zz
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: epspxy                   !< strain xy
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: epspyz                   !< strain yz
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: epspzx                   !< strain zx
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: sv1                      !< damp stress xx
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: sv2                      !< damp stress yy
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: sv3                      !< damp stress zz
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: sv4                      !< damp stress xy
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: sv5                      !< damp stress yz
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: sv6                      !< damp stress zx
+          real(kind=WP), dimension(nel) ,                  intent(in)    :: rho                      !< density
+          real(kind=WP), dimension(nel) ,                  intent(inout) :: soundsp                  !< sound speed
+          type(buf_damp_range_)   ,                  intent(in)    :: damp_buf                 !< damping frequency range buffer
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i, j, ii, offset
+          real(kind=WP) :: g, rbulk,h0(6),h(6),hp0,hp,dav
+          real(kind=WP), dimension(nel) :: p, epxx, epyy, epzz, trace
+          real(kind=WP), dimension(3)   :: aa, bb, gv, beta, aak, bbk, betak, kv
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+!
+          g  = zero
+          rbulk = zero
+
+          do j=1,3
+            !   tangent young modulus is used - bb multiplied by tangent coefficient for each element
+            gv(j)    = damp_buf%alpha(j)*shear_modulus
+            beta(j)  = one/damp_buf%tau(j)
+            kv(j)    = damp_buf%alpha(j)*young
+            betak(j) = one/damp_buf%tau(j)
+            g = g + gv(j)
+            rbulk = rbulk + kv(j)
+            aa(j) = exp(-beta(j)*timestep)
+            bb(j) = two*timestep*gv(j)*exp(-half*beta(j)*timestep)
+            aak(j) = exp(-betak(j)*timestep)
+            bbk(j) = timestep*kv(j)*exp(-half*betak(j)*timestep)
+          end do
+!
+          do i=1,nel
+!           spheric part
+            trace(i) = -(epspxx(i) + epspyy(i) + epspzz(i))
+            dav = third*trace(i)
+            p(i)   = zero
+
+!           deviatoric part
+            epxx(i) = epspxx(i) + dav
+            epyy(i) = epspyy(i) + dav
+            epzz(i) = epspzz(i) + dav
+!
+            sv1(i) = zero
+            sv2(i) = zero
+            sv3(i) = zero
+            sv4(i) = zero
+            sv5(i) = zero
+            sv6(i) = zero
+          end do
+!
+          do j= 1,3
+            offset = nvarvis - nvar_damp
+            ii = offset + 7*(j-1)
+            do i=1,nel
+              h0(1) = uvarvis(i,ii + 1)
+              h0(2) = uvarvis(i,ii + 2)
+              h0(3) = uvarvis(i,ii + 3)
+              h0(4) = uvarvis(i,ii + 4)
+              h0(5) = uvarvis(i,ii + 5)
+              h0(6) = uvarvis(i,ii + 6)
+              hp0   = uvarvis(i,ii + 7)
+!
+              h(1) = aa(j)*h0(1) + bb(j)*epxx(i)*et(i)
+              h(2) = aa(j)*h0(2) + bb(j)*epyy(i)*et(i)
+              h(3) = aa(j)*h0(3) + bb(j)*epzz(i)*et(i)
+              h(4) = aa(j)*h0(4) + half*bb(j)*epspxy(i)*et(i)
+              h(5) = aa(j)*h0(5) + half*bb(j)*epspyz(i)*et(i)
+              h(6) = aa(j)*h0(6) + half*bb(j)*epspzx(i)*et(i)
+              hp = aak(j)*hp0 + bbk(j)*trace(i)*et(i)
+!
+              uvarvis(i,ii + 1) = h(1)
+              uvarvis(i,ii + 2) = h(2)
+              uvarvis(i,ii + 3) = h(3)
+              uvarvis(i,ii + 4) = h(4)
+              uvarvis(i,ii + 5) = h(5)
+              uvarvis(i,ii + 6) = h(6)
+              uvarvis(i,ii + 7) = hp
+!
+              sv1(i) = sv1(i) + h(1)
+              sv2(i) = sv2(i) + h(2)
+              sv3(i) = sv3(i) + h(3)
+              sv4(i) = sv4(i) + h(4)
+              sv5(i) = sv5(i) + h(5)
+              sv6(i) = sv6(i) + h(6)
+              p(i)   = p(i)   + hp
+!
+            end do
+          end do
+!
+          do i=1,nel
+            sv1(i) = sv1(i) - p(i)
+            sv2(i) = sv2(i) - p(i)
+            sv3(i) = sv3(i) - p(i)
+            soundsp(i) = sqrt(soundsp(i)**2 + (four_over_3*g + rbulk)*et(i)/rho(i))
+          end do
+!
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine damping_range_solid
+      end module damping_range_solid_mod

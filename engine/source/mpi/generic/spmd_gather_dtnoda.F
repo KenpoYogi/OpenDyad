@@ -1,0 +1,129 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_gather_dtnoda                ../engine/source/mpi/generic/spmd_gather_dtnoda.F
+!||--- called by ------------------------------------------------------
+!||    find_dt_for_targeted_added_mass   ../engine/source/time_step/find_dt_for_targeted_added_mass.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    spmd_comm_world_mod               ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+       SUBROUTINE SPMD_GATHER_DTNODA(TAGN,STIFN,MS,WEIGHT,ITAB,NUM,DT2_L,STF_L,MS_L,UID_L)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       my_real
+     .   STIFN(*),MS(*),DT2_L(*),MS_L(*),STF_L(*)
+       INTEGER WEIGHT(*),NUM,TAGN(*),ITAB(*),UID_L(*)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),IERROR,MS_LOFF,ID_G
+      INTEGER SIZ,MS_LTYP,I,K,NREC,UID_LTYP
+
+      DATA MS_LOFF/7014/
+       my_real, DIMENSION(:) , ALLOCATABLE :: BUFSR
+       INTEGER, DIMENSION(:) , ALLOCATABLE :: BUFI
+C
+C=======================================================================
+       ALLOCATE (BUFSR(3*NUM))
+       ALLOCATE (BUFI(NUM))
+C  
+       IF (ISPMD/=0) THEN     
+         SIZ = 0
+         DO I=1,NUMNOD
+           IF (TAGN(I) > 0) THEN
+             SIZ = SIZ + 3
+             BUFSR(SIZ-2) = MS(I)/STIFN(I)
+             BUFSR(SIZ-1) = STIFN(I) 
+             BUFSR(SIZ  ) = MS(I)
+             BUFI(SIZ/3) = ITAB(I)
+           END IF
+         END DO 
+
+C   Floating buffer (MS/STIFN, STIFN, MS)
+         MS_LTYP = MS_LOFF 
+         CALL MPI_SEND(BUFSR,SIZ,REAL,IT_SPMD(1),MS_LTYP,
+     .     SPMD_COMM_WORLD,ierror)
+         UID_LTYP = MS_LOFF + 1
+         CALL MPI_SEND(BUFI,SIZ/3,MPI_INTEGER,IT_SPMD(1),UID_LTYP,
+     .     SPMD_COMM_WORLD,ierror)
+
+       ELSE
+          ID_G = 0
+          DO I=1,NUMNOD
+           IF (TAGN(I) > 0) THEN
+              ID_G = ID_G + 1 
+              DT2_L(ID_G) = MS(I)/STIFN(I) 
+              STF_L(ID_G) = STIFN(I) 
+              MS_L(ID_G) = MS(I)
+              UID_L(ID_G) = ITAB(I)
+            ENDIF
+          ENDDO
+
+          DO I=2,NSPMD
+C-------------
+            MS_LTYP = MS_LOFF 
+            CALL MPI_PROBE(IT_SPMD(I),MS_LTYP,
+     .                    SPMD_COMM_WORLD,STATUS,ierror)
+              CALL MPI_GET_COUNT(STATUS,REAL,SIZ,ierror) 
+
+C------------ Reception of the floating buffer
+            CALL MPI_RECV(BUFSR,SIZ,REAL,IT_SPMD(I),MS_LTYP,
+     .                  SPMD_COMM_WORLD,STATUS,ierror)
+            UID_LTYP = MS_LOFF + 1
+            CALL MPI_RECV(BUFI,SIZ/3,MPI_INTEGER,IT_SPMD(I),UID_LTYP,
+     .                  SPMD_COMM_WORLD,STATUS,ierror)
+     
+            NREC = SIZ
+            DO K = 1,NREC,3
+              ID_G = ID_G + 1
+              DT2_L(ID_G) = BUFSR(K)
+              STF_L(ID_G) = BUFSR(K+1)
+              MS_L(ID_G) = BUFSR(K+2)
+              UID_L(ID_G) = BUFI(K/3+1)
+            ENDDO
+C
+          ENDDO
+
+       ENDIF
+       DEALLOCATE(BUFSR)
+       DEALLOCATE(BUFI)
+
+#endif
+       RETURN
+       END

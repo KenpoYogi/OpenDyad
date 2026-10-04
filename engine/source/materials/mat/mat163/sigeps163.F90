@@ -1,0 +1,311 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    sigeps163_mod   ../engine/source/materials/mat/mat163/sigeps163.F90
+!||--- called by ------------------------------------------------------
+!||    mulaw           ../engine/source/materials/mat_share/mulaw.F90
+!||====================================================================
+      module sigeps163_mod
+      implicit none
+      contains
+! ======================================================================================================================
+! \brief Computation of stress tensor with /MAT/LAW163 (CRUSHABLE_FOAM) theory
+! \details Realise a stress scaling according to /MAT/LAW163 theory, using the tabulated
+!          yield stress and the volumetric strain rate. The volumetric strain rate is filtered
+!          and the change of volumetric strain rate is capped. The volumetric strain rate is
+!          computed according to the user choice (engineering or true strain rate).
+!          A viscous damping is added to the stress tensor.
+! ======================================================================================================================
+!||====================================================================
+!||    sigeps163               ../engine/source/materials/mat/mat163/sigeps163.F90
+!||--- called by ------------------------------------------------------
+!||    mulaw                   ../engine/source/materials/mat_share/mulaw.F90
+!||--- calls      -----------------------------------------------------
+!||    table_mat_vinterp       ../engine/source/materials/tools/table_mat_vinterp.F
+!||    valpvec_v               ../engine/source/materials/mat/mat033/sigeps33.F
+!||    valpvecdp_v             ../engine/source/materials/mat/mat033/sigeps33.F
+!||--- uses       -----------------------------------------------------
+!||    constant_mod            ../common_source/modules/constant_mod.F
+!||    matparam_def_mod        ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||    precision_mod           ../common_source/modules/precision_mod.F90
+!||    table_mat_vinterp_mod   ../engine/source/materials/tools/table_mat_vinterp.F
+!||====================================================================
+        subroutine sigeps163(                                                  &
+          nel      ,nuvar    ,uvar     ,matparam ,timestep ,et       ,         &
+          rho0     ,sigy     ,ssp      ,nvartmp  ,vartmp   ,mvsiz    ,         &
+          depsxx   ,depsyy   ,depszz   ,depsxy   ,depsyz   ,depszx   ,         &
+          epspxx   ,epspyy   ,epspzz   ,epspxy   ,epspyz   ,epspzx   ,         &
+          sigoxx   ,sigoyy   ,sigozz   ,sigoxy   ,sigoyz   ,sigozx   ,         &
+          signxx   ,signyy   ,signzz   ,signxy   ,signyz   ,signzx   ,         &
+          sigvxx   ,sigvyy   ,sigvzz   ,sigvxy   ,sigvyz   ,sigvzx   ,         &
+          aldt     ,rho      ,iresp    ,plas     ,epsd     )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                        Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use matparam_def_mod
+          use constant_mod
+          use table_mat_vinterp_mod
+          use precision_mod, only : WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                 implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+#include  "units_c.inc"
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, intent(in)                    :: nel        !< number of elements in the group
+          integer, intent(in)                    :: nuvar      !< number of user variables
+          real(kind=WP), dimension(nel,nuvar), intent(inout) :: uvar !< user variables
+          type(matparam_struct_), intent(in)     :: matparam   !< material parameters data
+          real(kind=WP), intent(in)                    :: timestep   !< time step
+          real(kind=WP), dimension(nel), intent(inout) :: et         !< coefficient for hourglass
+          real(kind=WP), dimension(nel), intent(in)    :: rho0       !< material initial density
+          real(kind=WP), dimension(nel), intent(inout) :: sigy       !< yield stress
+          real(kind=WP), dimension(nel), intent(inout) :: ssp        !< sound speed
+          integer, intent(in)                    :: nvartmp    !< number of temporary variables
+          integer, dimension(nel,nvartmp), intent(inout) :: vartmp !< temporary variables
+          integer, intent(in)                    :: mvsiz      !< maximum size of the arrays
+          real(kind=WP), dimension(nel), intent(in)    :: depsxx     !< strain increment xx
+          real(kind=WP), dimension(nel), intent(in)    :: depsyy     !< strain increment yy
+          real(kind=WP), dimension(nel), intent(in)    :: depszz     !< strain increment zz
+          real(kind=WP), dimension(nel), intent(in)    :: depsxy     !< strain increment xy
+          real(kind=WP), dimension(nel), intent(in)    :: depsyz     !< strain increment yz
+          real(kind=WP), dimension(nel), intent(in)    :: depszx     !< strain increment zx
+          real(kind=WP), dimension(nel), intent(in)    :: epspxx     !< strain rate xx
+          real(kind=WP), dimension(nel), intent(in)    :: epspyy     !< strain rate yy
+          real(kind=WP), dimension(nel), intent(in)    :: epspzz     !< strain rate zz
+          real(kind=WP), dimension(nel), intent(in)    :: epspxy     !< strain rate xy
+          real(kind=WP), dimension(nel), intent(in)    :: epspyz     !< strain rate yz
+          real(kind=WP), dimension(nel), intent(in)    :: epspzx     !< strain rate zx
+          real(kind=WP), dimension(nel), intent(in)    :: sigoxx     !< initial stress xx
+          real(kind=WP), dimension(nel), intent(in)    :: sigoyy     !< initial stress yy
+          real(kind=WP), dimension(nel), intent(in)    :: sigozz     !< initial stress zz
+          real(kind=WP), dimension(nel), intent(in)    :: sigoxy     !< initial stress xy
+          real(kind=WP), dimension(nel), intent(in)    :: sigoyz     !< initial stress yz
+          real(kind=WP), dimension(nel), intent(in)    :: sigozx     !< initial stress zx
+          real(kind=WP), dimension(nel), intent(inout) :: signxx     !< new stress xx
+          real(kind=WP), dimension(nel), intent(inout) :: signyy     !< new stress yy
+          real(kind=WP), dimension(nel), intent(inout) :: signzz     !< new stress zz
+          real(kind=WP), dimension(nel), intent(inout) :: signxy     !< new stress xy
+          real(kind=WP), dimension(nel), intent(inout) :: signyz     !< new stress yz
+          real(kind=WP), dimension(nel), intent(inout) :: signzx     !< new stress zx
+          real(kind=WP), dimension(nel), intent(inout) :: sigvxx     !< viscous stress xx
+          real(kind=WP), dimension(nel), intent(inout) :: sigvyy     !< viscous stress yy
+          real(kind=WP), dimension(nel), intent(inout) :: sigvzz     !< viscous stress zz
+          real(kind=WP), dimension(nel), intent(inout) :: sigvxy     !< viscous stress xy
+          real(kind=WP), dimension(nel), intent(inout) :: sigvyz     !< viscous stress yz
+          real(kind=WP), dimension(nel), intent(inout) :: sigvzx     !< viscous stress zx
+          real(kind=WP), dimension(nel), intent(in)    :: aldt       !< element characteristic length
+          real(kind=WP), dimension(nel), intent(in)    :: rho        !< material current density
+          integer, intent(in)                    :: iresp      !< precision flag
+          real(kind=WP), dimension(nel), intent(inout) :: plas       !< effective volumetric true strain
+          real(kind=WP), dimension(nel), intent(inout) :: epsd       !< effective volumetric strain rate
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,j,ncycle,nrs
+          real(kind=WP) :: young,nu,g,bulk,cii,cij,tsc,damp,srclmt,alpha,ldav,a,&
+            denom
+          real(kind=WP), dimension(nel) :: dgamdt,gama,dsdgam,le
+          real(kind=WP), dimension(mvsiz,6) :: sig,eps
+          real(kind=WP), dimension(mvsiz,3) :: sigp
+          real(kind=WP), dimension(mvsiz,3,3) :: dirp
+          real(kind=WP), dimension(nel,2) :: xvec
+!
+          !=====================================================================
+          !< - Initialisation of computation on time step
+          !=====================================================================
+          !< Recovering integer model parameter
+          ncycle = matparam%iparam(1) !< Number of cycles for filtering
+          nrs    = matparam%iparam(2) !< Strain rate type flag
+          !< Recovering real model parameters
+          young  = matparam%young     !< Young modulus
+          nu     = matparam%nu        !< Poisson ratio
+          g      = matparam%shear     !< Shear modulus
+          bulk   = matparam%bulk      !< Bulk modulus
+          cii    = matparam%uparam(1) !< Diagonal coefficient of stiffness matrix
+          cij    = matparam%uparam(2) !< Non-diagonal coefficient of stiffness matrix
+          tsc    = matparam%uparam(3) !< Tensile stress cut-off
+          damp   = matparam%uparam(4) !< Damping coefficient
+          srclmt = matparam%uparam(5) !< Strain-rate change limit
+          !< Volumetric strain rate filtering coefficient
+          alpha = two*pi/(two*pi + ncycle)
+!
+          !< Save the initial element length
+          if (uvar(1,2) == zero) then
+            do i = 1,nel
+              uvar(i,2) = aldt(i)
+            end do
+          end if
+          le(1:nel) = uvar(1:nel,2)
+          !< Coefficient for hourglass control
+          et(1:nel) = one
+!
+          !=====================================================================
+          !< - Computation of trial stress tensor and principal stresses
+          !=====================================================================
+          !< Trial stress tensor
+          do i = 1,nel
+            signxx(i) = sigoxx(i) + cii*depsxx(i) + cij*depsyy(i) + cij*depszz(i)
+            signyy(i) = sigoyy(i) + cij*depsxx(i) + cii*depsyy(i) + cij*depszz(i)
+            signzz(i) = sigozz(i) + cij*depsxx(i) + cij*depsyy(i) + cii*depszz(i)
+            signxy(i) = sigoxy(i) +   g*depsxy(i)
+            signyz(i) = sigoyz(i) +   g*depsyz(i)
+            signzx(i) = sigozx(i) +   g*depszx(i)
+          end do
+          !< Principal stresses and directions
+          sig(1:nel,1) = signxx(1:nel)
+          sig(1:nel,2) = signyy(1:nel)
+          sig(1:nel,3) = signzz(1:nel)
+          sig(1:nel,4) = signxy(1:nel)
+          sig(1:nel,5) = signyz(1:nel)
+          sig(1:nel,6) = signzx(1:nel)
+          if (iresp == 1) then
+            call valpvecdp_v(sig,sigp,dirp,nel)
+          else
+            call valpvec_v(sig,sigp,dirp,nel)
+          end if
+!
+          !=====================================================================
+          !< - Volumetric strain and strain rate filtering
+          !=====================================================================
+          do i = 1,nel
+            !< Volumetric strain
+            gama(i) = one - rho0(i)/max(rho(i),em20)
+            !< Volumetric strain rate
+            ! -> Engineering strain rate
+            if (nrs == 1) then
+              dgamdt(i) = (gama(i) - uvar(i,1))/max(timestep,em20)
+              ! -> True strain rate
+            else if (nrs == 0) then
+              dgamdt(i) = -(epspxx(i)+epspyy(i)+epspzz(i))
+            end if
+            !< Filtering of the volumetric strain rate
+            dgamdt(i) = alpha*dgamdt(i) + (one-alpha)*epsd(i)
+            !< Cap the change of volumetric strain rate
+            if (abs(dgamdt(i)-epsd(i)) > srclmt*timestep) then
+              dgamdt(i) = epsd(i) + sign(one,dgamdt(i)-epsd(i))*srclmt*timestep
+            end if
+            !< Effective volumetric true strain (output purpose)
+            plas(i) = log(max(rho0(i)/rho(i),em20))
+            !< Volumetric strain rate (output purpose)
+            epsd(i) = dgamdt(i)
+          end do
+!
+          !=====================================================================
+          !< - Yield stress computation
+          !=====================================================================
+          do i = 1,nel
+            xvec(i,1) = max(gama(i)  ,zero)
+            xvec(i,2) = max(dgamdt(i),zero)
+          end do
+          call table_mat_vinterp(matparam%table(1),nel,nel,vartmp,xvec,sigy,dsdgam)
+          do i = 1,nel
+            sigy(i) = -abs(sigy(i))
+            dsdgam(i) = max(dsdgam(i),zero)
+          end do
+!
+          !=====================================================================
+          !< - Stress scaling procedure
+          !=====================================================================
+          do i = 1,nel
+            !< Scaling of principal stresses
+            do j = 1,3
+              if (sigp(i,j) < sigy(i)) then
+                sigp(i,j) = sigy(i)
+              else if (sigp(i,j) > tsc) then
+                sigp(i,j) = tsc
+              end if
+            end do
+            !< Update the global stress tensor
+            signxx(i) = dirp(i,1,1)*dirp(i,1,1)*sigp(i,1)                      &
+                      + dirp(i,1,2)*dirp(i,1,2)*sigp(i,2)                      &
+                      + dirp(i,1,3)*dirp(i,1,3)*sigp(i,3)
+            signyy(i) = dirp(i,2,2)*dirp(i,2,2)*sigp(i,2)                      &
+                      + dirp(i,2,3)*dirp(i,2,3)*sigp(i,3)                      &
+                      + dirp(i,2,1)*dirp(i,2,1)*sigp(i,1)
+            signzz(i) = dirp(i,3,3)*dirp(i,3,3)*sigp(i,3)                      &
+                      + dirp(i,3,1)*dirp(i,3,1)*sigp(i,1)                      &
+                      + dirp(i,3,2)*dirp(i,3,2)*sigp(i,2)
+            signxy(i) = dirp(i,1,1)*dirp(i,2,1)*sigp(i,1)                      &
+                      + dirp(i,1,2)*dirp(i,2,2)*sigp(i,2)                      &
+                      + dirp(i,1,3)*dirp(i,2,3)*sigp(i,3)
+            signyz(i) = dirp(i,2,2)*dirp(i,3,2)*sigp(i,2)                      &
+                      + dirp(i,2,3)*dirp(i,3,3)*sigp(i,3)                      &
+                      + dirp(i,2,1)*dirp(i,3,1)*sigp(i,1)
+            signzx(i) = dirp(i,3,3)*dirp(i,1,3)*sigp(i,3)                      &
+                      + dirp(i,3,1)*dirp(i,1,1)*sigp(i,1)                      &
+                      + dirp(i,3,2)*dirp(i,1,2)*sigp(i,2)
+          end do
+!
+          !=====================================================================
+          !< - Update user variables and sound speed
+          !=====================================================================
+          do i=1,nel
+            !< Sound speed
+            if (rho(i) > em20) then
+              ssp(i) = sqrt((max(bulk,dsdgam(i)) + four_over_3*g)/rho(i))
+            else
+              ssp(i) = sqrt((max(bulk,dsdgam(i)) + four_over_3*g)/rho0(i))
+            end if
+            !< User variables
+            uvar(i,1) = gama(i) !< Volumetric strain
+          end do
+!
+          !=====================================================================
+          !< - Viscous damping
+          !=====================================================================
+          do i = 1,nel
+            !< Viscous damping coefficient
+            denom = sign(max(abs((one + gama(i))),em20),(one + gama(i)))
+            a = ssp(i)*max(rho(i),em20)*damp*le(i)/denom
+            ldav = third*(epspxx(i) + epspyy(i) + epspzz(i))
+            !< Viscous stresses
+            sigvxx(i) = a*((epspxx(i) - ldav)/(one + nu) + ldav/(one - two*nu))
+            sigvyy(i) = a*((epspyy(i) - ldav)/(one + nu) + ldav/(one - two*nu))
+            sigvzz(i) = a*((epspzz(i) - ldav)/(one + nu) + ldav/(one - two*nu))
+            sigvxy(i) = a*epspxy(i)/(two*(one + nu))
+            sigvyz(i) = a*epspyz(i)/(two*(one + nu))
+            sigvzx(i) = a*epspzx(i)/(two*(one + nu))
+            !< Update the soundspeed to include the viscous damping stiffness
+            if (timestep > zero) then
+              if (rho(i) > em20) then
+                ssp(i) = sqrt((max(bulk,dsdgam(i)) + four_over_3*g +           &
+                                    abs(a)/max(timestep,em20))/rho(i))
+              else
+                ssp(i) = sqrt((max(bulk,dsdgam(i)) + four_over_3*g +           &
+                                    abs(a)/max(timestep,em20))/rho0(i))    
+              end if            
+            else
+              if (rho(i) > em20) then
+                ssp(i) = sqrt((max(bulk,dsdgam(i)) + four_over_3*g)/rho(i))
+              else
+                ssp(i) = sqrt((max(bulk,dsdgam(i)) + four_over_3*g)/rho0(i))
+              end if
+            end if
+          end do
+!
+        end subroutine sigeps163
+      end module sigeps163_mod

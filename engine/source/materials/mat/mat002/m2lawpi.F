@@ -1,0 +1,290 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    m2lawpi            ../engine/source/materials/mat/mat002/m2lawpi.F
+!||--- called by ------------------------------------------------------
+!||    main_beam18        ../engine/source/elements/beam/main_beam18.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod       ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    matparam_def_mod   ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||====================================================================
+      SUBROUTINE M2LAWPI(ELBUF_STR,MAT_PARAM,
+     1                  NEL     ,NPT    ,GEO    ,EINT   ,OFF    ,
+     3                  PID     ,EPSP   ,EXX    ,EXY    ,EXZ    ,
+     4                  KXX     ,KYY    ,KZZ    ,AL     ,ASRATE ,
+     5                  TIMESTEP,JTHE   ,TEMP   ,SIGY   ,TORS_FACT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD
+      use matparam_def_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scr17_c.inc"
+#include      "param_c.inc"
+#include      "com08_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER,INTENT(IN)  :: NEL,NPT
+      INTEGER,INTENT(IN)  :: JTHE
+      INTEGER PID(NEL)
+      my_real ,INTENT(IN) :: TIMESTEP
+      my_real ,INTENT(IN) :: ASRATE
+      my_real
+     .   EXX(NEL), EXY(NEL), EXZ(NEL), 
+     .   KXX(NEL), KYY(NEL), KZZ(NEL),
+     .   GEO(NPROPG,*), EINT(NEL,2),
+     .   OFF(*),EPSP(*), AL(*) 
+      my_real ,DIMENSION(NEL) ,INTENT(INOUT) :: TEMP
+      my_real ,INTENT(INOUT) :: SIGY(NEL,NPT)
+      my_real ,INTENT(IN) :: TORS_FACT
+      TYPE (ELBUF_STRUCT_), TARGET :: ELBUF_STR
+      type (matparam_struct_)  ,intent(in)    :: mat_param
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I,IPT,ICC,iform,IPY,IPZ,IPA,VP,IR,IS,ILAYER
+      INTEGER :: II(3)
+      my_real :: YOUNG,G,SHFACT,EPMX
+      my_real :: TREF,TINI,TMELT,CC,CP,EPDR,SVM1,GS,MT,TSTAR,UMR,R,PLAP1,Z4
+      my_real :: CA(NEL), CB(NEL), CN(NEL),YMAX(NEL),
+     .   Z3(NEL),YLD(NEL),ETSE(NEL),Q(NEL),
+     .   YPT(NEL),ZPT(NEL),APT(NEL),VOL(NEL),DPLA(NEL),
+     .   SIGNXX(NEL),SIGNXY(NEL),SIGNXZ(NEL),LOGEP(NEL),
+     .   DEPSXX(NEL),DEPSXY(NEL),DEPSXZ(NEL),PLAP(NEL)
+C
+      TYPE(L_BUFEL_) ,POINTER :: LBUF  
+      TYPE(BUF_LAY_) ,POINTER :: BUFLY
+C=======================================================================
+      IPY  = 200        
+      IPZ  = 300        
+      IPA  = 400        
+      SHFACT = FIVE_OVER_6
+!
+      DO I=1,3
+        II(I) = NEL*(I-1)
+      ENDDO
+!
+C---
+      iform = mat_param%iparam(1)
+      icc   = mat_param%iparam(2)
+      vp    = mat_param%iparam(3)
+!
+      cc    = mat_param%uparam(6)      
+      epdr  = mat_param%uparam(7)                
+      if (vp == 1) then
+        epdr = max(epdr, em20)   
+      else             
+        epdr = max(epdr*dt1, em20)   
+      endif
+      tini  = mat_param%therm%tini                
+      tref  = mat_param%therm%tref                 
+      tmelt = mat_param%therm%tmelt               
+      cp    = mat_param%therm%rhocp               
+      if (cp > zero) cp = one/cp          
+
+      IF (iform == 1) THEN   ! zerilli
+        z4 = mat_param%uparam(11)                
+      ELSE              
+        Z4 = zero                   
+      END IF             
+!
+      YOUNG = mat_param%young                
+      G     = mat_param%shear                
+      GS    = SHFACT*G                         
+      EPMX = mat_param%uparam(4)                    
+!
+      DO I=1,NEL                           
+        CA(I)   = mat_param%uparam(1)                    
+        CB(I)   = mat_param%uparam(2)                    
+        CN(I)   = mat_param%uparam(3)                    
+        YMAX(I) = mat_param%uparam(5)                    
+        Z3(I)   = mat_param%uparam(10)                   
+        EPSP(I) = MAX(EPSP(I),EPDR)
+        VOL(I)  = AL(I)*GEO(1,PID(I))            
+      ENDDO                                    
+C
+      IF (JTHE == 0 .and. CP > ZERO) THEN
+        DO I=1,NEL
+          TEMP(I) = TINI + (EINT(I,1)+EINT(I,2)) * CP / VOL(I)
+        ENDDO
+      END IF  
+C-------------------------------------
+C     start of loop over integration points
+C--------------------------------------
+      ILAYER= 1
+      IR    = 1
+      IS    = 1
+      DO IPT= 1,NPT
+ 
+        LBUF => ELBUF_STR%BUFLY(ILAYER)%LBUF(IR,IS,IPT)
+        BUFLY => ELBUF_STR%BUFLY(ILAYER)
+C---    Coordonnees du point d'integration
+        DO I=1,NEL                                 
+          YPT(I) = GEO(IPY+IPT,PID(I))              
+          ZPT(I) = GEO(IPZ+IPT,PID(I))           
+          APT(I) = GEO(IPA+IPT,PID(I))           
+        ENDDO                                        
+        DO I=1,NEL
+          SIGNXX(I) = LBUF%SIG(II(1)+I)
+          SIGNXY(I) = LBUF%SIG(II(2)+I)
+          SIGNXZ(I) = LBUF%SIG(II(3)+I)
+       ENDDO        
+C---    Deformations Incrementales
+        DO I= 1,NEL
+          DEPSXX(I) = EXX(I) - YPT(I)*KZZ(I) + ZPT(I)*KYY(I)
+          DEPSXY(I) = EXY(I) + ZPT(I)*KXX(I)*TORS_FACT 
+          DEPSXZ(I) = EXZ(I) - YPT(I)*KXX(I)*TORS_FACT
+          DEPSXY(I) = DEPSXY(I) / SHFACT
+          DEPSXZ(I) = DEPSXZ(I) / SHFACT 
+        ENDDO
+C
+c---    Total strain
+C 
+        IF (BUFLY%L_STRA > 0) THEN
+          DO I= 1,NEL
+            LBUF%STRA(II(1)+I) = LBUF%STRA(II(1)+I) + DEPSXX(I)
+            LBUF%STRA(II(2)+I) = LBUF%STRA(II(2)+I) + DEPSXY(I)
+            LBUF%STRA(II(3)+I) = LBUF%STRA(II(3)+I) + DEPSXZ(I)
+          ENDDO
+        ENDIF        
+C
+C--- Elastic constraints
+C
+        DO I = 1,NEL
+          SIGNXX(I) = SIGNXX(I) + YOUNG*DEPSXX(I)
+          SIGNXY(I) = SIGNXY(I) + GS*DEPSXY(I)
+          SIGNXZ(I) = SIGNXZ(I) + GS*DEPSXZ(I)
+          ETSE(I)   = ONE                        
+        ENDDO                                    
+c---    strain rate dependency
+        IF(VP == 1)THEN
+          DO I= 1,NEL
+            PLAP(I)  = BUFLY%MAT(IR,IS,IPT)%VAR(I)
+            PLAP(I)  = MAX(PLAP(I),EPDR )
+            LOGEP(I) = LOG(PLAP(I)/EPDR)
+          ENDDO      
+        ELSE
+          DO I= 1,NEL
+            LOGEP(I) = LOG(EPSP(I)/EPDR)
+          ENDDO      
+        ENDIF
+C--     Yield 
+        IF (CC /= ZERO) THEN
+          IF (iform == 0)THEN
+            DO I=1,NEL
+              MT      = MAX(EM20,Z3(I))
+              TSTAR   = MAX(ZERO,(TEMP(I)-TREF) / (TMELT-TREF))
+              IF (TSTAR == ZERO) THEN
+                Q(I) = (ONE + CC * LOGEP(I))
+              ELSE
+                Q(I) = (ONE + CC * LOGEP(I))*(ONE-EXP(MT*LOG(TSTAR)))
+              ENDIF
+              Q(I)  = MAX(Q(I),EM20)
+              CA(I) = CA(I) * Q(I)
+              CB(I) = CB(I) * Q(I)
+              IF (ICC== 1) YMAX(I) = YMAX(I) * Q(I)
+            ENDDO
+          ELSEIF (iform == 1) THEN
+            DO I=1,NEL
+              Q(I) = LOGEP(I)
+              Q(I) = CC*EXP((-Z3(I)+Z4 * Q(I))*TEMP(I))
+              IF (ICC == 1) YMAX(I)= YMAX(I) + Q(I)
+              CA(I) = CA(I) + Q(I)
+            ENDDO
+          ENDIF
+        ELSEIF (IFORM == 0) THEN  
+          DO I=1,NEL
+            MT    = MAX(EM20,Z3(I))
+            TSTAR = MAX(ZERO,(TEMP(I)-TREF) / (TMELT-TREF))
+            Q(I)  = ONE - TSTAR**MT
+          ENDDO
+          IF (ICC==1) YMAX(1:NEL) = YMAX(1:NEL)*Q(1:NEL)
+        ENDIF
+C---
+        DO I=1,NEL
+          IF(LBUF%PLA(I) == ZERO) THEN
+            YLD(I)= CA(I)                                
+          ELSE                                           
+            YLD(I)= CA(I) + CB(I)*EXP(CN(I)*LOG(LBUF%PLA(I)))
+          ENDIF                                          
+          YLD(I)  = MIN(YLD(I),YMAX(I))      
+          SIGY(I,IPT) = YLD(I)          
+        ENDDO
+C-------------------
+C       PROJECTION   -   radial return
+C-------------------
+        DO I=1,NEL
+          SVM1 = SIGNXX(I)**2 + THREE*(SIGNXY(I)**2 + SIGNXZ(I)**2)
+          IF (SVM1 > YLD(I)**2) THEN
+            SVM1 = SQRT(SVM1)                                        
+            R    = MIN( ONE, YLD(I)/MAX(EM20,SVM1) )                  
+            SIGNXX(I) = SIGNXX(I)*R                                  
+            SIGNXY(I) = SIGNXY(I)*R                                  
+            SIGNXZ(I) = SIGNXZ(I)*R                                  
+            UMR = ONE - R               
+            DPLA(I) =    SVM1*UMR/YOUNG                           
+            LBUF%PLA(I) = LBUF%PLA(I) + OFF(I)* DPLA(I) 
+c            IF (R < ONE) ETSE(I)= H(I)/(H(I)+YOUNG) 
+          ENDIF                                   
+        ENDDO 
+        IF (VP == 1) THEN 
+          DO I=1,NEL
+            PLAP1   = DPLA(I) / MAX(EM20,TIMESTEP)
+            BUFLY%MAT(IR,IS,IPT)%VAR(I) = ASRATE * PLAP1 + (ONE - ASRATE) * PLAP(I)
+          ENDDO
+        ENDIF
+        
+C  failure criteria 
+C--------------------------------
+C     ductile failure test
+C--------------------------------
+C      
+        DO  I=1,NEL
+          IF (LBUF%PLA(I) >= EPMX .AND. OFF(I) == ONE) THEN
+            OFF(I)=FOUR_OVER_5
+          ENDIF
+        ENDDO                                          
+C-----------
+C
+        DO I=1,NEL                                                    
+          LBUF%SIG(II(1)+I) = SIGNXX(I)
+          LBUF%SIG(II(2)+I) = SIGNXY(I)
+          LBUF%SIG(II(3)+I) = SIGNXZ(I)
+        ENDDO                                                       
+C-------------------------------------
+C       end of loop over integration point
+C-------------------------------------
+      ENDDO   
+C-----------
+      RETURN
+      END
+

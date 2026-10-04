@@ -1,0 +1,151 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C     REAL
+#include "my_real.inc"
+!||====================================================================
+!||    sysfus        ../engine/source/system/sysfus.F
+!||--- called by ------------------------------------------------------
+!||    leccut        ../engine/source/tools/sect/leccut.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg        ../engine/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod   ../engine/share/message_module/message_mod.F
+!||====================================================================
+       my_real  FUNCTION SYSFUS(IU,ITABM1,NUMNOD,MESS)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IU, NUMNOD
+      CHARACTER MESS*40
+      INTEGER ITABM1(*)
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "warn_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER JINF, JSUP, J
+C-----------------------------------------------
+C
+      JINF=1
+      JSUP=NUMNOD
+C  045      J=NUMNOD/2
+      J=MIN(1,NUMNOD/2)
+   10 IF(JSUP<=JINF.AND.(IU-ITABM1(J))/=0) THEN
+        CALL ANCMSG(MSGID=187,ANMODE=ANINFO,
+     .            I1=IU,C1=MESS)
+        IERR=IERR+1
+        SYSFUS=1.1
+        RETURN
+      ENDIF
+      IF((IU-ITABM1(J))==0)THEN
+C     >CASE IU=TABM END OF SEARCH
+         SYSFUS=ITABM1(J+NUMNOD)+0.1
+         RETURN
+      ELSE IF (IU-ITABM1(J)<0) THEN
+C     >CAS IU<TABM
+         JSUP=J-1
+      ELSE
+C     >CAS IU>TABM
+         JINF=J+1
+      ENDIF
+      J=(JSUP+JINF)/2
+      GO TO 10
+      END
+C
+C     REAL
+!||====================================================================
+!||    sysfus2         ../engine/source/system/sysfus.F
+!||--- called by ------------------------------------------------------
+!||    fr_rlale        ../engine/source/mpi/kinematic_conditions/fr_rlink1.F
+!||    fr_rlink1       ../engine/source/mpi/kinematic_conditions/fr_rlink1.F
+!||    genh3d          ../engine/source/output/h3d/h3d_results/genh3d.F
+!||    init_ale_spmd   ../engine/source/ale/init_ale_spmd.F90
+!||    lcbcsf          ../engine/source/constraints/general/bcs/lcbcsf.F
+!||    lecnoise        ../engine/source/general_controls/computation/lecnoise.F
+!||====================================================================
+      INTEGER FUNCTION SYSFUS2(IU,ITABM1,NUMNOD)
+C this function returns the internal number corresponding to a user number or 0
+C If the node does not exist
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IU, NUMNOD
+      INTEGER ITABM1(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER JINF, JSUP, J
+C-----------------------------------------------
+C
+      ! Check exit parameters
+
+      ! 1st NUMNOD=0
+      IF (NUMNOD==0) THEN
+        SYSFUS2=0
+        RETURN
+      END IF
+
+      ! 2nd NodeID is lower than smallest NodeID.
+      IF ( IU-ITABM1(1)<0 ) THEN
+        SYSFUS2=0
+        RETURN
+      ENDIF
+
+
+      JINF=1
+      JSUP=NUMNOD
+      J=MIN(1,NUMNOD/2)
+   10 IF(JSUP<=JINF.AND.(IU-ITABM1(J))/=0) THEN
+C     > Noise case not found
+        SYSFUS2=0
+        RETURN
+      ENDIF
+      IF((IU-ITABM1(J))==0)THEN
+C     >CASE IU=TABM END OF SEARCH
+         SYSFUS2=ITABM1(J+NUMNOD)
+         RETURN
+      ELSE IF (IU-ITABM1(J)<0) THEN
+C     >CAS IU<TABM
+         JSUP=J-1
+      ELSE
+C     >CAS IU>TABM
+         JINF=J+1
+      ENDIF
+      J=(JSUP+JINF)/2
+      GO TO 10
+      END

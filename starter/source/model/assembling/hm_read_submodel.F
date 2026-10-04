@@ -1,0 +1,199 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_submodel     ../starter/source/model/assembling/hm_read_submodel.F
+!||--- called by ------------------------------------------------------
+!||    starter0             ../starter/source/starter/starter0.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg               ../starter/source/output/message/message.F
+!||    hm_option_count      ../starter/source/devtools/hm_reader/hm_option_count.F
+!||    hm_option_read_key   ../starter/source/devtools/hm_reader/hm_option_read_key.F
+!||    hm_option_start      ../starter/source/devtools/hm_reader/hm_option_start.F
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod   ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod          ../starter/share/message_module/message_mod.F
+!||    submodel_mod         ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_READ_SUBMODEL(LSUBMODEL)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   READ //SUBMODELs USING HM_READER
+C   BUILD //SUBMODEL DATA STRUCTURE
+C-----------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME         DESCRIPTION              
+C    
+C     LSUBMODEL    SUBMODEL STRUCTURE       
+C-----------------------------------------------
+C   M o d u l e s
+C----------------------------------------------- 
+      USE MESSAGE_MOD
+      USE SUBMODEL_MOD   
+      USE HM_OPTION_READ_MOD
+      USE USER_ID_MOD , ONLY : ID_LIMIT
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+C OUTPUT ARGUMENTS
+      TYPE(SUBMODEL_DATA),INTENT(OUT)::LSUBMODEL(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  I, CUR_SUBMOD, ISUBSKEW, STAT
+      INTEGER, DIMENSION(:), ALLOCATABLE :: NOSUBMOD,IFATHER,LEVEL,UID_SUB
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: OFFSETS
+      INTEGER  NB_BEGIN,SCHAR,SUB_INDEX,NBUNIT_SUB
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+C--------------------------------------------------------
+      IF(NSUBMOD > 0)THEN
+        call my_alloc(NOSUBMOD, NSUBMOD, "NOSUBMOD", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='NOSUBMOD')
+        call my_alloc(IFATHER, NSUBMOD, "IFATHER", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='IFATHER')
+        call my_alloc(LEVEL, NSUBMOD, "LEVEL", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='LEVEL')
+        call my_alloc(OFFSETS, 7, NSUBMOD, "OFFSETS", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='OFFSETS')
+        call my_alloc(UID_SUB, NSUBMOD, "UID_SUB", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='UID_SUB')
+        NOSUBMOD = 0
+        IFATHER = 0
+        LEVEL = 1
+        LSUBMODEL(1:NSUBMOD)%NOSUBMOD=0
+        LSUBMODEL(1:NSUBMOD)%NBTRANS=0
+        LSUBMODEL(1:NSUBMOD)%LEVEL=0
+        LSUBMODEL(1:NSUBMOD)%IFATHER=0
+        LSUBMODEL(1:NSUBMOD)%UID=0
+        UID_SUB(1:NSUBMOD)=0
+        OFFSETS(1:7,1:NSUBMOD)=0
+      ELSE
+        call my_alloc(NOSUBMOD, 0, "NOSUBMOD", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='NOSUBMOD')
+        call my_alloc(IFATHER, 0, "IFATHER", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='IFATHER')
+        call my_alloc(LEVEL, 0, "LEVEL", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='LEVEL')
+        call my_alloc(OFFSETS, 0, 0, "OFFSETS", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='OFFSETS')
+        call my_alloc(UID_SUB, 0, "UID_SUB", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGERROR,
+     .                         C1='UID_SUB')
+      ENDIF
+C
+      IF(NSUBMOD > 0) CALL CPP_SUBMODEL_BUILD(IFATHER,NOSUBMOD,LEVEL,OFFSETS,UID_SUB)
+C
+      DO I=1,NSUBMOD
+        LSUBMODEL(I)%IFATHER = IFATHER(I)
+        LSUBMODEL(I)%NOSUBMOD = NOSUBMOD(I) 
+        LSUBMODEL(I)%LEVEL = LEVEL(I)  
+        LSUBMODEL(I)%UID = UID_SUB(I)
+        LSUBMODEL(I)%OFF_DEF    = OFFSETS(1,I)
+        LSUBMODEL(I)%OFF_NOD    = OFFSETS(2,I)
+        LSUBMODEL(I)%OFF_EL     = OFFSETS(3,I)
+        LSUBMODEL(I)%OFF_PART   = OFFSETS(4,I)
+        LSUBMODEL(I)%OFF_MAT    = OFFSETS(5,I)
+        LSUBMODEL(I)%OFF_PROP   = OFFSETS(6,I)
+        LSUBMODEL(I)%OFF_SUBMOD = OFFSETS(7,I)
+      ENDDO
+c
+      ISUBSKEW = 1000000000
+      DO I=1,NSUBMOD
+        ISUBSKEW = ISUBSKEW + 1
+        IF (LSUBMODEL(I)%SKEW == 0) LSUBMODEL(I)%SKEW = ISUBSKEW
+      ENDDO
+      IF (NSUBMOD /= 0) THEN
+        DO I=1,NSUBMOD
+          CUR_SUBMOD = I
+          DO WHILE (LSUBMODEL(CUR_SUBMOD)%IFATHER /= 0)
+            CUR_SUBMOD = LSUBMODEL(CUR_SUBMOD)%IFATHER
+            LSUBMODEL(I)%LEVEL = LSUBMODEL(I)%LEVEL + 1
+          ENDDO
+        ENDDO
+      ENDIF
+C
+      NBUNIT_SUB = 0
+      IF(NSUBMOD > 0)THEN
+        CALL HM_OPTION_COUNT('/BEGIN',NB_BEGIN)
+        SCHAR = 20
+        IF (NB_BEGIN /= 0) THEN
+          CALL HM_OPTION_START('/BEGIN')
+          DO I=1,NB_BEGIN
+            CALL HM_OPTION_READ_KEY(LSUBMODEL,
+     .                              SUBMODEL_INDEX = SUB_INDEX)
+            IF (SUB_INDEX /= 0) THEN
+              NBUNIT_SUB = NBUNIT_SUB + 1
+              LSUBMODEL(SUB_INDEX)%UID = ID_LIMIT%UNIT + NBUNIT_SUB
+            ENDIF
+          ENDDO
+c
+          
+        ENDIF
+      ENDIF
+C
+c      print *,'INTERNAL_ID,USER_ID,FATHER,OFF_DEF,UID'
+c      DO I=1,NSUBMOD    
+c        print *,I,LSUBMODEL(I)%NOSUBMOD,LSUBMODEL(I)%IFATHER,LSUBMODEL(I)%OFF_DEF,
+c     .                                            LSUBMODEL(I)%UID
+c      ENDDO
+c
+      IF (ALLOCATED(NOSUBMOD)) CALL MY_DEALLOC(NOSUBMOD)
+      IF (ALLOCATED(IFATHER)) CALL MY_DEALLOC(IFATHER)
+      IF (ALLOCATED(LEVEL)) CALL MY_DEALLOC(LEVEL)
+      IF (ALLOCATED(OFFSETS)) CALL MY_DEALLOC(OFFSETS)
+C-----------
+      RETURN
+      END SUBROUTINE HM_READ_SUBMODEL

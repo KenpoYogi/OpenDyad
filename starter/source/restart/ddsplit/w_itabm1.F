@@ -1,0 +1,94 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    w_itabm1       ../starter/source/restart/ddsplit/w_itabm1.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit        ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    usr2sys        ../starter/source/system/sysfus.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE W_ITABM1(ITABM1,ITABM2,NODGLOB,NODLOCAL,NUMNOD_L,
+     2                   ITAB, LEN_IA)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ITABM1(*), ITABM2(*), NODGLOB(*),  NODLOCAL(*),
+     .        NUMNOD_L, LEN_IA,ITAB(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,NI,WORK(70000),ND
+      INTEGER, DIMENSION(:), ALLOCATABLE :: ITMPM1,ITMPM2,INDX
+      CHARACTER MESS*40
+      DATA MESS/'TOTO '/
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+      INTEGER USR2SYS
+C-----------------------------------------------
+!     allocate 1d array
+      call my_alloc(ITMPM1, NUMNOD_L, "ITMPM1")
+      call my_alloc(ITMPM2, NUMNOD_L, "ITMPM2")
+      ALLOCATE( INDX(2*NUMNOD_L) )
+! ---------------------------------
+      DO I = 1, NUMNOD_L
+        ITMPM1(I) = ITAB(NODGLOB(I))
+        INDX(I) = I
+      ENDDO
+C
+C Retris Croissant order Itabm1 (Num User)
+C
+      CALL MY_ORDERS(0,WORK,ITMPM1,INDX,NUMNOD_L,1)
+      DO I = 1, NUMNOD_L
+        ITMPM2(I)= ITMPM1(INDX(I))
+      ENDDO
+C ITABM1 NUM STRIES CRIES CROISANT
+      CALL WRITE_I_C(ITMPM2,NUMNOD_L)
+      LEN_IA = LEN_IA + NUMNOD_L
+C
+      DO I = 1, NUMNOD_L
+        NI = ITMPM2(I)
+        ND = USR2SYS(NI,ITABM1,MESS,0)
+        ITMPM1(I) = NODLOCAL(ND)
+      END DO
+
+C ITABM2 Writing (NUM SYSTEMES)
+      CALL WRITE_I_C(ITMPM1,NUMNOD_L)
+      LEN_IA = LEN_IA + NUMNOD_L
+C
+! ---------------------------------
+!     deallocate 1d array
+      CALL MY_DEALLOC(ITMPM1)
+      CALL MY_DEALLOC(ITMPM2)
+      DEALLOCATE( INDX )
+! ---------------------------------
+      RETURN
+      END

@@ -1,0 +1,3994 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    genh3d                               ../engine/source/output/h3d/h3d_results/genh3d.F
+!||--- called by ------------------------------------------------------
+!||    sortie_main                          ../engine/source/output/sortie_main.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                               ../engine/source/output/message/message.F
+!||    arret                                ../engine/source/system/arret.F
+!||    c_h3d_create_beams                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_beams.cpp
+!||    c_h3d_create_components              ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_components.cpp
+!||    c_h3d_create_displacement_datatype   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_displacement_datatype.cpp
+!||    c_h3d_create_nodes                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_nodes.cpp
+!||    c_h3d_create_quads                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_quads.cpp
+!||    c_h3d_create_rbe2                    ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_rbe2.cpp
+!||    c_h3d_create_rbe3                    ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_rbe3.cpp
+!||    c_h3d_create_rbodies                 ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_rbodies.cpp
+!||    c_h3d_create_results_end             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_results_end.cpp
+!||    c_h3d_create_rwalls                  ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_rwalls.cpp
+!||    c_h3d_create_sh3ns                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_sh3ns.cpp
+!||    c_h3d_create_shells                  ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_shells.cpp
+!||    c_h3d_create_skins                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_skins.cpp
+!||    c_h3d_create_solid8n                 ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_solid8n.cpp
+!||    c_h3d_create_sph                     ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_sph.cpp
+!||    c_h3d_create_springs                 ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_springs.cpp
+!||    c_h3d_create_truss                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_create_truss.cpp
+!||    c_h3d_eroded_oned                    ../engine/source/output/h3d/h3d_build_cpp/c_h3d_eroded_oned.cpp
+!||    c_h3d_eroded_quad                    ../engine/source/output/h3d/h3d_build_cpp/c_h3d_eroded_quad.cpp
+!||    c_h3d_eroded_shell                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_eroded_shell.cpp
+!||    c_h3d_eroded_skin                    ../engine/source/output/h3d/h3d_build_cpp/c_h3d_eroded_skin.cpp
+!||    c_h3d_eroded_solid                   ../engine/source/output/h3d/h3d_build_cpp/c_h3d_eroded_solid.cpp
+!||    c_h3d_eroded_sph                     ../engine/source/output/h3d/h3d_build_cpp/c_h3d_eroded_sph.cpp
+!||    c_h3d_export_library_version         ../engine/source/output/h3d/h3d_build_cpp/c_h3d_export_library_version.cpp
+!||    c_h3d_open_file                      ../engine/source/output/h3d/h3d_build_cpp/c_h3d_open_file.cpp
+!||    c_h3d_reopen_file                    ../engine/source/output/h3d/h3d_build_cpp/c_h3d_open_file.cpp
+!||    c_h3d_update_nodal_fvmbag_scalar     ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_nodal_fvmbag_scalar.cpp
+!||    c_h3d_update_nodal_scalar            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_nodal_scalar.cpp
+!||    c_h3d_update_nodal_tensor            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_nodal_tensor.cpp
+!||    c_h3d_update_nodal_vector            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_nodal_vector.cpp
+!||    c_h3d_update_oned_scalar             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_oned_scalar.cpp
+!||    c_h3d_update_oned_tensor             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_oned_tensor.cpp
+!||    c_h3d_update_oned_torsor             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_oned_torsor.cpp
+!||    c_h3d_update_oned_vector             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_oned_vector.cpp
+!||    c_h3d_update_quad_scalar             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_quad_scalar.cpp
+!||    c_h3d_update_quad_tensor             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_quad_tensor.cpp
+!||    c_h3d_update_quad_vector             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_quad_vector.cpp
+!||    c_h3d_update_shell_scalar            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_shell_scalar.cpp
+!||    c_h3d_update_shell_tensor            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_shell_tensor.cpp
+!||    c_h3d_update_shell_vector            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_shell_vector.cpp
+!||    c_h3d_update_skin_scalar             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_skin_scalar.cpp
+!||    c_h3d_update_skin_tensor             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_skin_tensor.cpp
+!||    c_h3d_update_skin_vector             ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_skin_vector.cpp
+!||    c_h3d_update_solid_scalar            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_solid_scalar.cpp
+!||    c_h3d_update_solid_tensor            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_solid_tensor.cpp
+!||    c_h3d_update_solid_vector            ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_solid_vector.cpp
+!||    c_h3d_update_sph_scalar              ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_sph_scalar.cpp
+!||    c_h3d_update_sph_tensor              ../engine/source/output/h3d/h3d_build_cpp/c_h3d_update_sph_tensor.cpp
+!||    drbe2cnt                             ../engine/source/output/anim/generate/drbe2cnt.F
+!||    drbe3cnt                             ../engine/source/output/anim/generate/drbe3cnt.F
+!||    drbycnt                              ../engine/source/output/anim/generate/drbycnt.F
+!||    fretitl                              ../engine/source/input/freform.F
+!||    get_nodal_ipart                      ../engine/source/output/h3d/h3d_results/h3d_skin_ixskin.F
+!||    h3d_constit                          ../engine/source/output/h3d/h3d_build_fortran/h3d_constit.F
+!||    h3d_create_datatype                  ../engine/source/output/h3d/h3d_build_fortran/h3d_create_datatype.F
+!||    h3d_create_fvmbag_centroids          ../engine/source/output/h3d/h3d_build_fortran/h3d_create_fvmbag_centroids.F
+!||    h3d_create_rbe2_impi                 ../engine/source/output/h3d/h3d_build_fortran/h3d_create_rbe2_impi.F
+!||    h3d_create_rbe3_impi                 ../engine/source/output/h3d/h3d_build_fortran/h3d_create_rbe3_impi.F
+!||    h3d_create_rbodies_impi              ../engine/source/output/h3d/h3d_build_fortran/h3d_create_rbodies_impi.F
+!||    h3d_dxyz_rwall                       ../engine/source/output/h3d/h3d_build_fortran/h3d_dxyz_rwall.F
+!||    h3d_dxyz_rwall_update                ../engine/source/output/h3d/h3d_build_fortran/h3d_dxyz_rwall_update.F
+!||    h3d_gather_id_val                    ../engine/source/output/h3d/spmd/h3d_gather_id_val.F90
+!||    h3d_nodal_scalar                     ../engine/source/output/h3d/h3d_results/h3d_nodal_scalar.F
+!||    h3d_nodal_tensor                     ../engine/source/output/h3d/h3d_results/h3d_nodal_tensor.F
+!||    h3d_nodal_vector                     ../engine/source/output/h3d/h3d_results/h3d_nodal_vector.F
+!||    h3d_oned_off                         ../engine/source/output/h3d/spmd/spmd_h3d_oned_off.F
+!||    h3d_oned_scalar                      ../engine/source/output/h3d/h3d_results/h3d_oned_scalar.F90
+!||    h3d_oned_tensor                      ../engine/source/output/h3d/h3d_results/h3d_oned_tensor.F
+!||    h3d_oned_torsor                      ../engine/source/output/h3d/h3d_results/h3d_oned_torsor.F
+!||    h3d_oned_vector                      ../engine/source/output/h3d/h3d_results/h3d_oned_vector.F
+!||    h3d_quad_off                         ../engine/source/output/h3d/spmd/spmd_h3d_quad_off.F
+!||    h3d_quad_scalar                      ../engine/source/output/h3d/h3d_results/h3d_quad_scalar.F
+!||    h3d_quad_tensor                      ../engine/source/output/h3d/h3d_results/h3d_quad_tensor.F
+!||    h3d_quad_vector                      ../engine/source/output/h3d/h3d_results/h3d_quad_vector.F
+!||    h3d_shell_off                        ../engine/source/output/h3d/spmd/spmd_h3d_shell_off.F
+!||    h3d_shell_scalar                     ../engine/source/output/h3d/h3d_results/h3d_shell_scalar.F
+!||    h3d_shell_tensor                     ../engine/source/output/h3d/h3d_results/h3d_shell_tensor.F
+!||    h3d_shell_vector                     ../engine/source/output/h3d/h3d_results/h3d_shell_vector.F
+!||    h3d_skin_ixskin                      ../engine/source/output/h3d/h3d_results/h3d_skin_ixskin.F
+!||    h3d_skin_off                         ../engine/source/output/h3d/h3d_results/h3d_skin_off.F
+!||    h3d_skin_pre_map                     ../engine/source/output/h3d/h3d_results/h3d_skin_pre_map.F
+!||    h3d_skin_scalar                      ../engine/source/output/h3d/h3d_results/h3d_skin_scalar.F
+!||    h3d_skin_tensor                      ../engine/source/output/h3d/h3d_results/h3d_skin_tensor.F
+!||    h3d_skin_vector                      ../engine/source/output/h3d/h3d_results/h3d_skin_vector.F
+!||    h3d_solid_off                        ../engine/source/output/h3d/spmd/spmd_h3d_solid_off.F
+!||    h3d_solid_scalar                     ../engine/source/output/h3d/h3d_results/h3d_solid_scalar.F
+!||    h3d_solid_tensor                     ../engine/source/output/h3d/h3d_results/h3d_solid_tensor.F
+!||    h3d_solid_vector                     ../engine/source/output/h3d/h3d_results/h3d_solid_vector.F
+!||    h3d_sph_off                          ../engine/source/output/h3d/spmd/spmd_h3d_sph_off.F
+!||    h3d_sph_scalar                       ../engine/source/output/h3d/h3d_results/h3d_sph_scalar.F
+!||    h3d_sph_tensor                       ../engine/source/output/h3d/h3d_results/h3d_sph_tensor.F
+!||    h3d_update_fvmbag_centroids          ../engine/source/output/h3d/h3d_build_fortran/h3d_update_fvmbag_centroids.F
+!||    h3dlib_load                          ../common_source/output/h3d/h3d_build_cpp/h3d_dl.c
+!||    q1np_evaluate_nurbs_shape_values     ../engine/source/elements/solid/solid_q1np/q1np_nurbs_surface_eval_mod.F90
+!||    scanor                               ../engine/source/output/anim/generate/scanor.F
+!||    spmd_h3d_gather_i                    ../engine/source/output/h3d/spmd/spmd_h3d_gather_i.F
+!||    spmd_h3d_gather_i_node               ../engine/source/output/h3d/spmd/spmd_h3d_gather_i_node.F
+!||    spmd_h3d_gather_i_node_part          ../engine/source/output/h3d/spmd/spmd_h3d_gather_i_node_part.F
+!||    spmd_h3d_gather_r                    ../engine/source/output/h3d/spmd/spmd_h3d_gather_r.F
+!||    spmd_h3d_gather_r_nodal_value        ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_nodal_value.F
+!||    spmd_h3d_gather_r_node               ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_node.F
+!||    spmd_h3d_gather_t_node               ../engine/source/output/h3d/spmd/spmd_h3d_gather_t_node.F
+!||    spmd_h3d_max_r_nodal_value           ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_nodal_value.F
+!||    spmd_h3d_max_r_nodal_value_21        ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_nodal_value.F
+!||    spmd_h3d_sum_r_nodal                 ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_node.F
+!||    spmd_h3d_sum_r_nodal_21              ../engine/source/output/h3d/spmd/spmd_h3d_gather_r_node.F
+!||    spmd_h3d_sum_r_nodal_value           ../engine/source/output/h3d/spmd/spmd_h3d_sum_r_nodal_value.F
+!||    spmd_outpitab                        ../engine/source/mpi/interfaces/spmd_outp.F
+!||    startime                             ../engine/source/system/timer_mod.F90
+!||    stoptime                             ../engine/source/system/timer_mod.F90
+!||    sysfus2                              ../engine/source/system/sysfus.F
+!||--- uses       -----------------------------------------------------
+!||    ale_connectivity_mod                 ../common_source/modules/ale/ale_connectivity_mod.F
+!||    aleanim_mod                          ../common_source/modules/aleanim_mod.F
+!||    cluster_mod                          ../engine/share/modules/cluster_mod.F
+!||    crackxfem_mod                        ../engine/share/modules/crackxfem_mod.F
+!||    drape_mod                            ../engine/share/modules/drape_mod.F
+!||    elbufdef_mod                         ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod                          ../common_source/modules/elements/element_mod.F90
+!||    fvbag_mod                            ../engine/share/modules/fvbag_mod.F
+!||    glob_therm_mod                       ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||    groupdef_mod                         ../common_source/modules/groupdef_mod.F
+!||    h3d_gather_id_val_mod                ../engine/source/output/h3d/spmd/h3d_gather_id_val.F90
+!||    h3d_inc_mod                          ../engine/share/modules/h3d_inc_mod.F
+!||    h3d_mod                              ../engine/share/modules/h3d_mod.F
+!||    h3d_oned_scalar_mod                  ../engine/source/output/h3d/h3d_results/h3d_oned_scalar.F90
+!||    inoutfile_mod                        ../common_source/modules/inoutfile_mod.F
+!||    loads_mod                            ../common_source/modules/loads/loads_mod.F90
+!||    matparam_def_mod                     ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||    message_mod                          ../engine/share/message_module/message_mod.F
+!||    multi_fvm_mod                        ../common_source/modules/ale/multi_fvm_mod.F90
+!||    my_alloc_mod                         ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod                       ../common_source/tools/memory/my_dealloc.F90
+!||    names_and_titles_mod                 ../common_source/modules/names_and_titles_mod.F
+!||    outmax_mod                           ../common_source/modules/outmax_mod.F
+!||    output_mod                           ../common_source/modules/output/output_mod.F90
+!||    pblast_mod                           ../common_source/modules/loads/pblast_mod.F90
+!||    plyxfem_mod                          ../engine/share/modules/plyxfem_mod.F
+!||    precision_mod                        ../common_source/modules/precision_mod.F90
+!||    q1np_nurbs_surface_evaluation_mod    ../engine/source/elements/solid/solid_q1np/q1np_nurbs_surface_eval_mod.F90
+!||    q1np_restart_mod                     ../common_source/modules/q1np_restart_mod.F90
+!||    sensor_mod                           ../common_source/modules/sensor_mod.F90
+!||    spmd_mod                             ../engine/source/mpi/spmd_mod.F90
+!||    stack_mod                            ../engine/share/modules/stack_mod.F
+!||    table_mod                            ../engine/share/modules/table_mod.F
+!||    timer_mod                            ../engine/source/system/timer_mod.F90
+!||====================================================================
+      SUBROUTINE GENH3D(OUTPUT, TIMERS,X        ,D        ,V           ,A           ,BUFEL    ,
+     2                  IXS      ,IXQ      ,IXC         ,IXT         ,IXP      ,
+     3                  IXR      ,IXTG     ,SWAFT       ,SMAS        ,SXNORM   ,
+     4                  SIAD     ,IPARG    ,PM          ,GEO         ,MS       ,
+     5                  SINVERT  ,CONT     ,SMATER      ,ICUT        ,SKEW     ,
+     6                  XCUT     ,FINT     ,ITAB        ,SEL2FA      ,FEXT     ,
+     7                  FOPT     ,LPBY        ,NPBY        ,NSTRF    ,
+     8                  RWBUF    ,NPRW     ,TANI        ,ELBUF_TAB   ,MAT_PARAM,
+     A                  DD_IAD   ,WEIGHT   ,EANI        ,IPART       ,CLUSTER  ,
+     B                  IPARTS   ,IPARTQ   ,IPARTC      ,IPARTT      ,IPARTP   ,
+     C                  IPARTR   ,IPARTUR  ,IPARTTG     ,
+     D                  RBY      ,SWA4     ,TORS        ,NOM_OPT     ,
+     E                  BUFSF    ,IDATA    ,RDATA       ,SIADG       ,BUFMAT   ,
+     F                  BUFGEO   ,KXX      ,IXX         ,IPARTX      ,SUIX     ,
+     G                  SXUSR    ,SNFACPTX ,SIXEDGE     ,SIXFACET    ,SIXSOLID ,
+     H                  SNUMX1   ,SNUMX2   ,SNUMX3      ,SOFFX1      ,SOFFX2   ,
+     I                  SOFFX3   ,SMASS1   ,SMASS2      ,SMASS3      ,SFUNC1   ,
+     J                  SFUNC2   ,SFUNC3   ,KXSP        ,IXSP        ,NOD2SP   ,
+     K                  IPARTSP  ,SPBUF    ,IXS10       ,IXS20       ,IXS16    ,
+     L                  VR       ,MONVOL   ,VOLMON      ,IPM         ,IGEO     ,NODGLOB,
+     M                  IAD_ELEM ,FR_ELEM  ,FR_SEC      ,FR_RBY2     ,IAD_RBY2 ,
+     N                  FR_WALL  ,IFLOW    ,RFLOW       ,FNCONT      ,FTCONT   ,
+     O                  TEMP     ,THKE     ,ERR_THK_SH4 ,ERR_THK_SH3 ,DIAG_SMS ,
+     P                  IPARI    ,FNCONT2  ,DR          ,ALE_CONNECT       ,
+     Q                  IRBE2    ,IRBE3    ,LRBE2       ,LRBE3       ,FR_RBE2,
+     R                  FR_RBE3M ,IAD_RBE2 ,DXANCG      ,NOD_PXFEM   ,IEL_PXFEM,
+     S                  ZI_PLY   ,VGAZ     ,FCONTG      ,FNCONTG     ,FTCONTG  ,
+     T                  FANREAC  ,INOD_CRK ,IEL_CRK     ,ELCUTC      ,IADC_CRK ,
+     U                  PDAMA2   ,RES_SMS  ,WEIGHT_MD   ,NODGLOBXFE  ,NODEDGE  ,
+     V                  FCLUSTER ,MCLUSTER ,XFEM_TAB    ,W           ,
+     W                  NV46     ,IPARTIG3D,KXIG3D      ,IXIG3D      ,SIG3DSOLID,
+     X                  KNOT     ,WIGE     ,NERCVOIS    ,NESDVOIS    ,LERCVOIS  ,
+     Y                  LESDVOIS ,CRKEDGE  ,INDX_CRK    ,XEDGE4N     ,XEDGE3N   ,
+     Z                  STACK    ,SPH2SOL  ,STIFN       ,STIFR       ,IGRNOD    ,
+     1                  SH4TREE  ,SH3TREE  ,H3D_DATA    ,MULTI_FVM   ,SUBSET    ,
+     2                  PSKIDS   ,TAG_SKINS6,TF         ,NPF         ,FCONT_MAX ,
+     3                  MDS_MATID,FNCONTP2 ,FTCONTP2    ,IBCL        ,ILOADP    ,
+     4                  LLOADP   ,FAC      ,SENSORS     ,TAGNCONT    ,LOADP_HYD_INTER,
+     5                  XFRAME   ,FORC     ,AR          ,CSEFRIC     ,CSEFRICG  ,
+     6                  CSEFRIC_STAMP,CSEFRICG_STAMP    ,TABLE       ,IFRAME    ,LOADS,
+     7                  DRAPE_SH4N, DRAPE_SH3N, DRAPEG  ,X_C         ,GLOB_THERM,PBLAST)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+        USE TIMER_MOD
+        USE PRECISION_MOD, ONLY : WP
+        USE FVBAG_MOD , only:FVBAG_DATA, FVDATA, NFVBAG, AIRBAGS_TOTAL_FVM_IN_H3D, FVSPMD
+        USE H3D_ONED_SCALAR_MOD, ONLY: H3D_ONED_SCALAR
+        USE Q1NP_RESTART_MOD, ONLY : NUMELQ1NP_G, Q1NP_NKNOT_SETS_G,
+     .    Q1NP_NX_G, Q1NP_NY_G, Q1NP_NX_SET_G, Q1NP_NY_SET_G,
+     .    Q1NP_KTAB_OFF_G,IQ1NP_TAB, KQ1NP_TAB, Q1NP_KTAB
+        USE Q1NP_NURBS_SURFACE_EVALUATION_MOD, ONLY :
+     .    Q1NP_EVALUATE_NURBS_SHAPE_VALUES
+        USE NAMES_AND_TITLES_MOD, ONLY: NCHARLINE100
+        USE PLYXFEM_MOD
+        USE MESSAGE_MOD
+        USE ELBUFDEF_MOD
+        USE CRACKXFEM_MOD
+        USE CLUSTER_MOD
+        USE STACK_MOD
+        USE H3D_MOD
+        USE ALEANIM_MOD
+        USE MULTI_FVM_MOD
+        USE GROUPDEF_MOD
+        USE INOUTFILE_MOD
+        USE ALE_CONNECTIVITY_MOD
+        USE SENSOR_MOD
+        USE OUTMAX_MOD
+        USE H3D_INC_MOD
+        USE OUTPUT_MOD
+        USE TABLE_MOD
+        USE LOADS_MOD
+        USE MATPARAM_DEF_MOD
+        USE MY_ALLOC_MOD
+        USE OUTMAX_MOD
+        USE DRAPE_MOD
+        use glob_therm_mod
+        USE PBLAST_MOD 
+        USE h3d_gather_id_val_mod
+        USE SPMD_MOD
+        use element_mod , only : nixs,nixq,nixc,nixt,nixr,nixp,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#ifdef MPI
+#endif
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "build_info.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com08_c.inc"
+#include      "com_xfem1.inc"
+#include      "sphcom.inc"
+#include      "param_c.inc"
+#include      "units_c.inc"
+#include      "scr14_c.inc"
+#include      "scr16_c.inc"
+#include      "scr17_c.inc"
+#include      "scr23_c.inc"
+#include      "chara_c.inc"
+#include      "task_c.inc"
+#include      "spmd_c.inc"
+#include      "filescount_c.inc"
+#include      "tabsiz_c.inc"
+#include      "intstamp_c.inc"
+#include      "macro.inc"
+#include      "sysunit.inc"
+C-----------------------------------------------
+C   E x t e r n a l  F u n c t i o n s
+C-----------------------------------------------
+        INTEGER SYSFUS2
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        TYPE(OUTPUT_), INTENT(INOUT) :: OUTPUT ! Output structure
+        TYPE(TIMER_), INTENT(INOUT) :: TIMERS ! Timers for /MON
+        INTEGER SWAFT,SMAS,SXNORM,SIAD,SINVERT,SMATER,SEL2FA,SWA4,
+     .          SIADG,NERCVOIS(*),NESDVOIS(*),LERCVOIS(*),
+     .          LESDVOIS(*),SPH2SOL(*),SH4TREE(*),SH3TREE(*),TAG_SKINS6(*)
+        INTEGER
+     .    SUIX, SXUSR ,SIXEDGE,SIXFACET,SIXSOLID,SNUMX1,
+     .    SNUMX2,SNUMX3,SOFFX1,SOFFX2,SOFFX3,SMASS1,SMASS2,
+     .    SMASS3,SFUNC1,SFUNC2,SFUNC3,SNFACPTX,NPF(*)
+
+        INTEGER  IGEO(NPROPGI,NUMGEO),IPM(NPROPMI,NUMMAT),INDX_CRK(*),
+     .    LRBE2(*),LRBE3(*),FR_RBE2(3,*),FR_RBE3M(3,*),
+     .    NOD_PXFEM(*), IEL_PXFEM(*),NODEDGE(2,*),XEDGE4N(4,*),XEDGE3N(3,*),
+     .    INOD_CRK(*),IEL_CRK(*),ELCUTC(2,*),IADC_CRK(*)
+        my_real
+     .     X(3*NUMNOD), D(3*NUMNOD), V(3*NUMNOD), A(3,NUMNOD), BUFEL(*),
+     .     PM(NPROPM,NUMMAT), GEO(NPROPG,NUMGEO),CONT(*),
+     .     XCUT(*) , FINT(3,NUMNOD),MS(NUMNOD),RWBUF(NRWLP,*),SKEW(LSKEW,*),
+     .     RBY(NRBY,*),FEXT(3,NUMNOD) ,FOPT(6,*),TANI(6,*),EANI(*),
+     .     TORS(15,*),BUFSF(*), RDATA(*),
+     .     BUFMAT(*),BUFGEO(*),
+     .     SPBUF(*), VR(3*NUMNOD),VOLMON(SVOLMON), RFLOW(*), FNCONT(3,*), FTCONT(3,*),
+     .     TEMP(*), THKE(*), ERR_THK_SH4(*), ERR_THK_SH3(*), DIAG_SMS(*),
+     .     FNCONT2(3,*), DR(3,*),DXANCG(3,*),ZI_PLY(*),VGAZ(*),
+     .     FCONTG(*), FNCONTG(*), FTCONTG(*),FANREAC(6,*),PDAMA2(2,*),
+     .     RES_SMS(*),FCLUSTER(3,*),MCLUSTER(3,*),W(SW),
+     .     WIGE(*),KNOT(*),STIFN(*),STIFR(*),PSKIDS(*),TF(*),FCONT_MAX(*),
+     .     FNCONTP2(3,*) ,FTCONTP2(3,*)
+        INTEGER IPARG(NPARG,NGROUP),NSTRF(*),LPBY(*),
+     .          IXS(NIXS,NUMELS),IXQ(NIXQ,NUMELQ),IXC(NIXC,NUMELC),IXTG(NIXTG,NUMELTG),
+     .          IXT(NIXT,NUMELT),IXP(NIXP,NUMELP),IXR(NIXR,NUMELR),MONVOL(SMONVOL) ,
+     .          IXS10(6,*) ,IXS16(8,*)  ,IXS20(12,*) ,
+     .          ICUT(*), ITAB(NUMNOD),NPBY(NNPBY,*),NPRW(*),
+     .          WEIGHT(*),IPART(LIPART1,*),IPARTS(*),IPARTQ(*),IPARTC(*),
+     .          IPARTT(*),IPARTP(*),IPARTR(*),IPARTUR(*),IPARTTG(*),
+     .          NOM_OPT(*),
+     .          IDATA(*),KXX(NIXX,*), IXX(*), IPARTX(*),
+     .          KXSP(NISP,*), IXSP(KVOISPH,*), NOD2SP(*), IPARTSP(*),
+     .          NODGLOB(*),IAD_ELEM(2,*),FR_ELEM(*),FR_WALL(*), IFLOW(*),
+     .          IPARI(NPARI,*),IRBE2(NRBE2L,*),IRBE3(NRBE3L,*),
+     .          WEIGHT_MD(*),NODGLOBXFE(*),IPARTIG3D(*)
+        INTEGER DD_IAD(NSPMD+1,*)
+        INTEGER FR_SEC(NSPMD+1,*),FR_RBY2(3,*),IAD_RBY2(4,*),
+     .          NERBE2T(NRBE2G),
+     .          NERBE3T(NRBE3G),IAD_RBE2(4,*),NV46,KXIG3D(*),
+     .          IXIG3D(*),SIG3DSOLID,MDS_MATID(*)
+        INTEGER LLOADP(SLLOADP)
+        INTEGER ILOADP(SIZLOADP,*),IBCL(NIBCLD,*)
+        INTEGER TAGNCONT(NLOADP_HYD_INTER,NUMNOD),LOADP_HYD_INTER(NLOADP_HYD)
+        INTEGER ,DIMENSION(LISKN,NUMFRAM+1), INTENT(IN) :: IFRAME
+        my_real
+     .         FAC(LFACCLD,*),XFRAME(NXFRAME,*),FORC(*)
+        TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP) :: ELBUF_TAB
+        TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP,NXEL) :: XFEM_TAB
+        TYPE (CLUSTER_) ,DIMENSION(NCLUSTER) :: CLUSTER
+        TYPE (XFEM_EDGE_)   , DIMENSION(*) :: CRKEDGE
+        TYPE (STACK_PLY) :: STACK
+        TYPE (H3D_DATABASE) :: H3D_DATA
+        TYPE (MULTI_FVM_STRUCT), INTENT(IN) :: MULTI_FVM
+        TYPE (GROUP_)  , DIMENSION(NGRNOD) :: IGRNOD
+        TYPE (SUBSET_) , TARGET, DIMENSION(NSUBS) :: SUBSET
+        TYPE(t_ale_connectivity), INTENT(IN) :: ALE_CONNECT
+        TYPE (SENSORS_) , INTENT(IN) :: SENSORS
+        TYPE (LOADS_)   , INTENT(IN) :: LOADS
+        TYPE (TTABLE),DIMENSION(NTABLE)  ,INTENT(IN) :: TABLE
+        TYPE (MATPARAM_STRUCT_) ,DIMENSION(NUMMAT) ,INTENT(IN) :: MAT_PARAM
+        my_real , INTENT(IN) :: AR(SAR)
+        my_real , INTENT(IN) :: CSEFRIC(OUTPUT%DATA%NINEFRIC,OUTPUT%DATA%S_EFRICINT) ,CSEFRICG(OUTPUT%DATA%S_EFRIC),
+     .  CSEFRIC_STAMP(OUTPUT%DATA%NINEFRIC_STAMP,OUTPUT%DATA%S_EFRICINTG) ,CSEFRICG_STAMP(OUTPUT%DATA%S_EFRICG)
+        my_real ,DIMENSION(3,NUMNOD), INTENT(IN) :: X_C
+        TYPE (DRAPE_) , INTENT(IN)  :: DRAPE_SH4N(NUMELC_DRAPE), DRAPE_SH3N(NUMELTG_DRAPE)
+        TYPE (DRAPEG_), INTENT(IN)  :: DRAPEG
+        type (glob_therm_), intent(in) :: GLOB_THERM
+        type (pblast_), intent(in) :: PBLAST
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+        my_real, DIMENSION(:), ALLOCATABLE :: WAFT  , MAS   
+        INTEGER IAD(SIAD),INVERT(SINVERT),EL2FA(SEL2FA),IADG(NSPMD,SIADG)
+        CHARACTER*80 H3DTITLE
+        CHARACTER(LEN=NCHARLINE100):: KEYWORD
+        CHARACTER CH_H3D*4,FILNAM*100
+        INTEGER I, NBF, NBPART, J, IFUNC, FILEN, NSENSOR,NELCUT,K,NERBY,LAYER,IPT,GAUSS,ID_PLY,IUVAR
+        INTEGER II,INC,NDMA2, NBF_L
+        INTEGER NERBE2,NERBE3,ALL_SUB_CHILDS,IDMDS,IMDSVAR
+        INTEGER I161,I16A,I16B,I16C,I16D,I16E,I16F,I16G,I16H,I16I,I16J,I16K,I16L,I16M,I16N
+        INTEGER NNN
+        INTEGER ISPH3D
+        INTEGER SBUFSPM,SBUFRECVM,SBUFSPO,SPORBY,N_OUTP_DATA,LEN_H3DTITLE,N_H3D_PART_LIST
+        INTEGER, PARAMETER :: Q1NP_MAX_CTRL = 50
+        INTEGER Q1NP_IEL, Q1NP_HEX_IEL, Q1NP_OFFCP, Q1NP_NCTRL
+        INTEGER Q1NP_FACE_NODE(4), Q1NP_CTRL_IDS(Q1NP_MAX_CTRL)
+        INTEGER Q1NP_KK, Q1NP_JJ, Q1NP_II
+        INTEGER Q1NP_NMAP, Q1NP_IFACE, Q1NP_IPERM
+        INTEGER Q1NP_BEST_IFACE, Q1NP_BEST_IPERM
+        INTEGER Q1NP_OLD_NODE_ID, Q1NP_CORNER_ID, Q1NP_KNOT_SET_ID
+        INTEGER Q1NP_P_CUR, Q1NP_Q_CUR, Q1NP_ELEM_U_IDX, Q1NP_ELEM_V_IDX
+        INTEGER Q1NP_NX_CUR, Q1NP_NY_CUR, Q1NP_U_LEN, Q1NP_V_LEN
+        INTEGER Q1NP_CACHE_ELEM, Q1NP_NODE_ID_TMP
+        INTEGER Q1NP_FACE_IXS(4,6), Q1NP_CORNER_PERM(4,8)
+        INTEGER, DIMENSION(:), ALLOCATABLE :: Q1NP_NODE_TO_ELEM, Q1NP_NODE_TO_CORNER
+        REAL(KIND=WP), DIMENSION(:), ALLOCATABLE :: Q1NP_NODE_TO_DIST2
+        REAL(KIND=WP), DIMENSION(:,:), ALLOCATABLE :: Q1NP_NODE_TO_REFXYZ
+        INTEGER, DIMENSION(:), ALLOCATABLE, SAVE ::
+     .    Q1NP_OLDNODE_IDS_SAVE, Q1NP_ELEM_IDS_SAVE, Q1NP_CORNER_IDS_SAVE
+        REAL(KIND=WP), DIMENSION(:,:), ALLOCATABLE, SAVE :: Q1NP_REFXYZ_SAVE
+        LOGICAL, PARAMETER :: Q1NP_REMAP_ENABLED = .TRUE.
+        LOGICAL, SAVE :: Q1NP_REMAP_MAP_READY = .FALSE.
+        LOGICAL Q1NP_CORNER_READY
+        REAL(KIND=WP), DIMENSION(:), ALLOCATABLE :: Q1NP_U_KNOT, Q1NP_V_KNOT
+        REAL(KIND=WP) Q1NP_DIST2, Q1NP_BEST_DIST2, Q1NP_NODE_MATCH_DIST2
+        REAL(KIND=WP) Q1NP_CORNER_XYZ(3,4), Q1NP_TARGET_XYZ(3)
+        REAL(KIND=WP) Q1NP_CORNER_XI(4), Q1NP_CORNER_ETA(4)
+        REAL(KIND=WP) Q1NP_NVAL(Q1NP_MAX_CTRL)
+        DATA Q1NP_FACE_IXS /
+     .      2,3,4,5, 6,7,8,9, 2,3,7,6,
+     .      3,4,8,7, 4,5,9,8, 5,2,6,9 /
+        DATA Q1NP_CORNER_PERM /
+     .      1,2,3,4, 2,3,4,1, 3,4,1,2, 4,1,2,3,
+     .      1,4,3,2, 4,3,2,1, 3,2,1,4, 2,1,4,3 /
+        DATA Q1NP_CORNER_XI / -1._WP, 1._WP, 1._WP, -1._WP /
+        DATA Q1NP_CORNER_ETA / -1._WP, -1._WP, 1._WP, 1._WP /
+        my_real CDG(3),XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX, SCALE
+        INTEGER IR,IS,IT,INTER_INPUT,INTERSKID,NI,ITYSKID,INTERFRIC
+        INTEGER, DIMENSION(:), ALLOCATABLE :: SHELL_ID,SHELL_ID_P,
+     .                                        SHELL_ITY,SHELL_ITY_P,ONED_ID,ONED_ID_P,
+     .                                        ONED_ITY,ONED_ITY_P,SOLID_ID,SOLID_ID_P,
+     .                                        SOLID_ITY,SOLID_ITY_P,IS_WRITEN_SHELL,
+     .                                        IS_WRITEN_SHELL_P,IS_WRITEN_ONED,
+     .                                        IS_WRITEN_ONED_P,IS_WRITEN_NODE,
+     .                                        IS_WRITEN_NODE_P,NODE_ID,NODE_ID_P,
+     .                                        IS_WRITEN_SOLID,IS_WRITEN_SOLID_P,
+     .                                        SPH_ID,SPH_ID_P,IS_WRITEN_SPH,IS_WRITEN_SPH_P,
+     .                                        QUAD_ID,QUAD_ID_P,IS_WRITEN_QUAD,IS_WRITEN_QUAD_P,
+     .                                        SKIN_ID_P,IS_WRITEN_SKIN,IS_WRITEN_SKIN_P,
+     .                                        ISOLNOD,ISOLNOD_P
+        INTEGER, DIMENSION(:), ALLOCATABLE :: IS_WRITEN_NODE_FVM,NODE_ID_FVM
+        INTEGER  INFO1,INFO2,IS_CORNER_DATA, COMPID_RBODIES, COMPID_RBE2S, COMPID_RBE3S, MAX_PART_ID
+        INTEGER  ERROR_LOAD,NUMNOD_H3DPART
+c to be made allocatable
+        INTEGER, DIMENSION(:,:), ALLOCATABLE ::
+     .           IXC_P,
+     .           IXC_TMP,
+     .           IXTG_TMP,
+     .           IXTG_P,
+     .           IXS_TMP,
+     .           IXS_P,
+     .           IXR_TMP,
+     .           IXR_P,
+     .           IXP_TMP,
+     .           IXP_P,
+     .           KXSP_TMP,
+     .           KXSP_P,
+     .           IXT_TMP,
+     .           IXT_P,
+     .           IXS10_TMP,
+     .           IXS10_P,
+     .           IXS16_TMP,
+     .           IXS16_P,
+     .           IXS20_TMP,
+     .           IXS20_P,
+     .           IXQ_TMP,
+     .           IXQ_P,
+     .           IXSKIN_TMP,
+     .           IXSKIN_P
+        INTEGER, DIMENSION(:), ALLOCATABLE ::
+     .           IPARTS_P,
+     .           IPARTR_P,
+     .           IPARTP_P,
+     .           IPARTT_P,
+     .           IPARTSP_P,
+     .           IPARTS10_P,
+     .           IPARTS16_P,
+     .           IPARTS20_P,
+     .           IPARTC_P,
+     .           IPARTTG_P,
+     .           IPARTQ_P,
+     .           IPARTSKIN_P,
+     .           NODAL_IPART,
+     .           IMAPSKP
+        my_real, DIMENSION(:), ALLOCATABLE :: X_P,D_P,D_H3D
+        INTEGER, DIMENSION(:), ALLOCATABLE :: ITAB_P
+        INTEGER :: NUMNODG0,IP0 ,NIXSKIN
+        INTEGER :: NUMNOD_P(NSPMD)
+        INTEGER MAX_NOD_ID,MAX_NCORN
+        REAL(KIND=4), DIMENSION(:), ALLOCATABLE :: SHELL_STACK
+        REAL(KIND=4), DIMENSION(:), ALLOCATABLE :: SHELL_STACK_P
+        REAL(KIND=4), DIMENSION(:), ALLOCATABLE :: SHELL_TENSOR_STACK
+        REAL(KIND=4), DIMENSION(:), ALLOCATABLE :: SHELL_TENSOR_STACK_P        
+        INTEGER,DIMENSION(NSPMD) ::  GATHER_SIZE
+        INTEGER,DIMENSION(NSPMD) ::  TMP_OFFSETS
+        INTEGER,DIMENSION(NSPMD+1) ::  SH_TRIA_SPMD_OFFSETS
+        my_real, DIMENSION(:), ALLOCATABLE :: NODAL_SCALAR,NODAL_SCALAR_P,
+     .                                        NODAL_VECTOR,NODAL_VECTOR_P,
+     .                                        NODAL_TENSOR,NODAL_TENSOR_P,
+     .                                        ONED_SCALAR,ONED_SCALAR_P,
+     .                                        ONED_VECTOR,ONED_VECTOR_P,
+     .                                        ONED_TENSOR,ONED_TENSOR_P,
+     .                                        ONED_TORSOR,ONED_TORSOR_P,
+     .                                        SHELL_SCALAR_P,SHELL_SCALAR,
+     .                                        SHELL_VECTOR,SHELL_VECTOR_P,
+     .                                        SHELL_TENSOR,SHELL_TENSOR_P,
+     .                                        SOLID_SCALAR,SOLID_SCALAR_P,
+     .                                        SOLID_VECTOR,SOLID_VECTOR_P,
+     .                                        SOLID_TENSOR,SOLID_TENSOR_P,
+     .                                        SOLID_TENSOR_CORNER,SOLID_TENSOR_CORNER_P,
+     .                                        SKIN_SCALAR,SKIN_SCALAR_P,
+     .                                        SKIN_VECTOR,SKIN_VECTOR_P,
+     .                                        SKIN_TENSOR,SKIN_TENSOR_P,
+     .                                        SPH_SCALAR,SPH_SCALAR_P,
+     .                                        SPH_TENSOR,SPH_TENSOR_P,
+     .                                        QUAD_SCALAR,QUAD_SCALAR_P,
+     .                                        QUAD_VECTOR,QUAD_VECTOR_P,
+     .                                        QUAD_TENSOR,QUAD_TENSOR_P,NODAL_SCALAR_FVM,
+     .                                        NODAL_VECTOR_FVM
+        INTEGER, DIMENSION(:), ALLOCATABLE :: TAGNOD,TAGNOD_P,
+     .                                        ITAB_P_PART,ITABM1_P
+        my_real XWL(NRWALL) ,YWL(NRWALL) , ZWL(NRWALL), V1(NRWALL), V2(NRWALL), V3(NRWALL),
+     .          VV1(NRWALL), VV2(NRWALL), VV3(NRWALL), XL(NRWALL), XN(NRWALL), YN(NRWALL),
+     .          ZN(NRWALL)
+        LOGICAL IS_FILE_EXISTS
+        INTEGER, DIMENSION(:), ALLOCATABLE :: SUB_CHILD,SUB_IAD,SUB_TITLE
+        INTEGER, DIMENSION(:), ALLOCATABLE :: SUB_NCHILD
+        INTEGER, DIMENSION(:), ALLOCATABLE :: SUB_LEVEL
+        INTEGER, DIMENSION(:), ALLOCATABLE :: SUB_ID
+        INTEGER (KIND=8) :: H3DTOTALSIZE8
+        INTEGER :: LEN_TMP_NAME,LEN_RADVERS,OBJECT_ID, NPOLH, NPOLHG, NPOLH_ANIM, NPOLH_ANIM_G, 
+     *             FVM_GLOBALS(3)
+        INTEGER :: AIRBAGS_TOTAL_FVM_IN_H3D_G
+        CHARACTER(len=2148) :: TMP_NAME
+        CHARACTER RADVERS*68
+        TYPE(FVBAG_DATA), DIMENSION(:), ALLOCATABLE :: FVDATA_P
+        my_real, DIMENSION(:), ALLOCATABLE :: FVDATA_1D_ARRAY
+        INTEGER ITMP,MODE
+        TYPE USER_NOD_ID_
+          !VIRTUAL NODES MANAGEMENT
+          !some option are writing virtual entities in H3D files. it requires to generate nodes which must have identifiers.
+          !
+          !  +-----------------USER NODE IDENTIFIERS----------------------------------------------+
+          !  | INPUT FILE        | FVMBAG                      | ... | RWALL                      |
+          !  +-------------------+-----------------------------+-----|----------------------------+
+          !  | (real nodes)      | (virtual added nodes)       | ... | (virtual added nodes)      |
+          !  +-------------------+-----------------------------+-----|----------------------------+
+          !  |    NUMNOD         | %FVMBAG_LEN                 | ... |  %RWALL_LEN                |  numbering
+          !  |     n/a           | %FVMBAG_SHIFT+1             | ... |  %RWALL_SHIFT+1            |  min identifier
+          !  |   %INPUT_MAX      | %FVMBAG_SHIFT+%FVMBAG_LEN   | ... |  %RWALL_SHIFT+%RWALL_LEN   |  max identifier
+          !  +-------------------+-----------------------------+-----+----------------------------+
+          INTEGER INPUT_MAX     !input file maximum user identifier (/NODE)
+          INTEGER RWALL_SHIFT   !RWALL virtual nodes starts from uID = %RWALL_SHIFT + 1
+          INTEGER RWALL_LEN     !RWALL virtual nodes numbering
+          INTEGER FVMBAG_SHIFT  !FVMBAG has virtual nodes from uID = %FVMBAG_SHIFT+1
+          INTEGER FVMBAG_LEN    !FVMBAG virtual nodes numbering
+        END TYPE
+
+        TYPE(USER_NOD_ID_) :: USER_NOD_ID
+        INTEGER SZ_ANIN
+        INTEGER :: MAX_SHELL_STACKSIZE          ! Maximum number of shell scalar to write
+        INTEGER :: SHELL_STACKSIZE              ! Number of shell scalar to write
+        INTEGER :: SHELL_STACKSIZE_P0           ! total shell scalar to write after gather
+        INTEGER :: REQUESTED_H3D_VERSION_MAJOR        ! Requested H3D major version
+        INTEGER :: REQUESTED_H3D_VERSION_MINOR        ! Requested H3D minor version
+        INTEGER :: H3D_VERSION_MAJOR        ! H3D major version to write
+        INTEGER :: H3D_VERSION_MINOR        ! H3D minor version to write
+        INTEGER TENS_COUNT,ct
+C-----------------------------------------------
+C   S o u r c e   L i n e s
+C-----------------------------------------------
+        MAX_SHELL_STACKSIZE = NUMELC + NUMELTG
+        CALL STARTIME(TIMERS,MACRO_TIMER_GENH3D)
+
+        USER_NOD_ID%INPUT_MAX=0
+        USER_NOD_ID%RWALL_SHIFT=0
+        USER_NOD_ID%RWALL_LEN=0
+        USER_NOD_ID%FVMBAG_SHIFT=0
+        USER_NOD_ID%FVMBAG_LEN=0
+
+        NDMA2 = NUMNOD*(MIN(1,ANIM_N(1)+OUTP_N(1)+H3D_DATA%N_SCAL_DT)
+     .                 +MIN(1,ANIM_N(2)+OUTP_N(2)+H3D_DATA%N_SCAL_DMAS)
+     .                 +MIN(1,ANIM_N(12)+OUTP_N(3)+H3D_DATA%N_SCAL_DINER))
+        NSENSOR = SENSORS%NSENSOR
+        call my_alloc(MAS, SMAS, "MAS")
+        call my_alloc(SUB_NCHILD, NSUBS, "SUB_NCHILD")
+        call my_alloc(SUB_LEVEL, NSUBS, "SUB_LEVEL")
+        call my_alloc(SUB_ID, NSUBS, "SUB_ID")
+
+c
+        I161=1
+        I16A=I161+LNOPT1*NRBODY0
+        I16B=I16A+LNOPT1*NACCELM
+        I16C=I16B+LNOPT1*NVOLU
+        I16D=I16C+LNOPT1*(NINTER+NINTSUB)
+        I16E=I16D+LNOPT1*NRWALL
+        I16F=I16E !obsolete option removed
+        I16G=I16F+LNOPT1*NJOINT
+        I16H=I16G+LNOPT1*NSECT
+        I16I=I16H+LNOPT1*NLINK
+        I16J=I16I+LNOPT1*(NUMSKW+1+NUMFRAM+1)
+        I16K=I16J+LNOPT1*NFXBODY
+        I16L=I16K+LNOPT1*NFLOW
+        I16M=I16L+LNOPT1*NRBE2
+        I16N=I16M+LNOPT1*NRBE3
+
+
+
+c
+        ERROR_LOAD = 0
+c
+        H3D_DATA%IH3D_RUN = H3D_DATA%IH3D_RUN + 1
+        IF(ISPMD == 0) THEN
+          NUMNODG0 = NUMNODG
+          IP0 = 1
+        ELSE
+          NUMNODG0 = 1
+          IP0 = 0
+        ENDIF
+C----- same size of skin than quad
+        NIXSKIN = NIXQ
+
+        call my_alloc(X_P, 8*NUMNODG0, "X_P")
+        call my_alloc(ITAB_P, NUMNODG0, "ITAB_P")
+
+        call my_alloc(IXTG_P, NIXTG, NUMELTGG*IP0, "IXTG_P")
+        call my_alloc(IXS_P, NIXS, (NUMELSG-NUMELS10G-NUMELS16G-NUMELS20G)*IP0, "IXS_P")
+        call my_alloc(IXP_P, NIXP, NUMELPG*IP0, "IXP_P")
+        call my_alloc(IXR_P, NIXR, NUMELRG*IP0, "IXR_P")
+        call my_alloc(KXSP_P, NISP, NUMSPHG*IP0, "KXSP_P")
+        call my_alloc(IXT_P, NIXT, NUMELTRG*IP0, "IXT_P") !!
+        call my_alloc(IXC_P, NIXC, NUMELCG*IP0, "IXC_P")
+        call my_alloc(IXS10_P, 11, NUMELS10G*IP0, "IXS10_P")
+        call my_alloc(IXS16_P, 17, NUMELS16G*IP0, "IXS16_P")
+        call my_alloc(IXS20_P, 21, NUMELS20G*IP0, "IXS20_P")
+        call my_alloc(IPARTC_P, NUMELCG*IP0, "IPARTC_P")
+        call my_alloc(IPARTTG_P, NUMELTGG*IP0, "IPARTTG_P")
+        call my_alloc(IPARTQ_P, NUMELQG*IP0, "IPARTQ_P")
+        call my_alloc(IPARTS_P, (NUMELSG-NUMELS10G-NUMELS16G-NUMELS20G)*IP0, "IPARTS_P")
+        call my_alloc(IPARTR_P, NUMELRG*IP0, "IPARTR_P")
+        call my_alloc(IPARTP_P, NUMELPG*IP0, "IPARTP_P")
+        call my_alloc(IPARTT_P, NUMELTRG*IP0, "IPARTT_P")
+        call my_alloc(IPARTSP_P, NUMSPHG*IP0, "IPARTSP_P")
+        call my_alloc(IPARTS10_P, NUMELS10G*IP0, "IPARTS10_P")
+        call my_alloc(IPARTS16_P, NUMELS16G*IP0, "IPARTS16_P")
+        call my_alloc(IPARTS20_P, NUMELS20G*IP0, "IPARTS20_P")
+        call my_alloc(IXQ_P, NIXQ, NUMELQG*IP0, "IXQ_P")
+        call my_alloc(IXC_TMP, NIXC, NUMELC, "IXC_TMP")
+        call my_alloc(IXTG_TMP, NIXTG, NUMELTG, "IXTG_TMP")
+        call my_alloc(IXR_TMP, NIXR, NUMELR, "IXR_TMP")
+        call my_alloc(IXP_TMP, NIXP, NUMELP, "IXP_TMP")
+        call my_alloc(KXSP_TMP, NISP, NUMSPH, "KXSP_TMP")
+        call my_alloc(IXT_TMP, NIXT, NUMELT, "IXT_TMP")
+        call my_alloc(IXS10_TMP, 11, NUMELS10, "IXS10_TMP")
+        call my_alloc(IXS16_TMP, 17, NUMELS16, "IXS16_TMP")
+        call my_alloc(IXS20_TMP, 21, NUMELS20, "IXS20_TMP")
+        call my_alloc(IXQ_TMP, NIXQ, NUMELQ, "IXQ_TMP")
+        call my_alloc(IXSKIN_TMP, NIXSKIN, NUMSKIN, "IXSKIN_TMP")
+        call my_alloc(IXSKIN_P, NIXSKIN, NUMSKING*IP0, "IXSKIN_P")
+        call my_alloc(IPARTSKIN_P, NUMSKING*IP0, "IPARTSKIN_P")
+c
+        call my_alloc(D_P, NUMNODG0*8, "D_P")
+
+        IF(NSPMD > 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_R_NODE(WEIGHT,D,3*NUMNOD,D_P,3*NUMNODG)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ENDIF
+c
+C**********************************************************************************************
+C COMPUTE COMPONENT ID FOR RBODIES
+C**********************************************************************************************
+        MAX_PART_ID = 0
+        COMPID_RBODIES = 0
+        COMPID_RBE2S = 0
+        COMPID_RBE3S = 0
+        DO I=1,NPART
+          MAX_PART_ID = MAX(MAX_PART_ID,IPART(4,I))
+        ENDDO
+        IF(H3D_DATA%RBODY_SINGLE == 1)COMPID_RBODIES = MAX_PART_ID + 1
+        IF(H3D_DATA%RBE2_SINGLE == 1)COMPID_RBE2S = MAX_PART_ID + 2
+        IF(H3D_DATA%RBE3_SINGLE == 1)COMPID_RBE3S = MAX_PART_ID + 3
+C**********************************************************************************************
+C BUILD H3D FILE
+C**********************************************************************************************
+        IF (ISPMD==0) THEN
+          FILNAM=ROOTNAM(1:ROOTLEN)//'.h3d'
+          FILEN = ROOTLEN + 4
+          LEN_TMP_NAME = OUTFILE_NAME_LEN + ROOTLEN + 4
+          TMP_NAME=OUTFILE_NAME(1:OUTFILE_NAME_LEN)//FILNAM(1:LEN_TRIM(FILNAM))
+C
+c**********************************************************************************************
+C CREATE PARTS + HIERARCHY
+C**********************************************************************************************
+          IF ((H3D_DATA%IH3D == 1 .AND. IRUN == 1)
+     .    .OR.( H3D_DATA%IH3D_RUN == 1 .AND. IRUN > 1)) THEN
+
+            IF (NSUBS > 0) THEN
+              ALL_SUB_CHILDS = 0
+              DO J=1,NSUBS
+                ALL_SUB_CHILDS = ALL_SUB_CHILDS + SUBSET(J)%NCHILD
+                SUB_ID    (J) = SUBSET(J)%ID
+                SUB_NCHILD(J) = SUBSET(J)%NCHILD
+                SUB_LEVEL (J) = SUBSET(J)%LEVEL
+              ENDDO
+!
+              call my_alloc(SUB_CHILD, ALL_SUB_CHILDS, "SUB_CHILD")
+              SUB_CHILD(1:ALL_SUB_CHILDS) = 0
+              call my_alloc(SUB_IAD, NSUBS, "SUB_IAD")
+              SUB_IAD(1:NSUBS) = 0
+              call my_alloc(SUB_TITLE, NSUBS*LTITR, "SUB_TITLE")
+              SUB_TITLE(1:NSUBS*LTITR) = 0
+              K = 0
+              DO J=1,NSUBS
+                DO I=1,SUBSET(J)%NCHILD
+                  K = K + 1
+                  SUB_CHILD(K) = SUBSET(J)%CHILD(I)
+                ENDDO
+                SUB_IAD(J) = K
+              ENDDO
+!  title
+              DO J=1,NSUBS
+                CALL FRETITL(SUBSET(J)%TITLE,SUB_TITLE(LTITR * (J-1)+1),LTITR)
+              ENDDO
+            ELSE
+              call my_alloc(SUB_CHILD, 0, "SUB_CHILD")
+              call my_alloc(SUB_IAD, 0, "SUB_IAD")
+              call my_alloc(SUB_TITLE, 0, "SUB_TITLE")
+            ENDIF !IF (NSUBS > 0) THEN
+          ENDIF ! IH3D,IRUN
+
+          IF (H3D_DATA%IH3D == 1 .AND. IRUN == 1) THEN
+C
+c**********************************************************************************************
+C OPEN H3D LIB
+C**********************************************************************************************
+            ERROR_LOAD = 0
+            CALL H3DLIB_LOAD(ERROR_LOAD)
+            IF(ERROR_LOAD == 1) THEN
+              CALL ANCMSG(MSGID=274,ANMODE=ANINFO)
+              CALL ARRET(2)
+            ENDIF
+
+            REQUESTED_H3D_VERSION_MAJOR = 2612
+            REQUESTED_H3D_VERSION_MINOR = 0
+
+            CALL C_H3D_EXPORT_LIBRARY_VERSION(H3D_VERSION_MAJOR, H3D_VERSION_MINOR)
+            IF(H3D_VERSION_MAJOR < REQUESTED_H3D_VERSION_MAJOR .AND. 
+     .        H3D_VERSION_MINOR < REQUESTED_H3D_VERSION_MINOR) THEN
+              CALL ANCMSG(MSGID=324,ANMODE=ANINFO,I1=H3D_VERSION_MAJOR,
+     .        I2=H3D_VERSION_MINOR,I3=REQUESTED_H3D_VERSION_MAJOR,I4=REQUESTED_H3D_VERSION_MINOR)
+              CALL ARRET(2)
+            ENDIF
+C**********************************************************************************************
+C PRINT H3D LIB VERSION 
+C**********************************************************************************************
+        IF (ISPMD==0) THEN
+          WRITE (IOUT,*)
+          WRITE (IOUT,2000) H3D_VERSION_MAJOR,H3D_VERSION_MINOR
+          WRITE (IOUT,*) 
+        ENDIF
+C**********************************************************************************************
+C OPEN H3D FILE
+C**********************************************************************************************
+            IS_H3D_USED = .TRUE.
+            WRITE(RADVERS,'(A,A)') 'Radioss ',VERS
+            LEN_RADVERS = LEN_TRIM(RADVERS)
+C
+            CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+            CALL C_H3D_OPEN_FILE(TMP_NAME,LEN_TMP_NAME,H3D_DATA%PERCENTAGE_ERROR,H3D_DATA%COMP_LEVEL,
+     .                           RADVERS,LEN_RADVERS,FAC_MASS,FAC_LENGTH,FAC_TIME)
+            CALL C_H3D_CREATE_COMPONENTS(IPART,LIPART1,NPART,LTITR,IGEO,NPROPGI,
+     .                                  H3D_DATA%PARTS(1)%PART,
+     .                                   NRBODY, NRWALL, NOM_OPT, LNOPT1, I16D, NPBY, NNPBY,
+     .                                   SUB_NCHILD, NSUBS, NRBE2, NRBE3, I16L, I16M, N2D ,IRBE2,
+     .                                   NRBE2L,SUB_ID,SUB_CHILD,SUB_LEVEL,SUB_IAD,SUB_TITLE,IRBE3,
+     .                                   NRBE3L,COMPID_RBODIES,COMPID_RBE2S,COMPID_RBE3S)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+
+C
+          ELSEIF( H3D_DATA%IH3D_RUN == 1 .AND. IRUN > 1) THEN
+c**********************************************************************************************
+C OPEN H3D LIB
+C**********************************************************************************************
+            ERROR_LOAD = 0
+            CALL H3DLIB_LOAD(ERROR_LOAD)
+            IF(ERROR_LOAD == 1) THEN
+              CALL ANCMSG(MSGID=274,ANMODE=ANINFO)
+              CALL ARRET(2)
+            ENDIF
+C
+c**********************************************************************************************
+C REOPEN H3D FILE
+C**********************************************************************************************
+            INQUIRE( FILE=TMP_NAME(1:LEN_TMP_NAME), EXIST=IS_FILE_EXISTS )
+            IF (IS_FILE_EXISTS) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              IS_H3D_USED = .TRUE.
+              CALL C_H3D_REOPEN_FILE(TMP_NAME,LEN_TMP_NAME,H3D_DATA%PERCENTAGE_ERROR,H3D_DATA%COMP_LEVEL)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+            ELSE
+c**********************************************************************************************
+C OPEN H3D FILE
+C**********************************************************************************************
+              WRITE(CH_H3D,'(I4.4)')IRUN
+              FILNAM=ROOTNAM(1:ROOTLEN)//'_'//CH_H3D//'.h3d'
+              LEN_TMP_NAME = OUTFILE_NAME_LEN + LEN_TRIM(FILNAM)
+              TMP_NAME=OUTFILE_NAME(1:OUTFILE_NAME_LEN)//FILNAM(1:LEN_TRIM(FILNAM))
+              H3D_DATA%IH3D = 1
+              FILEN = ROOTLEN + 9
+              IS_H3D_USED = .TRUE.
+C
+              WRITE(RADVERS,'(A,A)') 'Radioss ',VERS
+              LEN_RADVERS = LEN_TRIM(RADVERS)
+C
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_OPEN_FILE(TMP_NAME,LEN_TMP_NAME,H3D_DATA%PERCENTAGE_ERROR,H3D_DATA%COMP_LEVEL,
+     .                             RADVERS,LEN_RADVERS,FAC_MASS,FAC_LENGTH,FAC_TIME)
+              CALL C_H3D_CREATE_COMPONENTS(IPART,LIPART1,NPART,LTITR,IGEO,NPROPGI,H3D_DATA%PARTS(1)%PART,
+     .                                   NRBODY, NRWALL, NOM_OPT, LNOPT1, I16D, NPBY, NNPBY,
+     .                                   SUB_NCHILD, NSUBS, NRBE2G, NRBE3G, I16E, I16F, N2D  ,IRBE2,
+     .                                   NRBE2L,SUB_ID,SUB_CHILD,SUB_LEVEL,SUB_IAD,SUB_TITLE,IRBE3,
+     .                                   NRBE3L,COMPID_RBODIES,COMPID_RBE2S,COMPID_RBE3S)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+          ENDIF
+        ENDIF
+c**********************************************************************************************
+C CREATE ITAB_P
+C**********************************************************************************************
+        IF(NSPMD > 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,ITAB,NUMNOD,ITAB_P,NUMNODG)
+          CALL SPMD_H3D_GATHER_R_NODE(WEIGHT,X,3*NUMNOD,X_P,3*NUMNODG)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          DO I=1,NUMNOD
+            ITAB_P(I) = ITAB(I)
+          ENDDO
+        ENDIF
+c**********************************************************************************************
+C H3D/PART
+C**********************************************************************************************
+        IF (ISPMD == 0)THEN
+          call my_alloc(TAGNOD_P, NUMNODG, "TAGNOD_P")
+        ELSE
+          call my_alloc(TAGNOD_P, 1, "TAGNOD_P")
+        ENDIF
+
+        IF(H3D_DATA%IPART_SELECT == 1) THEN
+          call my_alloc(TAGNOD, NUMNOD, "TAGNOD")
+          TAGNOD(1:NUMNOD) = 0
+c
+c
+          DO I=1,NUMSPH
+            IF (H3D_DATA%PARTS(1)%PART(IPARTSP(I)) == 1) THEN
+              IF(KXSP(2,I) > 0 )TAGNOD(KXSP(2,I)) = 1
+            ENDIF
+          ENDDO
+c
+          DO I=1,NUMELR
+            IF (H3D_DATA%PARTS(1)%PART(IPARTR(I)) == 1) THEN
+              DO J=2,4
+                IF(IXR(J,I) > 0 )TAGNOD(IXR(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+c
+          DO I=1,NUMELP
+            IF (H3D_DATA%PARTS(1)%PART(IPARTP(I)) == 1) THEN
+              DO J=2,4
+                IF(IXP(J,I) > 0 )TAGNOD(IXP(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+c
+          DO I=1,NUMELT
+            IF (H3D_DATA%PARTS(1)%PART(IPARTT(I)) == 1) THEN
+              DO J=2,4
+                IF(IXT(J,I) > 0 )TAGNOD(IXT(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+c
+          DO I=1,NRBODY
+            IF(NPBY(1,I) > 0 ) TAGNOD(NPBY(1,I)) = 1
+            DO J=1,NPBY(2,I)
+              IF(LPBY(NPBY(11,I)+J) > 0)  TAGNOD(LPBY(NPBY(11,I)+J)) = 1
+            ENDDO
+          ENDDO
+c
+          DO I=1,NUMELC
+            IF (H3D_DATA%PARTS(1)%PART(IPARTC(I)) == 1) THEN
+              DO J=2,5
+                IF(IXC(J,I) > 0 )TAGNOD(IXC(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+c
+          DO I=1,NUMELTG
+            IF (H3D_DATA%PARTS(1)%PART(IPARTTG(I)) == 1) THEN
+              DO J=2,4
+                TAGNOD(IXTG(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+c
+          DO I=1,NUMELS
+            IF (H3D_DATA%PARTS(1)%PART(IPARTS(I)) == 1) THEN
+              DO J=2,9
+                IF(IXS(J,I) > 0 )TAGNOD(IXS(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+c
+c         Q1NP control points are promoted nodes of the owning solid part,
+c         but they are not present in the legacy HEX8 connectivity.
+          IF (NUMELQ1NP_G > 0 .AND. ALLOCATED(KQ1NP_TAB) .AND.
+     .        ALLOCATED(IQ1NP_TAB)) THEN
+            DO Q1NP_IEL=1,NUMELQ1NP_G
+              Q1NP_HEX_IEL = KQ1NP_TAB(10,Q1NP_IEL)
+              IF (Q1NP_HEX_IEL <= 0 .OR. Q1NP_HEX_IEL > NUMELS) CYCLE
+              IF (H3D_DATA%PARTS(1)%PART(IPARTS(Q1NP_HEX_IEL))
+     .            == 1) THEN
+                Q1NP_NCTRL = KQ1NP_TAB(3,Q1NP_IEL)
+                Q1NP_OFFCP = KQ1NP_TAB(4,Q1NP_IEL)
+                IF (Q1NP_NCTRL > 0 .AND. Q1NP_OFFCP > 0) THEN
+                  IF (Q1NP_OFFCP + Q1NP_NCTRL - 1 <=
+     .                SIZE(IQ1NP_TAB)) THEN
+                    DO Q1NP_KK=1,Q1NP_NCTRL
+                      Q1NP_NODE_ID_TMP =
+     .                  IQ1NP_TAB(Q1NP_OFFCP + Q1NP_KK - 1)
+                      IF (Q1NP_NODE_ID_TMP > 0 .AND.
+     .                    Q1NP_NODE_ID_TMP <= NUMNOD) THEN
+                        TAGNOD(Q1NP_NODE_ID_TMP) = 1
+                      ENDIF
+                    ENDDO
+                  ENDIF
+                ENDIF
+              ENDIF
+            ENDDO
+          ENDIF
+c
+          DO I=1,NUMELQ
+            IF (H3D_DATA%PARTS(1)%PART(IPARTQ(I)) == 1) THEN
+              DO J=2,5
+                IF(IXQ(J,I) > 0 )TAGNOD(IXQ(J,I)) = 1
+              ENDDO
+            ENDIF
+          ENDDO
+
+          NUMNOD_H3DPART = 0
+
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(NUMNOD,1,NUMNOD_P,NSPMD)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            IF(ISPMD == 0) THEN
+              DO I=1,NSPMD
+                NUMNOD_H3DPART = NUMNOD_H3DPART + NUMNOD_P(I)
+              ENDDO
+            ENDIF
+          ENDIF
+C
+          call my_alloc(ITAB_P_PART, NUMNOD_H3DPART, "ITAB_P_PART")
+          ITAB_P_PART(1:NUMNOD_H3DPART) = 0!Initialization needed, otherwise it may be used uninitialized in sysfus2 call
+          call my_alloc(ITABM1_P, 2*NUMNODG, "ITABM1_P")
+C
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,TAGNOD,NUMNOD,TAGNOD_P,NUMNODG)
+            CALL SPMD_H3D_GATHER_I_NODE_PART(WEIGHT,TAGNOD,ITAB,NUMNOD,ITAB_P_PART,NUMNOD_H3DPART)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            IF(ISPMD == 0) THEN
+              CALL H3D_CONSTIT(ITAB_P,ITABM1_P,NUMNODG)
+              DO I=1,NUMNOD_H3DPART
+                IF(ITAB_P_PART(I) /= 0)THEN
+                  IF(SYSFUS2(ITAB_P_PART(I),ITABM1_P,NUMNODG) /= 0) THEN
+                    TAGNOD_P(SYSFUS2(ITAB_P_PART(I),ITABM1_P,NUMNODG)) = 1
+                  ENDIF
+                ENDIF
+              ENDDO
+            ENDIF
+          ELSE
+            DO I=1,NUMNOD
+              TAGNOD_P(I) = TAGNOD(I)
+            ENDDO
+          ENDIF
+          call my_dealloc(ITAB_P_PART)
+          call my_dealloc(ITABM1_P)
+        ELSE IF(ISPMD == 0) THEN
+          DO I=1,NUMNODG
+            TAGNOD_P(I) = 1
+          ENDDO
+        ENDIF
+!       Optional engine-only remap of legacy Q1NP old nodes for H3D.
+!       Legacy nodes follow the evaluated Q1NP span corners of Q1NP ELEMENTS.
+!       Toggle is hardcoded via Q1NP_REMAP_ENABLED parameter.
+
+        IF (Q1NP_REMAP_ENABLED .AND. ISPMD == 0 .AND. NSPMD == 1) THEN
+          IF (.NOT. Q1NP_REMAP_MAP_READY) THEN
+            Q1NP_NMAP = 0
+            CALL MY_DEALLOC(Q1NP_OLDNODE_IDS_SAVE)
+            CALL MY_DEALLOC(Q1NP_ELEM_IDS_SAVE)
+            CALL MY_DEALLOC(Q1NP_CORNER_IDS_SAVE)
+            CALL MY_DEALLOC(Q1NP_REFXYZ_SAVE)
+
+            IF (NUMNOD > 0 .AND. NUMELQ1NP_G > 0) THEN
+              IF (ALLOCATED(KQ1NP_TAB)) THEN
+                IF (ALLOCATED(IQ1NP_TAB)) THEN
+                  IF (ALLOCATED(Q1NP_KTAB)) THEN
+              CALL MY_ALLOC(Q1NP_NODE_TO_ELEM, NUMNOD, 'Q1NP_NODE_TO_ELEM')
+              CALL MY_ALLOC(Q1NP_NODE_TO_CORNER, NUMNOD, 'Q1NP_NODE_TO_CORNER')
+              CALL MY_ALLOC(Q1NP_NODE_TO_DIST2, NUMNOD, 'Q1NP_NODE_TO_DIST2')
+              CALL MY_ALLOC(Q1NP_NODE_TO_REFXYZ, 3, NUMNOD, 'Q1NP_NODE_TO_REFXYZ')
+              Q1NP_NODE_TO_ELEM(1:NUMNOD) = 0
+              Q1NP_NODE_TO_CORNER(1:NUMNOD) = 0
+              Q1NP_NODE_TO_DIST2(1:NUMNOD) = HUGE(0._WP)
+              Q1NP_NODE_TO_REFXYZ(1:3,1:NUMNOD) = 0._WP
+
+              DO Q1NP_IEL = 1, NUMELQ1NP_G
+                Q1NP_HEX_IEL = 0
+                IF (SIZE(KQ1NP_TAB,1) >= 10) THEN
+                  Q1NP_HEX_IEL = KQ1NP_TAB(10,Q1NP_IEL)
+                END IF
+                IF (Q1NP_HEX_IEL >= 1 .AND. Q1NP_HEX_IEL <= NUMELS) THEN
+                  IF (IXS(NIXS,Q1NP_HEX_IEL)
+     .              /= KQ1NP_TAB(5,Q1NP_IEL)) Q1NP_HEX_IEL = 0
+                END IF
+                IF (Q1NP_HEX_IEL <= 0) THEN
+                  DO I = 1, NUMELS
+                    IF (IXS(NIXS,I) == KQ1NP_TAB(5,Q1NP_IEL)) THEN
+                      Q1NP_HEX_IEL = I
+                      EXIT
+                    END IF
+                  END DO
+                END IF
+                IF (Q1NP_HEX_IEL < 1 .OR. Q1NP_HEX_IEL > NUMELS) CYCLE
+
+                Q1NP_NCTRL = KQ1NP_TAB(3,Q1NP_IEL)
+                Q1NP_OFFCP = KQ1NP_TAB(4,Q1NP_IEL)
+                Q1NP_P_CUR = KQ1NP_TAB(8,Q1NP_IEL)
+                Q1NP_Q_CUR = KQ1NP_TAB(9,Q1NP_IEL)
+                Q1NP_ELEM_U_IDX = KQ1NP_TAB(6,Q1NP_IEL)
+                Q1NP_ELEM_V_IDX = KQ1NP_TAB(7,Q1NP_IEL)
+                IF (Q1NP_NCTRL <= 0 .OR. Q1NP_OFFCP < 1) CYCLE
+                IF (Q1NP_NCTRL > Q1NP_MAX_CTRL) CYCLE
+                IF (Q1NP_OFFCP + Q1NP_NCTRL - 1 > SIZE(IQ1NP_TAB)) CYCLE
+                Q1NP_KNOT_SET_ID = 1
+                IF (SIZE(KQ1NP_TAB,1) >= 15) THEN
+                  Q1NP_KNOT_SET_ID = KQ1NP_TAB(15,Q1NP_IEL)
+                END IF
+                Q1NP_NX_CUR = KQ1NP_TAB(12,Q1NP_IEL)
+                Q1NP_NY_CUR = KQ1NP_TAB(13,Q1NP_IEL)
+                IF (Q1NP_NX_CUR <= 0 .OR. Q1NP_NY_CUR <= 0) THEN
+                  IF (Q1NP_NKNOT_SETS_G > 0 .AND.
+     .                Q1NP_KNOT_SET_ID > 0 .AND.
+     .                Q1NP_KNOT_SET_ID <= Q1NP_NKNOT_SETS_G) THEN
+                    Q1NP_NX_CUR = Q1NP_NX_SET_G(Q1NP_KNOT_SET_ID)
+                    Q1NP_NY_CUR = Q1NP_NY_SET_G(Q1NP_KNOT_SET_ID)
+                  ELSE
+                    Q1NP_NX_CUR = Q1NP_NX_G
+                    Q1NP_NY_CUR = Q1NP_NY_G
+                  END IF
+                END IF
+                Q1NP_U_LEN = Q1NP_NX_CUR + 2*Q1NP_P_CUR + 1
+                Q1NP_V_LEN = Q1NP_NY_CUR + 2*Q1NP_Q_CUR + 1
+                IF (Q1NP_U_LEN <= 0 .OR. Q1NP_V_LEN <= 0) CYCLE
+                CALL MY_ALLOC(Q1NP_U_KNOT, Q1NP_U_LEN, 'Q1NP_U_KNOT')
+                CALL MY_ALLOC(Q1NP_V_KNOT, Q1NP_V_LEN, 'Q1NP_V_KNOT')
+                IF (Q1NP_NKNOT_SETS_G > 0 .AND.
+     .              Q1NP_KNOT_SET_ID > 0 .AND.
+     .              Q1NP_KNOT_SET_ID <= Q1NP_NKNOT_SETS_G .AND.
+     .              ALLOCATED(Q1NP_KTAB_OFF_G)) THEN
+                  Q1NP_U_KNOT(1:Q1NP_U_LEN) = Q1NP_KTAB(
+     .              Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID):
+     .              Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID)+Q1NP_U_LEN-1)
+                  Q1NP_V_KNOT(1:Q1NP_V_LEN) = Q1NP_KTAB(
+     .              Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID)+Q1NP_U_LEN:
+     .              Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID)+Q1NP_U_LEN+
+     .              Q1NP_V_LEN-1)
+                ELSE
+                  Q1NP_U_KNOT(1:Q1NP_U_LEN) = Q1NP_KTAB(1:Q1NP_U_LEN)
+                  Q1NP_V_KNOT(1:Q1NP_V_LEN) = Q1NP_KTAB(
+     .              Q1NP_U_LEN+1:Q1NP_U_LEN+Q1NP_V_LEN)
+                END IF
+
+                Q1NP_CTRL_IDS(1:Q1NP_MAX_CTRL) = 0
+                DO Q1NP_KK = 1, Q1NP_NCTRL
+                  Q1NP_CTRL_IDS(Q1NP_KK) = IQ1NP_TAB(Q1NP_OFFCP+Q1NP_KK-1)
+                END DO
+
+                DO Q1NP_CORNER_ID = 1, 4
+                  CALL Q1NP_EVALUATE_NURBS_SHAPE_VALUES(
+     .              Q1NP_CORNER_XI(Q1NP_CORNER_ID),
+     .              Q1NP_CORNER_ETA(Q1NP_CORNER_ID),
+     .              Q1NP_P_CUR, Q1NP_Q_CUR,
+     .              Q1NP_ELEM_U_IDX, Q1NP_ELEM_V_IDX,
+     .              Q1NP_U_KNOT, Q1NP_V_KNOT,
+     .              Q1NP_NCTRL, Q1NP_NVAL(1:Q1NP_NCTRL))
+                  Q1NP_CORNER_XYZ(1:3,Q1NP_CORNER_ID) = 0._WP
+                  DO Q1NP_KK = 1, Q1NP_NCTRL
+                    Q1NP_II = Q1NP_CTRL_IDS(Q1NP_KK)
+                    IF (Q1NP_II <= 0 .OR. Q1NP_II > NUMNOD) CYCLE
+                    Q1NP_CORNER_XYZ(1,Q1NP_CORNER_ID) =
+     .              Q1NP_CORNER_XYZ(1,Q1NP_CORNER_ID)
+     .              + Q1NP_NVAL(Q1NP_KK) * X(3*(Q1NP_II-1)+1)
+                    Q1NP_CORNER_XYZ(2,Q1NP_CORNER_ID) =
+     .              Q1NP_CORNER_XYZ(2,Q1NP_CORNER_ID)
+     .              + Q1NP_NVAL(Q1NP_KK) * X(3*(Q1NP_II-1)+2)
+                    Q1NP_CORNER_XYZ(3,Q1NP_CORNER_ID) =
+     .              Q1NP_CORNER_XYZ(3,Q1NP_CORNER_ID)
+     .              + Q1NP_NVAL(Q1NP_KK) * X(3*(Q1NP_II-1)+3)
+                  END DO
+                END DO
+                CALL MY_DEALLOC(Q1NP_U_KNOT)
+                CALL MY_DEALLOC(Q1NP_V_KNOT)
+
+                Q1NP_BEST_DIST2 = HUGE(0._WP)
+                Q1NP_BEST_IFACE = 0
+                Q1NP_BEST_IPERM = 0
+                DO Q1NP_IFACE = 1, 6
+                  DO Q1NP_KK = 1, 4
+                    Q1NP_FACE_NODE(Q1NP_KK) = IXS(
+     .                    Q1NP_FACE_IXS(Q1NP_KK,Q1NP_IFACE),
+     .                    Q1NP_HEX_IEL)
+                  END DO
+
+                  DO Q1NP_IPERM = 1, 8
+                    Q1NP_DIST2 = 0._WP
+                    DO Q1NP_KK = 1, 4
+                      Q1NP_JJ = Q1NP_CORNER_PERM(Q1NP_KK,Q1NP_IPERM)
+                      Q1NP_OLD_NODE_ID = Q1NP_FACE_NODE(Q1NP_JJ)
+                      IF (Q1NP_OLD_NODE_ID <= 0 .OR.
+     .                    Q1NP_OLD_NODE_ID > NUMNOD) THEN
+                        Q1NP_DIST2 = HUGE(0._WP)
+                        EXIT
+                      END IF
+                      Q1NP_DIST2 = Q1NP_DIST2
+     .                          + (X(3*(Q1NP_OLD_NODE_ID-1)+1)
+     .                          -  Q1NP_CORNER_XYZ(1,Q1NP_KK))**2
+     .                          + (X(3*(Q1NP_OLD_NODE_ID-1)+2)
+     .                          -  Q1NP_CORNER_XYZ(2,Q1NP_KK))**2
+     .                          + (X(3*(Q1NP_OLD_NODE_ID-1)+3)
+     .                          -  Q1NP_CORNER_XYZ(3,Q1NP_KK))**2
+                    END DO
+                    IF (Q1NP_DIST2 < Q1NP_BEST_DIST2) THEN
+                      Q1NP_BEST_DIST2 = Q1NP_DIST2
+                      Q1NP_BEST_IFACE = Q1NP_IFACE
+                      Q1NP_BEST_IPERM = Q1NP_IPERM
+                    END IF
+                  END DO
+                END DO
+
+                IF (Q1NP_BEST_IFACE <= 0 .OR.
+     .              Q1NP_BEST_IPERM <= 0) CYCLE
+                DO Q1NP_KK = 1, 4
+                  Q1NP_JJ = Q1NP_CORNER_PERM(Q1NP_KK,Q1NP_BEST_IPERM)
+                  Q1NP_OLD_NODE_ID = IXS(
+     .                    Q1NP_FACE_IXS(Q1NP_JJ,Q1NP_BEST_IFACE),
+     .                    Q1NP_HEX_IEL)
+                  Q1NP_CORNER_ID = Q1NP_KK
+                  IF (Q1NP_OLD_NODE_ID <= 0 .OR.
+     .                Q1NP_OLD_NODE_ID > NUMNOD) CYCLE
+                  Q1NP_NODE_MATCH_DIST2 =
+     .            (X(3*(Q1NP_OLD_NODE_ID-1)+1)
+     .            - Q1NP_CORNER_XYZ(1,Q1NP_CORNER_ID))**2
+     .            + (X(3*(Q1NP_OLD_NODE_ID-1)+2)
+     .            - Q1NP_CORNER_XYZ(2,Q1NP_CORNER_ID))**2
+     .            + (X(3*(Q1NP_OLD_NODE_ID-1)+3)
+     .            - Q1NP_CORNER_XYZ(3,Q1NP_CORNER_ID))**2
+                  IF (Q1NP_NODE_MATCH_DIST2
+     .                < Q1NP_NODE_TO_DIST2(Q1NP_OLD_NODE_ID)) THEN
+                    Q1NP_NODE_TO_ELEM(Q1NP_OLD_NODE_ID) = Q1NP_IEL
+                    Q1NP_NODE_TO_CORNER(Q1NP_OLD_NODE_ID)=Q1NP_CORNER_ID
+                    Q1NP_NODE_TO_DIST2(Q1NP_OLD_NODE_ID) =
+     .              Q1NP_NODE_MATCH_DIST2
+                    Q1NP_NODE_TO_REFXYZ(1:3,Q1NP_OLD_NODE_ID) =
+     .              Q1NP_CORNER_XYZ(1:3,Q1NP_CORNER_ID)
+                  END IF
+                END DO
+              END DO
+
+              Q1NP_NMAP = COUNT(Q1NP_NODE_TO_ELEM > 0)
+              IF (Q1NP_NMAP > 0) THEN
+                CALL MY_DEALLOC(Q1NP_OLDNODE_IDS_SAVE)
+                CALL MY_DEALLOC(Q1NP_ELEM_IDS_SAVE)
+                CALL MY_DEALLOC(Q1NP_CORNER_IDS_SAVE)
+                CALL MY_ALLOC(Q1NP_OLDNODE_IDS_SAVE, Q1NP_NMAP,
+     .            'Q1NP_OLDNODE_IDS_SAVE')
+                CALL MY_ALLOC(Q1NP_ELEM_IDS_SAVE, Q1NP_NMAP,
+     .            'Q1NP_ELEM_IDS_SAVE')
+                CALL MY_ALLOC(Q1NP_CORNER_IDS_SAVE, Q1NP_NMAP,
+     .            'Q1NP_CORNER_IDS_SAVE')
+                CALL MY_ALLOC(Q1NP_REFXYZ_SAVE, 3, Q1NP_NMAP,
+     .            'Q1NP_REFXYZ_SAVE')
+                Q1NP_II = 0
+                DO I = 1, NUMNOD
+                  IF (Q1NP_NODE_TO_ELEM(I) > 0) THEN
+                    Q1NP_II = Q1NP_II + 1
+                    Q1NP_OLDNODE_IDS_SAVE(Q1NP_II) = I
+                    Q1NP_ELEM_IDS_SAVE(Q1NP_II) = Q1NP_NODE_TO_ELEM(I)
+                    Q1NP_CORNER_IDS_SAVE(Q1NP_II)=Q1NP_NODE_TO_CORNER(I)
+                    Q1NP_REFXYZ_SAVE(1:3,Q1NP_II) =
+     .              Q1NP_NODE_TO_REFXYZ(1:3,I)
+                  END IF
+                END DO
+              END IF
+
+              CALL MY_DEALLOC(Q1NP_NODE_TO_ELEM)
+              CALL MY_DEALLOC(Q1NP_NODE_TO_CORNER)
+              CALL MY_DEALLOC(Q1NP_NODE_TO_DIST2)
+              CALL MY_DEALLOC(Q1NP_NODE_TO_REFXYZ)
+                  END IF
+                END IF
+              END IF
+            END IF
+            Q1NP_REMAP_MAP_READY = .TRUE.
+          END IF
+        END IF
+c**********************************************************************************************
+C CREATE NODES
+C**********************************************************************************************
+c
+        MAX_NOD_ID = 0
+        IF(NSPMD > 1 .AND. ISPMD==0)THEN
+          DO I=1,NUMNODG
+            MAX_NOD_ID = MAX(MAX_NOD_ID,ITAB_P(I))
+          ENDDO
+        ELSEIF(NSPMD == 1)THEN
+          MAX_NOD_ID = 0
+          DO I=1,NUMNOD
+            MAX_NOD_ID = MAX(MAX_NOD_ID,ITAB(I))
+          ENDDO
+        ENDIF
+        USER_NOD_ID%INPUT_MAX = MAX_NOD_ID
+
+!       H3D may remap legacy Q1NP nodes for visualization. Keep that
+!       synthetic displacement out of the solver displacement array D.
+        IF (ISPMD == 0 .AND. NSPMD == 1) THEN
+          IF (ALLOCATED(D_H3D)) CALL MY_DEALLOC(D_H3D)
+          CALL MY_ALLOC(D_H3D, 3*NUMNOD, 'D_H3D')
+          D_H3D(1:3*NUMNOD) = D(1:3*NUMNOD)
+        ENDIF
+
+!       First H3D frame: force node creation onto the saved span-corner reference.
+        IF (Q1NP_REMAP_ENABLED .AND. Q1NP_REMAP_MAP_READY .AND.
+     .      ALLOCATED(Q1NP_OLDNODE_IDS_SAVE) .AND.
+     .      ALLOCATED(Q1NP_REFXYZ_SAVE) .AND.
+     .      ISPMD == 0 .AND. NSPMD == 1 .AND.
+     .      H3D_DATA%IH3D == 1) THEN
+          Q1NP_NMAP = SIZE(Q1NP_OLDNODE_IDS_SAVE)
+          DO Q1NP_KK = 1, Q1NP_NMAP
+            Q1NP_OLD_NODE_ID = Q1NP_OLDNODE_IDS_SAVE(Q1NP_KK)
+            IF (Q1NP_OLD_NODE_ID < 1 .OR.
+     .          Q1NP_OLD_NODE_ID > NUMNOD) CYCLE
+            D_H3D(3*(Q1NP_OLD_NODE_ID-1)+1) =
+     .        X(3*(Q1NP_OLD_NODE_ID-1)+1)
+     .        - Q1NP_REFXYZ_SAVE(1,Q1NP_KK)
+            D_H3D(3*(Q1NP_OLD_NODE_ID-1)+2) =
+     .        X(3*(Q1NP_OLD_NODE_ID-1)+2)
+     .        - Q1NP_REFXYZ_SAVE(2,Q1NP_KK)
+            D_H3D(3*(Q1NP_OLD_NODE_ID-1)+3) =
+     .        X(3*(Q1NP_OLD_NODE_ID-1)+3)
+     .        - Q1NP_REFXYZ_SAVE(3,Q1NP_KK)
+          END DO
+        END IF
+
+        !Create /NODE entities
+        IF(NSPMD > 1 .AND. ISPMD==0 .AND. H3D_DATA%IH3D == 1 )THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_NODES(ITAB_P,NUMNODG,X_P,TAGNOD_P,D_P)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ELSEIF(ISPMD==0  .AND. H3D_DATA%IH3D == 1)THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_NODES(ITAB,NUMNOD,X,TAGNOD_P,D_H3D)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+        call my_dealloc(X_P)
+
+!       All H3D frames: emit synthetic displacement so legacy nodes move with the current span corners.
+        IF (Q1NP_REMAP_ENABLED .AND. Q1NP_REMAP_MAP_READY .AND.
+     .      ALLOCATED(Q1NP_OLDNODE_IDS_SAVE) .AND.
+     .      ALLOCATED(Q1NP_ELEM_IDS_SAVE) .AND.
+     .      ALLOCATED(Q1NP_CORNER_IDS_SAVE) .AND.
+     .      ALLOCATED(Q1NP_REFXYZ_SAVE) .AND.
+     .      ALLOCATED(KQ1NP_TAB) .AND.
+     .      ALLOCATED(IQ1NP_TAB) .AND.
+     .      ALLOCATED(Q1NP_KTAB) .AND.
+     .      ISPMD == 0 .AND. NSPMD == 1) THEN
+          Q1NP_NMAP = SIZE(Q1NP_OLDNODE_IDS_SAVE)
+          Q1NP_CACHE_ELEM = 0
+          Q1NP_CORNER_READY = .FALSE.
+          DO Q1NP_KK = 1, Q1NP_NMAP
+            Q1NP_OLD_NODE_ID = Q1NP_OLDNODE_IDS_SAVE(Q1NP_KK)
+            Q1NP_IEL = Q1NP_ELEM_IDS_SAVE(Q1NP_KK)
+            Q1NP_CORNER_ID = Q1NP_CORNER_IDS_SAVE(Q1NP_KK)
+            IF (Q1NP_OLD_NODE_ID < 1 .OR.
+     .          Q1NP_OLD_NODE_ID > NUMNOD) CYCLE
+            IF (Q1NP_IEL < 1 .OR. Q1NP_IEL > NUMELQ1NP_G) CYCLE
+            IF (Q1NP_CORNER_ID < 1 .OR. Q1NP_CORNER_ID > 4) CYCLE
+            IF (Q1NP_CACHE_ELEM /= Q1NP_IEL) THEN
+              Q1NP_CACHE_ELEM = Q1NP_IEL
+              Q1NP_CORNER_READY = .FALSE.
+              IF (ALLOCATED(Q1NP_U_KNOT)) CALL MY_DEALLOC(Q1NP_U_KNOT)
+              IF (ALLOCATED(Q1NP_V_KNOT)) CALL MY_DEALLOC(Q1NP_V_KNOT)
+              Q1NP_NCTRL = KQ1NP_TAB(3,Q1NP_IEL)
+              Q1NP_OFFCP = KQ1NP_TAB(4,Q1NP_IEL)
+              Q1NP_P_CUR = KQ1NP_TAB(8,Q1NP_IEL)
+              Q1NP_Q_CUR = KQ1NP_TAB(9,Q1NP_IEL)
+              Q1NP_ELEM_U_IDX = KQ1NP_TAB(6,Q1NP_IEL)
+              Q1NP_ELEM_V_IDX = KQ1NP_TAB(7,Q1NP_IEL)
+              IF (Q1NP_NCTRL <= 0 .OR. Q1NP_OFFCP < 1) CYCLE
+              IF (Q1NP_NCTRL > Q1NP_MAX_CTRL) CYCLE
+              IF (Q1NP_OFFCP + Q1NP_NCTRL - 1 > SIZE(IQ1NP_TAB)) CYCLE
+              Q1NP_KNOT_SET_ID = 1
+              IF (SIZE(KQ1NP_TAB,1) >= 15) THEN
+                Q1NP_KNOT_SET_ID = KQ1NP_TAB(15,Q1NP_IEL)
+              END IF
+              Q1NP_NX_CUR = KQ1NP_TAB(12,Q1NP_IEL)
+              Q1NP_NY_CUR = KQ1NP_TAB(13,Q1NP_IEL)
+              IF (Q1NP_NX_CUR <= 0 .OR. Q1NP_NY_CUR <= 0) THEN
+                IF (Q1NP_NKNOT_SETS_G > 0 .AND.
+     .              Q1NP_KNOT_SET_ID > 0 .AND.
+     .              Q1NP_KNOT_SET_ID <= Q1NP_NKNOT_SETS_G) THEN
+                  Q1NP_NX_CUR = Q1NP_NX_SET_G(Q1NP_KNOT_SET_ID)
+                  Q1NP_NY_CUR = Q1NP_NY_SET_G(Q1NP_KNOT_SET_ID)
+                ELSE
+                  Q1NP_NX_CUR = Q1NP_NX_G
+                  Q1NP_NY_CUR = Q1NP_NY_G
+                END IF
+              END IF
+              Q1NP_U_LEN = Q1NP_NX_CUR + 2*Q1NP_P_CUR + 1
+              Q1NP_V_LEN = Q1NP_NY_CUR + 2*Q1NP_Q_CUR + 1
+              IF (Q1NP_U_LEN <= 0 .OR. Q1NP_V_LEN <= 0) CYCLE
+              CALL MY_ALLOC(Q1NP_U_KNOT, Q1NP_U_LEN, 'Q1NP_U_KNOT')
+              CALL MY_ALLOC(Q1NP_V_KNOT, Q1NP_V_LEN, 'Q1NP_V_KNOT')
+              IF (Q1NP_NKNOT_SETS_G > 0 .AND.
+     .            Q1NP_KNOT_SET_ID > 0 .AND.
+     .            Q1NP_KNOT_SET_ID <= Q1NP_NKNOT_SETS_G .AND.
+     .            ALLOCATED(Q1NP_KTAB_OFF_G)) THEN
+                Q1NP_U_KNOT(1:Q1NP_U_LEN) = Q1NP_KTAB(
+     .            Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID):
+     .            Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID)+Q1NP_U_LEN-1)
+                Q1NP_V_KNOT(1:Q1NP_V_LEN) = Q1NP_KTAB(
+     .            Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID)+Q1NP_U_LEN:
+     .            Q1NP_KTAB_OFF_G(Q1NP_KNOT_SET_ID)+Q1NP_U_LEN+
+     .            Q1NP_V_LEN-1)
+              ELSE
+                Q1NP_U_KNOT(1:Q1NP_U_LEN) = Q1NP_KTAB(1:Q1NP_U_LEN)
+                Q1NP_V_KNOT(1:Q1NP_V_LEN) = Q1NP_KTAB(
+     .            Q1NP_U_LEN+1:Q1NP_U_LEN+Q1NP_V_LEN)
+              END IF
+              Q1NP_CTRL_IDS(1:Q1NP_MAX_CTRL) = 0
+              DO Q1NP_II = 1, Q1NP_NCTRL
+                Q1NP_CTRL_IDS(Q1NP_II) = IQ1NP_TAB(Q1NP_OFFCP+Q1NP_II-1)
+              END DO
+              DO Q1NP_JJ = 1, 4
+                CALL Q1NP_EVALUATE_NURBS_SHAPE_VALUES(
+     .            Q1NP_CORNER_XI(Q1NP_JJ),
+     .            Q1NP_CORNER_ETA(Q1NP_JJ),
+     .            Q1NP_P_CUR, Q1NP_Q_CUR,
+     .            Q1NP_ELEM_U_IDX, Q1NP_ELEM_V_IDX,
+     .            Q1NP_U_KNOT, Q1NP_V_KNOT,
+     .            Q1NP_NCTRL, Q1NP_NVAL(1:Q1NP_NCTRL))
+                Q1NP_CORNER_XYZ(1:3,Q1NP_JJ) = 0._WP
+                DO Q1NP_II = 1, Q1NP_NCTRL
+                  Q1NP_NODE_ID_TMP = Q1NP_CTRL_IDS(Q1NP_II)
+                  IF (Q1NP_NODE_ID_TMP <= 0 .OR.
+     .                Q1NP_NODE_ID_TMP > NUMNOD) CYCLE
+                  Q1NP_CORNER_XYZ(1,Q1NP_JJ) =
+     .            Q1NP_CORNER_XYZ(1,Q1NP_JJ)
+     .            + Q1NP_NVAL(Q1NP_II) * X(3*(Q1NP_NODE_ID_TMP-1)+1)
+                  Q1NP_CORNER_XYZ(2,Q1NP_JJ) =
+     .            Q1NP_CORNER_XYZ(2,Q1NP_JJ)
+     .            + Q1NP_NVAL(Q1NP_II) * X(3*(Q1NP_NODE_ID_TMP-1)+2)
+                  Q1NP_CORNER_XYZ(3,Q1NP_JJ) =
+     .            Q1NP_CORNER_XYZ(3,Q1NP_JJ)
+     .            + Q1NP_NVAL(Q1NP_II) * X(3*(Q1NP_NODE_ID_TMP-1)+3)
+                END DO
+              END DO
+              CALL MY_DEALLOC(Q1NP_U_KNOT)
+              CALL MY_DEALLOC(Q1NP_V_KNOT)
+              Q1NP_CORNER_READY = .TRUE.
+            END IF
+            IF (.NOT. Q1NP_CORNER_READY) CYCLE
+            Q1NP_TARGET_XYZ(1:3) = Q1NP_CORNER_XYZ(1:3,Q1NP_CORNER_ID)
+            D_H3D(3*(Q1NP_OLD_NODE_ID-1)+1) =
+     .        Q1NP_TARGET_XYZ(1) - Q1NP_REFXYZ_SAVE(1,Q1NP_KK)
+            D_H3D(3*(Q1NP_OLD_NODE_ID-1)+2) =
+     .        Q1NP_TARGET_XYZ(2) - Q1NP_REFXYZ_SAVE(2,Q1NP_KK)
+            D_H3D(3*(Q1NP_OLD_NODE_ID-1)+3) =
+     .        Q1NP_TARGET_XYZ(3) - Q1NP_REFXYZ_SAVE(3,Q1NP_KK)
+          END DO
+          IF (ALLOCATED(Q1NP_U_KNOT)) CALL MY_DEALLOC(Q1NP_U_KNOT)
+          IF (ALLOCATED(Q1NP_V_KNOT)) CALL MY_DEALLOC(Q1NP_V_KNOT)
+        END IF
+
+        !Create virtual nodes (FVMBAG polyhedra centroids)
+        AIRBAGS_TOTAL_FVM_IN_H3D_G = 0
+
+        USER_NOD_ID%FVMBAG_SHIFT = MAX_NOD_ID
+        USER_NOD_ID%FVMBAG_LEN = 0
+
+        IF(NSPMD > 1)THEN
+          IF(NFVBAG >0 )THEN
+
+            if (ispmd == 0)ALLOCATE (FVDATA_P(NFVBAG))
+            AIRBAGS_TOTAL_FVM_IN_H3D_G = 0
+            DO J=1,NFVBAG
+
+              ! get NPOLHG,NPOLH_ANIM_G, AIRBAGS_TOTAL_FVM_IN_H3D
+              if ( (FVSPMD(J)%PMAIN-1 == 0) .and. (ispmd == 0)) then ! no communication Internal mesh is already on Domain 0
+
+                 NPOLHG                     = FVDATA(J)%NPOLH
+                 NPOLH_ANIM_G               = FVDATA(J)%NPOLH_ANIM
+                 AIRBAGS_TOTAL_FVM_IN_H3D_G = AIRBAGS_TOTAL_FVM_IN_H3D
+
+              else
+                 if (FVSPMD(J)%PMAIN-1 == ispmd)then ! the airbag is on another domain the ispmd=0
+
+                   FVM_GLOBALS(1) = FVDATA(J)%NPOLH
+                   FVM_GLOBALS(2) = FVDATA(J)%NPOLH_ANIM
+                   FVM_GLOBALS(3) = AIRBAGS_TOTAL_FVM_IN_H3D
+
+                   call spmd_send(FVM_GLOBALS,3,IT_SPMD(1),25001)
+                 endif
+ 
+                 if (ispmd == 0)then
+                    call spmd_recv(FVM_GLOBALS,3,IT_SPMD(FVSPMD(J)%PMAIN),25001)
+                    NPOLHG                     = FVM_GLOBALS(1)
+                    NPOLH_ANIM_G               = FVM_GLOBALS(2)
+                    AIRBAGS_TOTAL_FVM_IN_H3D_G = FVM_GLOBALS(3)
+                 else
+                    NPOLHG = 0
+                    NPOLH_ANIM_G = 0
+                    AIRBAGS_TOTAL_FVM_IN_H3D_G = 0
+                 endif
+              endif
+
+              ! Allocate FVDATA_P
+              if (ispmd == 0)then
+                ALLOCATE (FVDATA_P(J)%CENTROID_POLH(3,NPOLHG))
+                ALLOCATE (FVDATA_P(J)%QPOLH(3,NPOLHG))
+                ALLOCATE (FVDATA_P(J)%PPOLH(NPOLHG))
+                ALLOCATE (FVDATA_P(J)%SSPPOLH(NPOLHG))
+                ALLOCATE (FVDATA_P(J)%DTPOLH(NPOLHG))
+                ALLOCATE (FVDATA_P(J)%MPOLH(NPOLHG))
+                ALLOCATE (FVDATA_P(J)%RPOLH(NPOLHG))
+                ALLOCATE (FVDATA_P(J)%TPOLH(NPOLHG))
+                FVDATA_P(J)%NPOLH = NPOLHG
+                FVDATA_P(J)%NPOLH_ANIM = NPOLH_ANIM_G
+              endif
+
+              if ( (FVSPMD(J)%PMAIN-1 == 0) .and. (ispmd == 0)) then ! no communication Internal mesh is already on Domain 0 just copy
+                 ! NPOLH = NPOLH_G
+                 FVDATA_P(J)%CENTROID_POLH(1,1:NPOLHG) = FVDATA(J)%CENTROID_POLH(1,1:NPOLHG)
+                 FVDATA_P(J)%CENTROID_POLH(2,1:NPOLHG) = FVDATA(J)%CENTROID_POLH(2,1:NPOLHG)
+                 FVDATA_P(J)%CENTROID_POLH(3,1:NPOLHG) = FVDATA(J)%CENTROID_POLH(3,1:NPOLHG)
+                 FVDATA_P(J)%QPOLH(1,1:NPOLHG)         = FVDATA(J)%QPOLH(1,1:NPOLHG)
+                 FVDATA_P(J)%QPOLH(2,1:NPOLHG)         = FVDATA(J)%QPOLH(2,1:NPOLHG)
+                 FVDATA_P(J)%QPOLH(3,1:NPOLHG)         = FVDATA(J)%QPOLH(3,1:NPOLHG)
+                 FVDATA_P(J)%PPOLH(1:NPOLHG)           = FVDATA(J)%PPOLH(1:NPOLHG)
+                 FVDATA_P(J)%SSPPOLH(1:NPOLHG)         = FVDATA(J)%SSPPOLH(1:NPOLHG)
+                 FVDATA_P(J)%DTPOLH(1:NPOLHG)          = FVDATA(J)%DTPOLH(1:NPOLHG)
+                 FVDATA_P(J)%MPOLH(1:NPOLHG)           = FVDATA(J)%MPOLH(1:NPOLHG)
+                 FVDATA_P(J)%RPOLH(1:NPOLHG)           = FVDATA(J)%RPOLH(1:NPOLHG)
+                 FVDATA_P(J)%TPOLH(1:NPOLHG)           = FVDATA(J)%TPOLH(1:NPOLHG)
+              else
+                 if (ispmd == FVSPMD(J)%PMAIN-1)then     ! Nothing to do for the others
+                    call my_alloc(FVDATA_1D_ARRAY, 12*NPOLHG, "FVDATA_1D_ARRAY")
+                    FVDATA_1D_ARRAY(00*NPOLHG+1:01*NPOLHG) = FVDATA(J)%CENTROID_POLH(1,1:NPOLHG)
+                    FVDATA_1D_ARRAY(01*NPOLHG+1:02*NPOLHG) = FVDATA(J)%CENTROID_POLH(2,1:NPOLHG)
+                    FVDATA_1D_ARRAY(02*NPOLHG+1:03*NPOLHG) = FVDATA(J)%CENTROID_POLH(3,1:NPOLHG)
+                    FVDATA_1D_ARRAY(03*NPOLHG+1:04*NPOLHG) = FVDATA(J)%QPOLH(1,1:NPOLHG)
+                    FVDATA_1D_ARRAY(04*NPOLHG+1:05*NPOLHG) = FVDATA(J)%QPOLH(2,1:NPOLHG)
+                    FVDATA_1D_ARRAY(05*NPOLHG+1:06*NPOLHG) = FVDATA(J)%QPOLH(3,1:NPOLHG)
+                    FVDATA_1D_ARRAY(06*NPOLHG+1:07*NPOLHG) = FVDATA(J)%PPOLH(1:NPOLHG)
+                    FVDATA_1D_ARRAY(07*NPOLHG+1:08*NPOLHG) = FVDATA(J)%SSPPOLH(1:NPOLHG)
+                    FVDATA_1D_ARRAY(08*NPOLHG+1:09*NPOLHG) = FVDATA(J)%DTPOLH(1:NPOLHG)
+                    FVDATA_1D_ARRAY(09*NPOLHG+1:10*NPOLHG) = FVDATA(J)%MPOLH(1:NPOLHG)
+                    FVDATA_1D_ARRAY(10*NPOLHG+1:11*NPOLHG) = FVDATA(J)%RPOLH(1:NPOLHG)
+                    FVDATA_1D_ARRAY(11*NPOLHG+1:12*NPOLHG) = FVDATA(J)%TPOLH(1:NPOLHG)
+
+                    call spmd_send(FVDATA_1D_ARRAY,12*NPOLHG,IT_SPMD(1),25000)
+                    call my_dealloc(FVDATA_1D_ARRAY)
+                 endif
+
+                 if (ispmd == 0)then
+                    call my_alloc(FVDATA_1D_ARRAY, 12*NPOLHG, "FVDATA_1D_ARRAY")
+                    call spmd_recv(FVDATA_1D_ARRAY,12*NPOLHG,IT_SPMD(FVSPMD(J)%PMAIN),25000)
+
+                    FVDATA_P(J)%CENTROID_POLH(1,1:NPOLHG) = FVDATA_1D_ARRAY(00*NPOLHG+1:01*NPOLHG)
+                    FVDATA_P(J)%CENTROID_POLH(2,1:NPOLHG) = FVDATA_1D_ARRAY(01*NPOLHG+1:02*NPOLHG)
+                    FVDATA_P(J)%CENTROID_POLH(3,1:NPOLHG) = FVDATA_1D_ARRAY(02*NPOLHG+1:03*NPOLHG)
+                    FVDATA_P(J)%QPOLH(1,1:NPOLHG)         = FVDATA_1D_ARRAY(03*NPOLHG+1:04*NPOLHG)
+                    FVDATA_P(J)%QPOLH(2,1:NPOLHG)         = FVDATA_1D_ARRAY(04*NPOLHG+1:05*NPOLHG)
+                    FVDATA_P(J)%QPOLH(3,1:NPOLHG)         = FVDATA_1D_ARRAY(05*NPOLHG+1:06*NPOLHG)
+                    FVDATA_P(J)%PPOLH(1:NPOLHG)           = FVDATA_1D_ARRAY(06*NPOLHG+1:07*NPOLHG)
+                    FVDATA_P(J)%SSPPOLH(1:NPOLHG)         = FVDATA_1D_ARRAY(07*NPOLHG+1:08*NPOLHG)
+                    FVDATA_P(J)%DTPOLH(1:NPOLHG)          = FVDATA_1D_ARRAY(08*NPOLHG+1:09*NPOLHG)
+                    FVDATA_P(J)%MPOLH(1:NPOLHG)           = FVDATA_1D_ARRAY(09*NPOLHG+1:10*NPOLHG)
+                    FVDATA_P(J)%RPOLH(1:NPOLHG)           = FVDATA_1D_ARRAY(10*NPOLHG+1:11*NPOLHG)
+                    FVDATA_P(J)%TPOLH(1:NPOLHG)           = FVDATA_1D_ARRAY(11*NPOLHG+1:12*NPOLHG)
+                    USER_NOD_ID%FVMBAG_LEN = USER_NOD_ID%FVMBAG_LEN + NPOLHG
+                    call my_dealloc(FVDATA_1D_ARRAY)
+                 endif
+              endif
+
+            ENDDO
+          ENDIF!NFVBAG > 0
+
+        ELSE !IF NSPMD==1
+
+          AIRBAGS_TOTAL_FVM_IN_H3D_G = AIRBAGS_TOTAL_FVM_IN_H3D
+          IF(NFVBAG > 0)THEN
+            ALLOCATE(FVDATA_P(NFVBAG))
+            DO J=1,NFVBAG
+              NPOLH = FVDATA(J)%NPOLH
+              NPOLH_ANIM = FVDATA(J)%NPOLH
+              NPOLH = MAX(1,NPOLH) !allocation size 1 if no polyhedron
+              ALLOCATE (FVDATA_P(J)%CENTROID_POLH(3,NPOLH))
+              ALLOCATE (FVDATA_P(J)%QPOLH(3,NPOLH))
+              ALLOCATE (FVDATA_P(J)%PPOLH(NPOLH))
+              ALLOCATE (FVDATA_P(J)%SSPPOLH(NPOLH))
+              ALLOCATE (FVDATA_P(J)%DTPOLH(NPOLH))
+              ALLOCATE (FVDATA_P(J)%MPOLH(NPOLH))
+              ALLOCATE (FVDATA_P(J)%RPOLH(NPOLH))
+              ALLOCATE (FVDATA_P(J)%TPOLH(NPOLH))
+              ! 10*NPOLH
+              FVDATA_P(J)%NPOLH = NPOLH
+              FVDATA_P(J)%NPOLH_ANIM = NPOLH_ANIM
+              FVDATA_P(J)%CENTROID_POLH(1,1:NPOLH) = FVDATA(J)%CENTROID_POLH(1,1:NPOLH)
+              FVDATA_P(J)%CENTROID_POLH(2,1:NPOLH) = FVDATA(J)%CENTROID_POLH(2,1:NPOLH)
+              FVDATA_P(J)%CENTROID_POLH(3,1:NPOLH) = FVDATA(J)%CENTROID_POLH(3,1:NPOLH)
+              FVDATA_P(J)%QPOLH(1,1:NPOLH)         = FVDATA(J)%QPOLH(1,1:NPOLH)
+              FVDATA_P(J)%QPOLH(2,1:NPOLH)         = FVDATA(J)%QPOLH(2,1:NPOLH)
+              FVDATA_P(J)%QPOLH(3,1:NPOLH)         = FVDATA(J)%QPOLH(3,1:NPOLH)
+              FVDATA_P(J)%PPOLH(1:NPOLH)           = FVDATA(J)%PPOLH(1:NPOLH)
+              FVDATA_P(J)%SSPPOLH(1:NPOLH)         = FVDATA(J)%SSPPOLH(1:NPOLH)
+              FVDATA_P(J)%DTPOLH(1:NPOLH)          = FVDATA(J)%DTPOLH(1:NPOLH)
+              FVDATA_P(J)%MPOLH(1:NPOLH)           = FVDATA(J)%MPOLH(1:NPOLH)
+              FVDATA_P(J)%RPOLH(1:NPOLH)           = FVDATA(J)%RPOLH(1:NPOLH)
+              FVDATA_P(J)%TPOLH(1:NPOLH)           = FVDATA(J)%TPOLH(1:NPOLH)
+              USER_NOD_ID%FVMBAG_LEN = USER_NOD_ID%FVMBAG_LEN + NPOLH
+            ENDDO
+          ENDIF ! NFVBAG > 0
+        ENDIF
+
+        MAX_NOD_ID = MAX_NOD_ID + USER_NOD_ID%FVMBAG_LEN !incrementing MAX_NOD_ID for next option which is generating virtual nodes
+
+        IF(NFVBAG > 0 .AND. ISPMD==0 .AND. H3D_DATA%IH3D == 1)THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL H3D_CREATE_FVMBAG_CENTROIDS(MONVOL,VOLMON, FVDATA_P, NFVBAG, SMONVOL, SVOLMON, USER_NOD_ID%FVMBAG_SHIFT)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+
+c**********************************************************************************************
+C CREATE SPH
+C**********************************************************************************************
+c
+        IF(H3D_DATA%IH3D == 1) THEN
+          IF(NSPMD > 1) THEN
+            DO I=1,NUMSPH
+              DO J=1,2
+                KXSP_TMP(J,I) = KXSP(J,I)
+              ENDDO
+              KXSP_TMP(3,I) = ITAB(KXSP(3,I))
+              DO J=4,NISP
+                KXSP_TMP(J,I) = KXSP(J,I)
+              ENDDO
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(KXSP_TMP,NISP*NUMSPH,KXSP_P,NISP*NUMSPHG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+c
+          ELSE
+            DO I=1,NUMSPH
+              DO J=1,2
+                KXSP_P(J,I) = KXSP(J,I)
+              ENDDO
+              KXSP_P(3,I) = ITAB(KXSP(3,I))
+              DO J=4,NISP
+                KXSP_P(J,I) = KXSP(J,I)
+              ENDDO
+            ENDDO
+          ENDIF
+c
+          IF(NSPMD > 1) THEN 
+            if (ispmd == 0)then
+                IPARTSP_P(1:NUMSPHG)=0
+            endif
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTSP,NUMSPH,IPARTSP_P,NUMSPHG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMSPH
+              IPARTSP_P(I) = IPARTSP(I)
+            ENDDO
+          ENDIF
+        ENDIF
+
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_SPH(ITAB_P,NUMNODG,KXSP_P,NISP,NUMSPHG,IPARTSP_P,IPART,LIPART1,X,H3D_DATA%PARTS(1)%PART)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+c**********************************************************************************************
+C CREATE 1D CONNECTIVITY
+C**********************************************************************************************
+C
+C         CREATE SPRINGS
+C
+        IF(H3D_DATA%IH3D == 1) THEN
+          IF(NSPMD > 1) THEN
+            DO I=1,NUMELR
+              IXR_TMP(1,I) = IXR(1,I)
+              DO J=2,4
+                IF (IXR(J,I) /= 0 )IXR_TMP(J,I) = ITAB(IXR(J,I))
+              ENDDO
+              IXR_TMP(4:NIXR,I) = IXR(4:NIXR,I)
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXR_TMP,NIXR*NUMELR,IXR_P,NIXR*NUMELRG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+c
+          ELSE
+            DO I=1,NUMELR
+              IXR_P(1,I) = IXR(1,I)
+              DO J=2,4
+                IF (IXR(J,I) /= 0 ) IXR_P(J,I) = ITAB(IXR(J,I))
+              ENDDO
+              IXR_P(4:NIXR,I) = IXR(4:NIXR,I)
+            ENDDO
+          ENDIF
+c
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTR,NUMELR,IPARTR_P,NUMELRG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELR
+              IPARTR_P(I) = IPARTR(I)
+            ENDDO
+          ENDIF
+        ENDIF
+c
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_SPRINGS(ITAB,NUMNOD,IXR_P,NIXR,NUMELRG,IPARTR_P,IPART,LIPART1,H3D_DATA%PARTS(1)%PART)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+C         CREATE BEAMS
+C
+C
+        IF(H3D_DATA%IH3D == 1) THEN
+          IF(NSPMD > 1) THEN
+            DO I=1,NUMELP
+              IXP_TMP(1,I) = IXP(1,I)
+              DO J=2,4
+                IXP_TMP(J,I) = ITAB(IXP(J,I))
+              ENDDO
+              IXP_TMP(4:NIXP,I) = IXP(4:NIXP,I)
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXP_TMP,NIXP*NUMELP,IXP_P,NIXP*NUMELPG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+c
+          ELSE
+            DO I=1,NUMELP
+              IXP_P(1,I) = IXP(1,I)
+              DO J=2,4
+                IXP_P(J,I) = ITAB(IXP(J,I))
+              ENDDO
+              IXP_P(4:NIXP,I) = IXP(4:NIXP,I)
+            ENDDO
+          ENDIF
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTP,NUMELP,IPARTP_P,NUMELPG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELP
+              IPARTP_P(I) = IPARTP(I)
+            ENDDO
+          ENDIF
+        ENDIF
+c
+c
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_BEAMS(ITAB,NUMNOD,IXP_P,NIXP,NUMELPG,IPARTP_P,IPART,LIPART1,H3D_DATA%PARTS(1)%PART)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+C         CREATE TRUSS
+C
+C
+        IF(H3D_DATA%IH3D == 1) THEN
+          IF(NSPMD > 1) THEN
+            DO I=1,NUMELT
+              IXT_TMP(1,I) = IXT(1,I)
+              DO J=2,4
+                IXT_TMP(J,I) = ITAB(IXT(J,I))
+              ENDDO
+              IXT_TMP(4:NIXT,I) = IXT(4:NIXT,I)
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXT_TMP,NIXT*NUMELT,IXT_P,NIXP*NUMELTRG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+c
+          ELSE
+            DO I=1,NUMELT
+              IXT_P(1,I) = IXT(1,I)
+              DO J=2,4
+                IXT_P(J,I) = ITAB(IXT(J,I))
+              ENDDO
+              IXT_P(4:NIXT,I) = IXT(4:NIXT,I)
+            ENDDO
+          ENDIF
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTT,NUMELT,IPARTT_P,NUMELTRG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELT
+              IPARTT_P(I) = IPARTT(I)
+            ENDDO
+          ENDIF
+        ENDIF
+c
+c
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_TRUSS(ITAB,NUMNOD,IXT_P,NIXT,NUMELTRG,IPARTT_P,IPART,LIPART1,H3D_DATA%PARTS(1)%PART)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE RBODY CONNECTIVITY
+C**********************************************************************************************
+
+        IF(NSPMD > 1 .AND. H3D_DATA%IH3D == 1)THEN
+          NERBY = 0
+          IF (NRBODY>0)
+     .        CALL DRBYCNT(NERBY,NPBY,FR_RBY2)
+          NERBE2 = 0
+          IF (NRBE2G>0)
+     .      CALL DRBE2CNT(NERBE2,IRBE2,LRBE2,WEIGHT)
+          NERBE3 = 0
+          IF (NRBE3G>0)
+     .      CALL DRBE3CNT(NERBE3,IRBE3,LRBE3,WEIGHT)
+c
+          SBUFSPM=0
+          SBUFRECVM=0
+          SBUFSPO=0
+          SPORBY=0
+
+          DO I=1,NSPMD
+            SBUFSPM = SBUFSPM + IAD_RBY2(1,I)
+            SBUFRECVM = SBUFRECVM + IAD_RBY2(2,I)+1
+          ENDDO
+          SBUFSPM = SBUFSPM + 2*NRBYKIN
+          SBUFRECVM = SBUFRECVM + 2*NRBYKIN*NSPMD
+          DO I=1,NRBYKIN
+
+            IF ((ISPMD+1)==ABS(FR_RBY2(3,I)))
+     .        SBUFSPO = SBUFSPO + FR_RBY2(2,I)
+          ENDDO
+          SBUFSPO = SBUFSPO + NRBYKIN*2
+          IF (ISPMD==0) THEN
+            SPORBY = NERBY+NRBYKIN*2
+          ELSE
+            SPORBY=1
+          ENDIF
+
+          CALL H3D_CREATE_RBODIES_IMPI(NPBY,LPBY,FR_RBY2,IAD_RBY2,
+     .                          SBUFSPM,SBUFRECVM,SBUFSPO,SPORBY,
+     .                          NODGLOB,WEIGHT,ITAB,COMPID_RBODIES)
+
+          CALL H3D_CREATE_RBE2_IMPI(LRBE2, IRBE2,NODGLOB,WEIGHT,NERBE2,
+     .                           NERBE2T,ITAB,COMPID_RBE2S)
+
+          CALL H3D_CREATE_RBE3_IMPI(LRBE3, IRBE3,NODGLOB,WEIGHT,NERBE3,
+     .                           NERBE3T,ITAB,COMPID_RBE3S)
+
+        ELSE
+          IF(NSPMD == 1 .AND. ISPMD==0 .AND. H3D_DATA%IH3D == 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+            CALL C_H3D_CREATE_RBODIES(ITAB,NUMNOD,NPBY,NNPBY,LPBY,NRBODY,COMPID_RBODIES)
+            CALL C_H3D_CREATE_RBE2(ITAB,NUMNOD,IRBE2,NRBE2L,LRBE2,NRBE2,COMPID_RBE2S,COMPID_RBE2S)
+            CALL C_H3D_CREATE_RBE3(ITAB,NUMNOD,IRBE3,NRBE3L,LRBE3,NRBE3,COMPID_RBE3S,COMPID_RBE3S)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          ENDIF
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE SH4N & SH3N CONNECTIVITY
+C**********************************************************************************************
+c
+        IF(H3D_DATA%IH3D  == 1) THEN
+          IF(NSPMD > 1 .AND. H3D_DATA%IH3D == 1) THEN
+            DO I=1,NUMELC
+              IXC_TMP(1,I) = IXC(1,I)
+              DO J=2,5
+                IXC_TMP(J,I) = ITAB(IXC(J,I))
+              ENDDO
+              IXC_TMP(6:NIXC,I) = IXC(6:NIXC,I)
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXC_TMP,NIXC*NUMELC,IXC_P,NIXC*NUMELCG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+c
+            DO I=1,NUMELTG
+              IXTG_TMP(1,I) = IXTG(1,I)
+              DO J=2,4
+                IXTG_TMP(J,I) = ITAB(IXTG(J,I))
+              ENDDO
+              IXTG_TMP(5:NIXTG,I) = IXTG(5:NIXTG,I)
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXTG_TMP,NIXTG*NUMELTG,IXTG_P,NIXTG*NUMELTGG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+c
+          ELSE
+            DO I=1,NUMELC
+              IXC_P(1,I) = IXC(1,I)
+              DO J=2,5
+                IXC_P(J,I) = ITAB(IXC(J,I))
+              ENDDO
+              IXC_P(6:NIXC,I) = IXC(6:NIXC,I)
+            ENDDO
+
+            DO I=1,NUMELTG
+              IXTG_P(1,I) = IXTG(1,I)
+              DO J=2,4
+                IXTG_P(J,I) = ITAB(IXTG(J,I))
+              ENDDO
+              IXTG_P(5:NIXTG,I) = IXTG(5:NIXTG,I)
+            ENDDO
+
+          ENDIF
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTC,NUMELC,IPARTC_P,NUMELCG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTTG,NUMELTG,IPARTTG_P,NUMELTGG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELC
+              IPARTC_P(I) = IPARTC(I)
+            ENDDO
+            DO I=1,NUMELTG
+              IPARTTG_P(I) = IPARTTG(I)
+            ENDDO
+          ENDIF
+        ENDIF
+c
+
+
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_SHELLS(ITAB_P,NUMNODG,IXC_P,NIXC,NUMELCG,IPARTC_P,IPART,LIPART1,
+     .                             H3D_DATA%PARTS(1)%PART)
+          CALL C_H3D_CREATE_SH3NS(ITAB_P,NUMNODG,IXTG_P,NIXTG,NUMELTGG,IPARTTG_P,IPART,LIPART1,
+     .                                    H3D_DATA%PARTS(1)%PART)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE RWALLS
+C**********************************************************************************************
+c
+        MAX_NOD_ID = USER_NOD_ID%FVMBAG_SHIFT + USER_NOD_ID%FVMBAG_LEN
+        USER_NOD_ID%RWALL_SHIFT = MAX_NOD_ID
+
+        IF(H3D_DATA%IH3D  == 1 .AND. NRWALL>0) THEN
+
+          IF (ALLOCATED(D_H3D)) THEN
+            CALL SCANOR(X,D_H3D,CDG,XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX,SCALE,
+     .               WEIGHT)
+          ELSE
+            CALL SCANOR(X,D,CDG,XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX,SCALE,
+     .               WEIGHT)
+          ENDIF
+C
+
+          CALL H3D_DXYZ_RWALL(
+     2                   NSTRF,RWBUF,NPRW  ,X,XMIN,
+     3                   YMIN,ZMIN,XMAX,YMAX,ZMAX,
+     4                   FR_SEC,FR_WALL,WEIGHT,ITAB,
+     5                   XWL ,YWL , ZWL, V1, V2, V3, VV1, VV2, VV3, XL, XN, YN, ZN )
+
+
+          IF(ISPMD==0) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+            CALL C_H3D_CREATE_RWALLS(NOM_OPT, LNOPT1, I16D, NPRW, NRWALL, USER_NOD_ID%RWALL_SHIFT,
+     .                             XWL ,YWL , ZWL, V1, V2, V3, VV1, VV2, VV3, XL, XN, YN, ZN, USER_NOD_ID%RWALL_LEN )
+            CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+            MAX_NOD_ID = MAX_NOD_ID + USER_NOD_ID%RWALL_LEN !incrementing MAX_NOD_ID for next option which is generating virtual nodes
+          ENDIF
+
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE SOLIDS CONNECTIVITY
+C**********************************************************************************************
+c
+        IF(H3D_DATA%IH3D == 1) THEN
+
+          IF(NSPMD > 1) THEN
+            call my_alloc(IXS_TMP, NIXS, NUMELS8, "IXS_TMP")
+c
+            DO I=1,NUMELS8
+              IXS_TMP(1,I) = IXS(1,I)
+              DO J=2,9
+                IXS_TMP(J,I) = ITAB(IXS(J,I))
+              ENDDO
+              IXS_TMP(10:NIXS,I) = IXS(10:NIXS,I)
+            ENDDO
+c
+            DO I=1,NUMELS10
+              IXS10_TMP(1,I) = ITAB(IXS(2,NUMELS8+I))
+              IXS10_TMP(2,I) = ITAB(IXS(4,NUMELS8+I))
+              IXS10_TMP(3,I) = ITAB(IXS(7,NUMELS8+I))
+              IXS10_TMP(4,I) = ITAB(IXS(6,NUMELS8+I))
+              DO J=1,6
+                IF (IXS10(J,I)>0) THEN
+                  IXS10_TMP(4+J,I) = ITAB(IXS10(J,I))
+                ELSE
+                  IXS10_TMP(4+J,I) = 0
+                END IF
+              ENDDO
+              IXS10_TMP(11,I) = IXS(NIXS,NUMELS8+I)
+            ENDDO
+c
+c
+            DO I=1,NUMELS16
+              IXS16_TMP(1,I) = ITAB(IXS(2,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(2,I) = ITAB(IXS(3,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(3,I) = ITAB(IXS(4,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(4,I) = ITAB(IXS(5,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(5,I) = ITAB(IXS(6,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(6,I) = ITAB(IXS(7,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(7,I) = ITAB(IXS(8,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_TMP(8,I) = ITAB(IXS(9,NUMELS8+NUMELS10+NUMELS20+I))
+              DO J=1,8
+                IXS16_TMP(8+J,I) = ITAB(IXS16(J,I))
+              ENDDO
+              IXS16_TMP(17,I) = IXS(NIXS,NUMELS8+NUMELS10+NUMELS20+I)
+            ENDDO
+c
+c
+            DO I=1,NUMELS20
+              IXS20_TMP(1,I) = ITAB(IXS(2,NUMELS8+NUMELS10+I))
+              IXS20_TMP(2,I) = ITAB(IXS(3,NUMELS8+NUMELS10+I))
+              IXS20_TMP(3,I) = ITAB(IXS(4,NUMELS8+NUMELS10+I))
+              IXS20_TMP(4,I) = ITAB(IXS(5,NUMELS8+NUMELS10+I))
+              IXS20_TMP(5,I) = ITAB(IXS(6,NUMELS8+NUMELS10+I))
+              IXS20_TMP(6,I) = ITAB(IXS(7,NUMELS8+NUMELS10+I))
+              IXS20_TMP(7,I) = ITAB(IXS(8,NUMELS8+NUMELS10+I))
+              IXS20_TMP(8,I) = ITAB(IXS(9,NUMELS8+NUMELS10+I))
+              DO J=1,12
+                IXS20_TMP(8+J,I) = ITAB(IXS20(J,I))
+              ENDDO
+              IXS20_TMP(21,I) = IXS(NIXS,NUMELS8+NUMELS10+I)
+            ENDDO
+c
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXS_TMP,NIXS*NUMELS8,IXS_P,NIXS*(NUMELSG-NUMELS10G-NUMELS16G-NUMELS20G))
+            CALL SPMD_H3D_GATHER_I(IXS10_TMP,11*NUMELS10,IXS10_P,11*NUMELS10G)
+            CALL SPMD_H3D_GATHER_I(IXS16_TMP,17*NUMELS16,IXS16_P,17*NUMELS16G)
+            CALL SPMD_H3D_GATHER_I(IXS20_TMP,21*NUMELS20,IXS20_P,21*NUMELS20G)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            call my_dealloc(IXS_TMP)
+          ELSE
+c
+            DO I=1,NUMELS8
+              IXS_P(1,I) = IXS(1,I)
+              DO J=2,9
+                IXS_P(J,I) = ITAB(IXS(J,I))
+              ENDDO
+              IXS_P(10:NIXS,I) = IXS(10:NIXS,I)
+            ENDDO
+c
+            DO I=1,NUMELS10
+              IXS10_P(1,I) = ITAB(IXS(2,NUMELS8+I))
+              IXS10_P(2,I) = ITAB(IXS(4,NUMELS8+I))
+              IXS10_P(3,I) = ITAB(IXS(7,NUMELS8+I))
+              IXS10_P(4,I) = ITAB(IXS(6,NUMELS8+I))
+              DO J=1,6
+                IXS10_P(4+J,I) = ITAB(IXS10(J,I))
+              ENDDO
+              IXS10_P(11,I) = IXS(NIXS,NUMELS8+I)
+            ENDDO
+c
+            DO I=1,NUMELS16
+              IXS16_P(1,I) = ITAB(IXS(2,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(2,I) = ITAB(IXS(3,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(3,I) = ITAB(IXS(4,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(4,I) = ITAB(IXS(5,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(5,I) = ITAB(IXS(6,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(6,I) = ITAB(IXS(7,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(7,I) = ITAB(IXS(8,NUMELS8+NUMELS10+NUMELS20+I))
+              IXS16_P(8,I) = ITAB(IXS(9,NUMELS8+NUMELS10+NUMELS20+I))
+              DO J=1,8
+                IXS16_P(8+J,I) = IXS16(J,I)
+              ENDDO
+              IXS16_P(17,I) = IXS(NIXS,NUMELS8+NUMELS10+NUMELS20+I)
+            ENDDO
+c
+            DO I=1,NUMELS20
+              IXS20_P(1,I) = ITAB(IXS(2,NUMELS8+NUMELS10+I))
+              IXS20_P(2,I) = ITAB(IXS(3,NUMELS8+NUMELS10+I))
+              IXS20_P(3,I) = ITAB(IXS(4,NUMELS8+NUMELS10+I))
+              IXS20_P(4,I) = ITAB(IXS(5,NUMELS8+NUMELS10+I))
+              IXS20_P(5,I) = ITAB(IXS(6,NUMELS8+NUMELS10+I))
+              IXS20_P(6,I) = ITAB(IXS(7,NUMELS8+NUMELS10+I))
+              IXS20_P(7,I) = ITAB(IXS(8,NUMELS8+NUMELS10+I))
+              IXS20_P(8,I) = ITAB(IXS(9,NUMELS8+NUMELS10+I))
+              DO J=1,12
+                IXS20_P(8+J,I) = ITAB(IXS20(J,I))
+              ENDDO
+              IXS20_P(21,I) = IXS(NIXS,NUMELS8+NUMELS10+I)
+            ENDDO
+          ENDIF
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTS,NUMELS8,IPARTS_P,NUMELSG-NUMELS10G-NUMELS16G-NUMELS20G)
+            CALL SPMD_H3D_GATHER_I(IPARTS(NUMELS8+1),NUMELS10,IPARTS10_P,NUMELS10G)
+            CALL SPMD_H3D_GATHER_I(IPARTS(NUMELS8+NUMELS10+1),NUMELS20,IPARTS20_P,NUMELS20G)
+            CALL SPMD_H3D_GATHER_I(IPARTS(NUMELS8+NUMELS10+NUMELS20+1),NUMELS16,IPARTS16_P,NUMELS16G)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELS8
+              IPARTS_P(I) = IPARTS(I)
+            ENDDO
+            DO I=1,NUMELS10
+              IPARTS10_P(I) = IPARTS(I+NUMELS8)
+            ENDDO
+            DO I=1,NUMELS20
+              IPARTS20_P(I) = IPARTS(I+NUMELS8+NUMELS10)
+            ENDDO
+            DO I=1,NUMELS16
+              IPARTS16_P(I) = IPARTS(I+NUMELS8+NUMELS10+NUMELS20)
+            ENDDO
+          ENDIF
+        ENDIF
+c
+c
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_SOLID8N(ITAB_P,NUMNODG,IXS_P,NIXS,NUMELSG,IPARTS_P,IPART,LIPART1,
+     .                    H3D_DATA%PARTS(1)%PART,NUMELS10G,IXS10_P,IPARTS10_P,NUMELS16G,IXS16_P,
+     .                    IPARTS16_P,NUMELS20G,IXS20_P,IPARTS20_P)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE QUADS CONNECTIVITY
+C**********************************************************************************************
+c
+        IF(H3D_DATA%IH3D == 1) THEN
+          IF(NSPMD > 1) THEN
+            DO I=1,NUMELQ
+              IXQ_TMP(1,I) = IXQ(1,I)
+              DO J=2,5
+                IXQ_TMP(J,I) = ITAB(IXQ(J,I))
+              ENDDO
+              IXQ_TMP(6:NIXQ,I) = IXQ(6:NIXQ,I)
+            ENDDO
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXQ_TMP,NIXQ*NUMELQ,IXQ_P,NIXQ*NUMELQG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELQ
+              IXQ_P(1,I) = IXQ(1,I)
+              DO J=2,5
+                IXQ_P(J,I) = ITAB(IXQ(J,I))
+              ENDDO
+              IXQ_P(6:NIXQ,I) = IXQ(6:NIXQ,I)
+            ENDDO
+          ENDIF
+          IF(NSPMD > 1) THEN
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IPARTQ,NUMELQ,IPARTQ_P,NUMELQG)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            DO I=1,NUMELQ
+              IPARTQ_P(I) = IPARTQ(I)
+            ENDDO
+          ENDIF
+        ENDIF
+c
+c
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_QUADS(ITAB_P,NUMNODG,IPART,LIPART1,H3D_DATA%PARTS(1)%PART,
+     .                    IXQ_P,NIXQ,NUMELQG,IPARTQ_P)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+c**********************************************************************************************
+C CREATE SKIN (4-N) CONNECTIVITY ( THICK SHELLS +solid +PLOAD...)
+C**********************************************************************************************
+C-------------nodal_pid used for PLOAD---
+        IF (NUMSKINP>0) THEN
+          call my_alloc(NODAL_IPART, NUMNOD, "NODAL_IPART")
+          call my_alloc(IMAPSKP, NUMSKINP0, "IMAPSKP")
+          CALL GET_NODAL_IPART(ELBUF_TAB,IPARG,IPARTC,IPARTTG,IPARTS,
+     .                          IXC, IXTG, IXS,IXS10,IXS16,IXS20,
+     .                          NODAL_IPART)
+          CALL H3D_SKIN_PRE_MAP(IBCL  ,ILOADP  ,LLOADP ,IMAPSKP,LOADS,PBLAST)
+        END IF
+        IF(H3D_DATA%IH3D == 1 .AND. NUMSKING>0 ) THEN
+C----create connectivity IXSKIN_P(NIXQ,NUMSKING),IPARTSKIN_P(NUMSKING)
+          IXSKIN_TMP = 0
+          CALL H3D_SKIN_IXSKIN(ELBUF_TAB,IPARG,IPARTS,IXS,IXS10,
+     .                         ITAB ,IXSKIN_TMP  ,TAG_SKINS6,
+     .                         IBCL,ILOADP,LLOADP,NODAL_IPART,IMAPSKP,LOADS,PBLAST)
+c--------IXSKIN_TMP(1,i) :ipart (instead of mid)--IXSKIN_TMP(2-5,i) : Nj(user_id)
+          IF(NSPMD > 1) THEN
+C
+            CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            CALL SPMD_H3D_GATHER_I(IXSKIN_TMP,NIXSKIN*NUMSKIN,IXSKIN_P,NIXSKIN*NUMSKING)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          ELSE
+            IXSKIN_P(1:NIXSKIN,1:NUMSKIN) = IXSKIN_TMP(1:NIXSKIN,1:NUMSKIN)
+          END IF
+
+c
+          IF(ISPMD == 0) THEN
+C-----usr_id not important but unique ---------
+            DO I=1,NUMSKING
+              IPARTSKIN_P(I) = IXSKIN_P(1,I)
+              IXSKIN_P(NIXSKIN,I) = I
+            ENDDO
+            CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+C
+            CALL C_H3D_CREATE_SKINS(ITAB_P,NUMNODG,IPART,LIPART1,H3D_DATA%PARTS(1)%PART,
+     .                              IXSKIN_P,NIXSKIN,NUMSKING,IPARTSKIN_P)
+            CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          ENDIF
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE NODAL DISPLACEMENT DATAS
+C**********************************************************************************************
+        IF(ISPMD==0.AND. H3D_DATA%IH3D == 1) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_CREATE_DISPLACEMENT_DATATYPE()
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+c**********************************************************************************************
+C CREATE RESULTS DATAS
+C**********************************************************************************************
+        IF(ISPMD==0.AND. ( H3D_DATA%IH3D_RUN == 1)) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL H3D_CREATE_DATATYPE(H3D_DATA,IPARI,OUTPUT)
+C
+c**********************************************************************************************
+C FINALIZE FORMAT
+C**********************************************************************************************
+          CALL C_H3D_CREATE_RESULTS_END()
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+        ENDIF
+C
+c**********************************************************************************************
+C UPDATE NODES DISPLACEMENTS
+c**********************************************************************************************
+c
+        IF(NRWALL>0) THEN
+
+          IF (ALLOCATED(D_H3D)) THEN
+            CALL SCANOR(X,D_H3D,CDG,XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX,SCALE,
+     .               WEIGHT)
+          ELSE
+            CALL SCANOR(X,D,CDG,XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX,SCALE,
+     .               WEIGHT)
+          ENDIF
+C
+
+          IF (ALLOCATED(D_H3D)) THEN
+            CALL H3D_DXYZ_RWALL_UPDATE(
+     2                   NSTRF,RWBUF,NPRW  ,D_H3D,XMIN,
+     3                   YMIN,ZMIN,XMAX,YMAX,ZMAX,
+     4                   FR_SEC,FR_WALL,WEIGHT,ITAB,
+     5                   XWL ,YWL , ZWL, V1, V2, V3, VV1, VV2, VV3)
+          ELSE
+            CALL H3D_DXYZ_RWALL_UPDATE(
+     2                   NSTRF,RWBUF,NPRW  ,D,XMIN,
+     3                   YMIN,ZMIN,XMAX,YMAX,ZMAX,
+     4                   FR_SEC,FR_WALL,WEIGHT,ITAB,
+     5                   XWL ,YWL , ZWL, V1, V2, V3, VV1, VV2, VV3)
+          ENDIF
+        ENDIF
+c
+        H3DTITLE = ' '
+        LEN_H3DTITLE = 0
+        IF (H3D_DATA%N_TITLE /= 0) THEN
+          DO I=1,H3D_DATA%N_TITLE
+            IF(H3D_DATA%ITITLE(I) == H3D_DATA%IH3D) THEN
+              H3DTITLE = H3D_DATA%TITLE(I)
+              LEN_H3DTITLE = LEN_TRIM(H3D_DATA%TITLE(I))
+            ENDIF
+          ENDDO
+        ENDIF
+c
+        IF(NSPMD > 1 .AND. ISPMD==0)THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_UPDATE_NODES(H3DTITLE,LEN_H3DTITLE,TT,H3D_DATA%IH3D,
+     .                            ITAB_P,NUMNODG,D_P, NRWALL, USER_NOD_ID%RWALL_SHIFT,
+     .                            XWL ,YWL , ZWL, V1, V2,
+     .                            V3, VV1, VV2, VV3,KXSP_P,
+     .                            NISP,NUMSPHG,TAGNOD_P,NPRW)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ELSEIF(ISPMD==0 )THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_UPDATE_NODES(H3DTITLE,LEN_H3DTITLE,TT,H3D_DATA%IH3D,
+     .                            ITAB,NUMNOD,D_H3D, NRWALL, USER_NOD_ID%RWALL_SHIFT,
+     .                            XWL ,YWL , ZWL, V1, V2,
+     .                            V3, VV1, VV2, VV3,KXSP_P,
+     .                            NISP,NUMSPHG,TAGNOD_P,NPRW)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+
+        IF (ALLOCATED(D_H3D)) CALL MY_DEALLOC(D_H3D)
+
+        !VIRTUAL NODES
+        !  FVMBAGS
+        IF(NFVBAG > 0 .AND. ISPMD==0)THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL H3D_UPDATE_FVMBAG_CENTROIDS(H3DTITLE,LEN_H3DTITLE,H3D_DATA%IH3D,MONVOL,VOLMON, NFVBAG, SMONVOL, SVOLMON,
+     .                                     FVDATA_P, USER_NOD_ID%FVMBAG_SHIFT)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+c
+c**********************************************************************************************
+C OUTPUT RESULTS
+c**********************************************************************************************
+        call my_dealloc(D_P)
+
+        call my_alloc(NODAL_SCALAR, NUMNOD, "NODAL_SCALAR")
+        call my_alloc(NODAL_VECTOR, 3*NUMNOD, "NODAL_VECTOR")
+        call my_alloc(NODAL_TENSOR, 6*NUMNOD, "NODAL_TENSOR")
+        call my_alloc(NODE_ID, NUMNOD, "NODE_ID")
+        call my_alloc(IS_WRITEN_NODE, NUMNOD, "IS_WRITEN_NODE")
+        IS_WRITEN_NODE(1:NUMNOD) = 0
+
+        IF(ISPMD == 0)THEN
+          call my_alloc(NODAL_SCALAR_FVM, AIRBAGS_TOTAL_FVM_IN_H3D_G, "NODAL_SCALAR_FVM")
+          call my_alloc(NODAL_VECTOR_FVM, 3*AIRBAGS_TOTAL_FVM_IN_H3D_G, "NODAL_VECTOR_FVM")
+          call my_alloc(NODE_ID_FVM, AIRBAGS_TOTAL_FVM_IN_H3D_G, "NODE_ID_FVM")
+          call my_alloc(IS_WRITEN_NODE_FVM, AIRBAGS_TOTAL_FVM_IN_H3D_G, "IS_WRITEN_NODE_FVM")
+          IS_WRITEN_NODE_FVM(1:AIRBAGS_TOTAL_FVM_IN_H3D_G) = 0
+        ELSE
+          call my_alloc(NODAL_SCALAR_FVM, 1, "NODAL_SCALAR_FVM")
+          call my_alloc(NODAL_VECTOR_FVM, 3*1, "NODAL_VECTOR_FVM")
+          call my_alloc(NODE_ID_FVM, 1, "NODE_ID_FVM")
+          call my_alloc(IS_WRITEN_NODE_FVM, 1, "IS_WRITEN_NODE_FVM")
+          IS_WRITEN_NODE_FVM(1:1) = 0
+        ENDIF
+
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(IS_WRITEN_NODE_P, NUMNODG, "IS_WRITEN_NODE_P")
+          call my_alloc(NODAL_SCALAR_P, NUMNODG, "NODAL_SCALAR_P")
+          call my_alloc(NODAL_VECTOR_P, 3*NUMNODG, "NODAL_VECTOR_P")
+          call my_alloc(NODAL_TENSOR_P, 6*NUMNODG, "NODAL_TENSOR_P")
+          call my_alloc(NODE_ID_P, NUMNODG, "NODE_ID_P")
+          IS_WRITEN_NODE_P(1:NUMNODG) = 0
+        ELSE
+          call my_alloc(IS_WRITEN_NODE_P, 1, "IS_WRITEN_NODE_P")
+          call my_alloc(NODAL_SCALAR_P, 1, "NODAL_SCALAR_P")
+          call my_alloc(NODAL_VECTOR_P, 1, "NODAL_VECTOR_P")
+          call my_alloc(NODAL_TENSOR_P, 1, "NODAL_TENSOR_P")
+          call my_alloc(NODE_ID_P, 1, "NODE_ID_P")
+          IS_WRITEN_NODE_P(1) = 0
+        ENDIF
+c
+c
+        call my_alloc(ONED_SCALAR, NUMELR+NUMELP+NUMELT, "ONED_SCALAR")
+        call my_alloc(ONED_VECTOR, 3*(NUMELR+NUMELP+NUMELT), "ONED_VECTOR")
+        call my_alloc(ONED_TENSOR, 6*(NUMELR+NUMELP+NUMELT), "ONED_TENSOR")
+        call my_alloc(ONED_TORSOR, 9*(NUMELR+NUMELP+NUMELT), "ONED_TORSOR")
+        call my_alloc(ONED_ID, NUMELRG+NUMELPG+NUMELTRG, "ONED_ID")
+        call my_alloc(ONED_ITY, NUMELRG+NUMELPG+NUMELTRG, "ONED_ITY")
+        call my_alloc(IS_WRITEN_ONED, NUMELRG+NUMELPG+NUMELTRG, "IS_WRITEN_ONED")
+        ONED_ID(1:NUMELR+NUMELP+NUMELT) = 0
+        ONED_ITY(1:NUMELR+NUMELP+NUMELT) = 0
+        IS_WRITEN_ONED(1:NUMELR+NUMELP+NUMELT) = 0
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(ONED_SCALAR_P, NUMELRG+NUMELPG+NUMELTRG, "ONED_SCALAR_P")
+          call my_alloc(ONED_VECTOR_P, 3*(NUMELRG+NUMELPG+NUMELTRG), "ONED_VECTOR_P")
+          call my_alloc(ONED_TENSOR_P, 6*(NUMELRG+NUMELPG+NUMELTRG), "ONED_TENSOR_P")
+          call my_alloc(ONED_TORSOR_P, 9*(NUMELRG+NUMELPG+NUMELTRG), "ONED_TORSOR_P")
+          call my_alloc(ONED_ID_P, NUMELRG+NUMELPG+NUMELTRG, "ONED_ID_P")
+          call my_alloc(ONED_ITY_P, NUMELRG+NUMELPG+NUMELTRG, "ONED_ITY_P")
+          call my_alloc(IS_WRITEN_ONED_P, NUMELRG+NUMELPG+NUMELTRG, "IS_WRITEN_ONED_P")
+          IS_WRITEN_ONED_P(1:NUMELRG+NUMELPG+NUMELTRG) = 0
+          ALLOCATE(SHELL_TENSOR_STACK_P(3*(NUMELCG+NUMELTGG)))
+        ELSE
+          call my_alloc(ONED_SCALAR_P, 1, "ONED_SCALAR_P")
+          call my_alloc(ONED_VECTOR_P, 1, "ONED_VECTOR_P")
+          call my_alloc(ONED_TENSOR_P, 1, "ONED_TENSOR_P")
+          call my_alloc(ONED_TORSOR_P, 1, "ONED_TORSOR_P")
+          call my_alloc(ONED_ID_P, 1, "ONED_ID_P")
+          call my_alloc(ONED_ITY_P, 1, "ONED_ITY_P")
+          call my_alloc(IS_WRITEN_ONED_P, 1, "IS_WRITEN_ONED_P")
+          IS_WRITEN_ONED_P(1) = 0
+          ALLOCATE(SHELL_TENSOR_STACK_P(1))
+        ENDIF
+c
+c
+        call my_alloc(SHELL_SCALAR, NUMELC+NUMELTG, "SHELL_SCALAR")
+        call my_alloc(SHELL_STACK, MAX_SHELL_STACKSIZE, "SHELL_STACK")
+        call my_alloc(SHELL_STACK_P, NUMELCG+NUMELTGG, "SHELL_STACK_P")
+        call my_alloc(SHELL_VECTOR, 3*(NUMELC+NUMELTG), "SHELL_VECTOR")
+        call my_alloc(SHELL_TENSOR, 3*(NUMELC+NUMELTG), "SHELL_TENSOR")
+        ALLOCATE(SHELL_TENSOR_STACK(3*(NUMELC+NUMELTG)))
+        call my_alloc(SHELL_ID, NUMELC+NUMELTG, "SHELL_ID")
+        call my_alloc(SHELL_ITY, NUMELC+NUMELTG, "SHELL_ITY")
+        call my_alloc(IS_WRITEN_SHELL, NUMELC+NUMELTG, "IS_WRITEN_SHELL")
+        SHELL_ID(1:NUMELC+NUMELTG) = 0
+        SHELL_ITY(1:NUMELC+NUMELTG) = 0
+        IS_WRITEN_SHELL(1:NUMELC+NUMELTG) = 0
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(SHELL_SCALAR_P, NUMELCG+NUMELTGG, "SHELL_SCALAR_P")
+          call my_alloc(SHELL_VECTOR_P, 3*(NUMELCG+NUMELTGG), "SHELL_VECTOR_P")
+          call my_alloc(SHELL_TENSOR_P, 3*(NUMELCG+NUMELTGG), "SHELL_TENSOR_P")
+          call my_alloc(SHELL_ID_P, NUMELCG+NUMELTGG, "SHELL_ID_P")
+          call my_alloc(SHELL_ITY_P, NUMELCG+NUMELTGG, "SHELL_ITY_P")
+          call my_alloc(IS_WRITEN_SHELL_P, NUMELCG+NUMELTGG, "IS_WRITEN_SHELL_P")
+          IS_WRITEN_SHELL_P(1:NUMELCG+NUMELTGG) = 0
+        ELSE
+          call my_alloc(SHELL_SCALAR_P, 1, "SHELL_SCALAR_P")
+          call my_alloc(SHELL_VECTOR_P, 1, "SHELL_VECTOR_P")
+          call my_alloc(SHELL_TENSOR_P, 1, "SHELL_TENSOR_P")
+          call my_alloc(SHELL_ID_P, 1, "SHELL_ID_P")
+          call my_alloc(SHELL_ITY_P, 1, "SHELL_ITY_P")
+          call my_alloc(IS_WRITEN_SHELL_P, 1, "IS_WRITEN_SHELL_P")
+          IS_WRITEN_SHELL_P(1) = 0
+        ENDIF
+c
+c-------not available now with S16,S20
+        MAX_NCORN = 10
+        call my_alloc(SOLID_SCALAR, NUMELS, "SOLID_SCALAR")
+        call my_alloc(SOLID_VECTOR, 3*NUMELS, "SOLID_VECTOR")
+        call my_alloc(SOLID_TENSOR, 6*NUMELS, "SOLID_TENSOR")
+        call my_alloc(SOLID_TENSOR_CORNER, 6*NUMELS*MAX_NCORN, "SOLID_TENSOR_CORNER")
+        call my_alloc(SOLID_ID, NUMELS, "SOLID_ID")
+        call my_alloc(ISOLNOD, NUMELS, "ISOLNOD")
+        call my_alloc(SOLID_ITY, NUMELS, "SOLID_ITY")
+        call my_alloc(IS_WRITEN_SOLID, NUMELS, "IS_WRITEN_SOLID")
+        SOLID_ID(1:NUMELS) = 0
+        ISOLNOD(1:NUMELS) = 0
+        SOLID_ITY(1:NUMELS) = 0
+        IS_WRITEN_SOLID(1:NUMELS) = 0
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(SOLID_SCALAR_P, NUMELSG, "SOLID_SCALAR_P")
+          call my_alloc(SOLID_VECTOR_P, 3*NUMELSG, "SOLID_VECTOR_P")
+          call my_alloc(SOLID_TENSOR_P, 6*NUMELSG, "SOLID_TENSOR_P")
+          call my_alloc(SOLID_TENSOR_CORNER_P, 6*NUMELSG*MAX_NCORN, "SOLID_TENSOR_CORNER_P")
+          call my_alloc(SOLID_ID_P, NUMELSG, "SOLID_ID_P")
+          call my_alloc(SOLID_ITY_P, NUMELSG, "SOLID_ITY_P")
+          call my_alloc(ISOLNOD_P, NUMELSG, "ISOLNOD_P")
+          call my_alloc(IS_WRITEN_SOLID_P, NUMELSG, "IS_WRITEN_SOLID_P")
+          IS_WRITEN_SOLID_P(1:NUMELSG) = 0
+        ELSE
+          call my_alloc(SOLID_SCALAR_P, 1, "SOLID_SCALAR_P")
+          call my_alloc(SOLID_VECTOR_P, 1, "SOLID_VECTOR_P")
+          call my_alloc(SOLID_TENSOR_P, 1, "SOLID_TENSOR_P")
+          call my_alloc(SOLID_TENSOR_CORNER_P, 1, "SOLID_TENSOR_CORNER_P")
+          call my_alloc(SOLID_ID_P, 1, "SOLID_ID_P")
+          call my_alloc(SOLID_ITY_P, 1, "SOLID_ITY_P")
+          call my_alloc(ISOLNOD_P, 1, "ISOLNOD_P")
+          call my_alloc(IS_WRITEN_SOLID_P, 1, "IS_WRITEN_SOLID_P")
+          IS_WRITEN_SOLID_P(1) = 0
+        ENDIF
+c
+c
+        call my_alloc(SPH_SCALAR, NUMSPH, "SPH_SCALAR")
+        call my_alloc(SPH_TENSOR, 6*NUMSPH, "SPH_TENSOR")
+        call my_alloc(SPH_ID, NUMSPH, "SPH_ID")
+        call my_alloc(IS_WRITEN_SPH, NUMSPH, "IS_WRITEN_SPH")
+        SPH_ID(1:NUMSPH) = 0
+        IS_WRITEN_SPH(1:NUMSPH) = 0
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(SPH_SCALAR_P, NUMSPHG, "SPH_SCALAR_P")
+          call my_alloc(SPH_TENSOR_P, 6*NUMSPHG, "SPH_TENSOR_P")
+          call my_alloc(SPH_ID_P, NUMSPHG, "SPH_ID_P")
+          call my_alloc(IS_WRITEN_SPH_P, NUMSPHG, "IS_WRITEN_SPH_P")
+          IS_WRITEN_SPH_P(1:NUMSPHG) = 0
+        ELSE
+          call my_alloc(SPH_SCALAR_P, 1, "SPH_SCALAR_P")
+          call my_alloc(SPH_TENSOR_P, 1, "SPH_TENSOR_P")
+          call my_alloc(SPH_ID_P, 1, "SPH_ID_P")
+          call my_alloc(IS_WRITEN_SPH_P, 1, "IS_WRITEN_SPH_P")
+          IS_WRITEN_SPH_P(1) = 0
+        ENDIF
+c
+c
+        call my_alloc(QUAD_SCALAR, NUMELQ, "QUAD_SCALAR")
+        call my_alloc(QUAD_VECTOR, 3*NUMELQ, "QUAD_VECTOR")
+        call my_alloc(QUAD_TENSOR, 6*NUMELQ, "QUAD_TENSOR")
+        call my_alloc(QUAD_ID, NUMELQ, "QUAD_ID")
+        call my_alloc(IS_WRITEN_QUAD, NUMELQ, "IS_WRITEN_QUAD")
+        QUAD_ID(1:NUMELQ) = 0
+        IS_WRITEN_QUAD(1:NUMELQ) = 0
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(QUAD_SCALAR_P, NUMELQG, "QUAD_SCALAR_P")
+          call my_alloc(QUAD_VECTOR_P, 3*NUMELQG, "QUAD_VECTOR_P")
+          call my_alloc(QUAD_TENSOR_P, 6*NUMELQG, "QUAD_TENSOR_P")
+          call my_alloc(QUAD_ID_P, NUMELQG, "QUAD_ID_P")
+          call my_alloc(IS_WRITEN_QUAD_P, NUMELQG, "IS_WRITEN_QUAD_P")
+          IS_WRITEN_QUAD_P(1:NUMELQG) = 0
+        ELSE
+          call my_alloc(QUAD_SCALAR_P, 1, "QUAD_SCALAR_P")
+          call my_alloc(QUAD_VECTOR_P, 1, "QUAD_VECTOR_P")
+          call my_alloc(QUAD_TENSOR_P, 1, "QUAD_TENSOR_P")
+          call my_alloc(QUAD_ID_P, 1, "QUAD_ID_P")
+          call my_alloc(IS_WRITEN_QUAD_P, 1, "IS_WRITEN_QUAD_P")
+          IS_WRITEN_QUAD_P(1) = 0
+        ENDIF
+c-------- for skin : only SKIN_ID_P (user id): unique
+        call my_alloc(SKIN_TENSOR, 3*NUMSKIN, "SKIN_TENSOR")
+        call my_alloc(SKIN_VECTOR, 3*NUMSKIN, "SKIN_VECTOR")
+        call my_alloc(SKIN_SCALAR, NUMSKIN, "SKIN_SCALAR")
+        call my_alloc(IS_WRITEN_SKIN, NUMSKIN, "IS_WRITEN_SKIN")
+        IS_WRITEN_SKIN(1:NUMSKIN) = 0
+c
+        IF (ISPMD == 0 )THEN
+          call my_alloc(SKIN_TENSOR_P, 3*NUMSKING, "SKIN_TENSOR_P")
+          call my_alloc(SKIN_VECTOR_P, 3*NUMSKING, "SKIN_VECTOR_P")
+          call my_alloc(SKIN_SCALAR_P, NUMSKING, "SKIN_SCALAR_P")
+          call my_alloc(SKIN_ID_P, NUMSKING, "SKIN_ID_P")
+          call my_alloc(IS_WRITEN_SKIN_P, NUMSKING, "IS_WRITEN_SKIN_P")
+          IS_WRITEN_SKIN_P(1:NUMSKING) = 0
+        ELSE
+          call my_alloc(SKIN_TENSOR_P, 1, "SKIN_TENSOR_P")
+          call my_alloc(SKIN_VECTOR_P, 1, "SKIN_VECTOR_P")
+          call my_alloc(SKIN_SCALAR_P, 1, "SKIN_SCALAR_P")
+          call my_alloc(SKIN_ID_P, 1, "SKIN_ID_P")
+          call my_alloc(IS_WRITEN_SKIN_P, 1, "IS_WRITEN_SKIN_P")
+          IS_WRITEN_SKIN_P(1) = 0
+        ENDIF
+
+        N_OUTP_DATA = 0
+C-----------------------------------------------
+C UPDATE ELEMENTS OFF
+C-----------------------------------------------
+c
+        CALL H3D_SHELL_OFF(
+     .                   ELBUF_TAB ,IPARG ,IXC, IXTG,NUMELC,SHELL_SCALAR, SHELL_ID, SHELL_ITY,
+     .                   IPART, IPARTC ,IPARTTG)
+c
+        IF (NSPMD > 1 ) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_I(SHELL_ID,NUMELC+NUMELTG,SHELL_ID_P,NUMELCG+NUMELTGG)
+          CALL SPMD_H3D_GATHER_I(SHELL_ITY,NUMELC+NUMELTG,SHELL_ITY_P,NUMELCG+NUMELTGG)
+          CALL SPMD_H3D_GATHER_R(SHELL_SCALAR,NUMELC+NUMELTG,SHELL_SCALAR_P,NUMELCG+NUMELTGG)
+
+          ! Gather number of Shell & Triangle elements per processor
+          ! Permits to compute an Offset for H3D Scalar values
+          CALL SPMD_GATHER(NUMELC+NUMELTG,TMP_OFFSETS,1,1,IT_SPMD(1))
+          IF (ISPMD == 0) THEN
+             SH_TRIA_SPMD_OFFSETS(1) = 0
+             DO I=2,NSPMD+1
+                SH_TRIA_SPMD_OFFSETS(I) = SH_TRIA_SPMD_OFFSETS(I-1) + TMP_OFFSETS(I-1)
+             ENDDO
+          ENDIF
+          ! --------------------------------------------------------------------------
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          SHELL_ID_P(1:NUMELC+NUMELTG) =  SHELL_ID(1:NUMELC+NUMELTG)
+          SHELL_ITY_P(1:NUMELC+NUMELTG) =  SHELL_ITY(1:NUMELC+NUMELTG)
+          SHELL_SCALAR_P(1:NUMELC+NUMELTG) =  SHELL_SCALAR(1:NUMELC+NUMELTG)
+        ENDIF
+c
+        IF(ISPMD == 0) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_ERODED_SHELL(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .        NIXC,NUMELCG,IPARTC,IXTG,NIXTG,
+     .        NUMELTGG,IPARTTG,SHELL_SCALAR_P,SHELL_ID_P,
+     .        H3D_DATA%N_OUTP_H3D+3,SHELL_ITY_P,NUMELS,
+     .        NUMELQ,NUMELT,NUMELP,NUMELR)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+c
+        CALL H3D_SOLID_OFF(
+     .                   ELBUF_TAB ,IPARG ,IXS ,SOLID_SCALAR, SOLID_ID, SOLID_ITY, ISOLNOD)
+c
+        IF (NSPMD > 1 ) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_I(SOLID_ID,NUMELS,SOLID_ID_P,NUMELSG)
+          CALL SPMD_H3D_GATHER_I(SOLID_ITY,NUMELS,SOLID_ITY_P,NUMELSG)
+          CALL SPMD_H3D_GATHER_R(SOLID_SCALAR,NUMELS,SOLID_SCALAR_P,NUMELSG)
+          CALL SPMD_H3D_GATHER_I(ISOLNOD,NUMELS,ISOLNOD_P,NUMELSG)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          SOLID_ID_P(1:NUMELS) =  SOLID_ID(1:NUMELS)
+          SOLID_ITY_P(1:NUMELS) =  SOLID_ITY(1:NUMELS)
+          SOLID_SCALAR_P(1:NUMELS) =  SOLID_SCALAR(1:NUMELS)
+          ISOLNOD_P(1:NUMELS) =  ISOLNOD(1:NUMELS)
+        ENDIF
+c
+        IF(ISPMD == 0) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_ERODED_SOLID(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXS_P,
+     .                       NIXS,NUMELSG,IPARTS,SOLID_SCALAR_P,SOLID_ID_P,
+     .                       H3D_DATA%N_OUTP_H3D+4,SOLID_ITY_P,
+     .                       NUMELQ,NUMELT,NUMELP,NUMELR)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+        ENDIF
+c
+        CALL H3D_ONED_OFF(
+     .                   ELBUF_TAB ,IPARG ,IXT, IXP, IXR ,ONED_SCALAR, ONED_ID, ONED_ITY,
+     .                   IPART , IPARTT  ,IPARTP  ,IPARTR)
+c
+        IF (NSPMD > 1 ) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_I(ONED_ID,NUMELT+NUMELP+NUMELR,ONED_ID_P,NUMELTRG+NUMELPG+NUMELRG)
+          CALL SPMD_H3D_GATHER_I(ONED_ITY,NUMELT+NUMELP+NUMELR,ONED_ITY_P,NUMELTRG+NUMELPG+NUMELRG)
+          CALL SPMD_H3D_GATHER_R(ONED_SCALAR,NUMELT+NUMELP+NUMELR,ONED_SCALAR_P,NUMELTRG+NUMELPG+NUMELRG)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          ONED_ID_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ID(1:NUMELT+NUMELP+NUMELR)
+          ONED_ITY_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ITY(1:NUMELT+NUMELP+NUMELR)
+          ONED_SCALAR_P(1:NUMELT+NUMELP+NUMELR) =  ONED_SCALAR(1:NUMELT+NUMELP+NUMELR)
+        ENDIF
+c
+        IF(ISPMD == 0) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_ERODED_ONED(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXT_P,
+     .                       NIXT,NUMELTRG,IPARTT,IXP_P,NIXP,
+     .                       NUMELPG,IPARTP,IXR_P,NIXR,NUMELRG,
+     .                       IPARTR,ONED_SCALAR_P,ONED_ID_P,H3D_DATA%N_OUTP_H3D+5,ONED_ITY_P)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+        ENDIF
+c
+        CALL H3D_SPH_OFF(
+     .                   ELBUF_TAB ,IPARG ,KXSP ,SPH_SCALAR, SPH_ID)
+c
+        IF (NSPMD > 1 ) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_I(SPH_ID,NUMSPH,SPH_ID_P,NUMSPHG)
+          CALL SPMD_H3D_GATHER_R(SPH_SCALAR,NUMSPH,SPH_SCALAR_P,NUMSPHG)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          SPH_ID_P(1:NUMSPH) =  SPH_ID(1:NUMSPH)
+          SPH_SCALAR_P(1:NUMSPH) =  SPH_SCALAR(1:NUMSPH)
+        ENDIF
+c
+        IF(ISPMD == 0) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_ERODED_SPH(TT,H3D_DATA%IH3D,NUMSPHG,SPH_SCALAR_P,SPH_ID_P,
+     .                       H3D_DATA%N_OUTP_H3D+6)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+        ENDIF
+c
+        CALL H3D_QUAD_OFF(
+     .                   ELBUF_TAB ,IPARG ,IXQ,QUAD_SCALAR, QUAD_ID,
+     .                   IPART     ,IPARTQ)
+c
+        IF (NSPMD > 1 ) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_I(QUAD_ID,NUMELQ,QUAD_ID_P,NUMELQ)
+          CALL SPMD_H3D_GATHER_R(QUAD_SCALAR,NUMELQ,QUAD_SCALAR_P,NUMELQ)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          QUAD_ID_P(1:NUMELQ) =  QUAD_ID(1:NUMELQ)
+          QUAD_SCALAR_P(1:NUMELQ) =  QUAD_SCALAR(1:NUMELQ)
+        ENDIF
+c
+        IF(ISPMD == 0) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_ERODED_QUAD(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXQ_P,
+     .        NIXQ,NUMELQG,IPARTQ,QUAD_SCALAR_P,QUAD_ID_P,
+     .        H3D_DATA%N_OUTP_H3D+7)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+        CALL H3D_SKIN_OFF(ELBUF_TAB,IPARG,IXS,IXS10,TAG_SKINS6,SKIN_SCALAR)
+        IF (NSPMD > 1 ) THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+          CALL SPMD_H3D_GATHER_R(SKIN_SCALAR,NUMSKIN,SKIN_SCALAR_P,NUMSKING)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+        ELSE
+          SKIN_SCALAR_P(1:NUMSKIN) =  SKIN_SCALAR(1:NUMSKIN)
+        ENDIF
+c
+        IF(ISPMD == 0) THEN
+          DO II=1,NUMSKING
+            SKIN_ID_P(II) = II
+          ENDDO
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_ERODED_SKIN(TT,H3D_DATA%IH3D,ITAB,NUMNOD,SKIN_SCALAR_P,SKIN_ID_P,
+     .                           H3D_DATA%N_OUTP_H3D+8,NUMSKING)
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C-----------------------------------------------
+C  UPDATE RESULTS VALUES
+C-----------------------------------------------
+c
+        DO I = 1,H3D_DATA%N_OUTP_H3D
+c
+          IS_WRITEN_NODE(1:NUMNOD) = 0
+          IS_WRITEN_SOLID(1:NUMELS) = 0
+          IS_WRITEN_SHELL(1:NUMELC+NUMELTG) = 0
+          IS_WRITEN_ONED(1:NUMELR+NUMELP+NUMELT) = 0
+          IS_WRITEN_QUAD(1:NUMELQ) = 0
+          IS_WRITEN_SPH(1:NUMSPH) = 0
+          IS_WRITEN_SKIN(1:NUMSKIN) = 0
+c-----
+c nodal scalar
+c-----
+          IF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 1 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INTER_INPUT = H3D_DATA%OUTPUT_LIST(I)%INTER
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            N_H3D_PART_LIST = H3D_DATA%OUTPUT_LIST(I)%N_H3D_PART_LIST
+            INTERSKID = 0
+            IF(KEYWORD == 'SKID_LINE')THEN
+              DO NI=1,NINTER
+                IF(NI == INTER_INPUT ) THEN
+                  INTERSKID = H3D_DATA%N_SKID_INTER (NI)
+                  ITYSKID = IPARI(7,NI)
+                  EXIT
+                ENDIF
+              ENDDO
+            ENDIF
+            INTERFRIC = 0
+            IF(KEYWORD == 'CSE_FRIC')THEN
+              DO NI=1,NINTER
+                IF(NI == INTER_INPUT ) THEN
+                  INTERFRIC = H3D_DATA%N_CSE_FRIC_INTER (NI)
+                  EXIT
+                ENDIF
+              ENDDO
+            ENDIF
+c          IF(ISPMD == 0) print *,'nodal scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+          CALL H3D_NODAL_SCALAR(OUTPUT,
+     .      ELBUF_TAB         ,NODAL_SCALAR  ,IFUNC          ,IPARG                        ,GEO                       ,
+     .      MAS               ,PM            ,ITAB                         ,NODE_ID                   ,
+     .      INFO1             ,INFO2         ,IS_WRITEN_NODE ,H3D_DATA%OUTPUT_LIST(I)%PART ,IPARTC                    ,
+     .      IPARTTG           ,IXC           ,IXTG           ,TEMP                         ,IFLOW                     ,
+     .      RFLOW             ,IXS           ,IXQ            ,NV46                         ,MONVOL                    ,
+     .      VOLMON            ,ALE_CONNECT   ,DIAG_SMS       ,MS                           ,PDAMA2                    ,
+     .      X                 ,STIFR         ,STIFN          ,KEYWORD                      ,H3D_DATA                  ,
+     .      NPBY              ,RBY           ,INTERSKID      ,H3D_DATA%N_SCAL_SKID         ,PSKIDS                    ,
+     .      NODGLOB           ,ITYSKID       ,IPARTSP        ,IPARTR                       ,IPARTP                    ,
+     .      IPARTT            ,IPARTS        ,IPARTQ         ,KXSP                         ,IXR                       ,
+     .      IXP               ,IXT           ,N_H3D_PART_LIST,INTERFRIC                    ,CSEFRIC                   ,
+     .      CSEFRICG          ,CSEFRIC_STAMP ,CSEFRICG_STAMP ,NODAL_SCALAR_FVM             ,AIRBAGS_TOTAL_FVM_IN_H3D_G,
+     .      IS_WRITEN_NODE_FVM,ISPMD         ,FVDATA_P       ,USER_NOD_ID%FVMBAG_SHIFT     ,MULTI_FVM ,
+     .      GLOB_THERM%ITHERM_FE, NFVBAG)
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+
+              IF(KEYWORD == 'SKID_LINE')THEN
+                CALL SPMD_OUTPITAB(NODE_ID,WEIGHT,NODGLOB,NODE_ID_P)
+                CALL SPMD_OUTPITAB(IS_WRITEN_NODE,WEIGHT,NODGLOB,IS_WRITEN_NODE_P)
+                IF(ITYSKID== 21) THEN
+                  CALL SPMD_H3D_MAX_R_NODAL_VALUE_21(NODGLOB,NODAL_SCALAR_P,NUMNODG,PSKIDS,
+     .                 INTERSKID,H3D_DATA%N_SCAL_SKID)
+                ELSE
+                  CALL SPMD_H3D_MAX_R_NODAL_VALUE(NODGLOB,NODAL_SCALAR,NUMNOD,NODAL_SCALAR_P,NUMNODG)
+                ENDIF
+              ELSEIF(KEYWORD == 'CSE_FRIC'.AND.INTERFRIC > 0)THEN
+                CALL SPMD_OUTPITAB(NODE_ID,WEIGHT,NODGLOB,NODE_ID_P)
+                CALL SPMD_OUTPITAB(IS_WRITEN_NODE,WEIGHT,NODGLOB,IS_WRITEN_NODE_P)
+                IF(INTERFRIC <= OUTPUT%DATA%NINEFRIC ) THEN
+                  CALL SPMD_H3D_SUM_R_NODAL_VALUE(NODGLOB,NODAL_SCALAR,NUMNOD,NODAL_SCALAR_P,NUMNODG)
+                ELSE
+                  IF(ISPMD == 0) THEN
+                    NODAL_SCALAR_P(1:NUMNODG) =CSEFRIC_STAMP(INTERFRIC-OUTPUT%DATA%NINEFRIC,1:NUMNODG)
+                  ENDIF
+                ENDIF
+              ELSEIF((KEYWORD == 'CSE_FRIC'.AND.INTERFRIC == 0).OR.KEYWORD == 'CSE_FRICG')THEN
+                CALL SPMD_OUTPITAB(NODE_ID,WEIGHT,NODGLOB,NODE_ID_P)
+                CALL SPMD_OUTPITAB(IS_WRITEN_NODE,WEIGHT,NODGLOB,IS_WRITEN_NODE_P)
+                IF(NINTSTAMP==0) THEN
+                  CALL SPMD_H3D_SUM_R_NODAL_VALUE(NODGLOB,NODAL_SCALAR,NUMNOD,NODAL_SCALAR_P,NUMNODG)
+                ELSE
+                  CALL SPMD_H3D_SUM_R_NODAL_VALUE(NODGLOB,NODAL_SCALAR,NUMNOD,NODAL_SCALAR_P,NUMNODG)
+                  IF(ISPMD == 0) THEN
+                    NODAL_SCALAR_P(1:NUMNODG) =NODAL_SCALAR_P(1:NUMNODG) + CSEFRICG_STAMP(1:NUMNODG)
+                  ENDIF
+                ENDIF
+              ELSE
+                CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,NODE_ID,NUMNOD,NODE_ID_P,NUMNODG)
+                CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,IS_WRITEN_NODE,NUMNOD,IS_WRITEN_NODE_P,NUMNODG)
+                CALL SPMD_H3D_GATHER_R_NODAL_VALUE(WEIGHT,NODAL_SCALAR,NUMNOD,NODAL_SCALAR_P,NUMNODG)
+              ENDIF
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              NODE_ID_P(1:NUMNOD) =  NODE_ID(1:NUMNOD)
+              IS_WRITEN_NODE_P(1:NUMNOD) =  IS_WRITEN_NODE(1:NUMNOD)
+              NODAL_SCALAR_P(1:NUMNOD) =  NODAL_SCALAR(1:NUMNOD)
+            ENDIF
+c
+            ! nodal scalar for /NODE entities
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_NODAL_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMNODG,NODAL_SCALAR_P,NODE_ID_P,
+     .                             N_OUTP_DATA,IS_WRITEN_NODE_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+
+            ! nodal scalar for virtual nodes (FVM centroids)
+            IF(ISPMD == 0) THEN
+              IF(AIRBAGS_TOTAL_FVM_IN_H3D_G > 0)THEN
+                DO J=1,AIRBAGS_TOTAL_FVM_IN_H3D_G
+                  NODE_ID_FVM(J) = USER_NOD_ID%FVMBAG_SHIFT + J
+                ENDDO
+                CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+                CALL C_H3D_UPDATE_NODAL_FVMBAG_SCALAR(TT,H3D_DATA%IH3D,AIRBAGS_TOTAL_FVM_IN_H3D_G,NODAL_SCALAR_FVM,NODE_ID_FVM,
+     .                                                N_OUTP_DATA,IS_WRITEN_NODE_FVM)
+                CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              ENDIF
+            ENDIF
+
+c-----
+c nodal vector
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 1 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 2)THEN
+c
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            N_H3D_PART_LIST = H3D_DATA%OUTPUT_LIST(I)%N_H3D_PART_LIST
+c          IF(ISPMD == 0) print *,'nodal vector',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_NODAL_VECTOR(
+     .                     ELBUF_TAB         ,NODAL_VECTOR             , IFUNC         ,IPARG  ,GEO             ,
+     .                     MAS               ,PM                       , ITAB   ,NODE_ID         ,
+     .                     INFO1             ,INFO2                    , IS_WRITEN_NODE,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                     IPARTC          ,
+     .                     IPARTTG           ,IXC                      , IXTG          ,TEMP   ,IFLOW           ,
+     .                     RFLOW             ,IXS                      , IXQ           ,NV46   ,MONVOL          ,
+     .                     DIAG_SMS          ,MS                       , PDAMA2        ,X      ,VOLMON          ,
+     .                     STIFR             ,STIFN                    , A             ,D      ,V               ,
+     .                     CONT              ,FCONTG                   , FINT          ,FEXT    ,KEYWORD         ,
+     .                     FNCONT            ,FNCONTG                  , FTCONT        ,FTCONTG ,FNCONT2         ,
+     .                     DR                ,DXANCG                   , FANREAC       ,FCLUSTER ,MCLUSTER        ,
+     .                     VR                ,FOPT                     , NPBY          ,VGAZ                        ,
+     .                     IPARI             ,IGRNOD                   , WEIGHT        ,NODGLOB  ,FCONT_MAX       ,
+     .                     FNCONTP2          ,FTCONTP2                 , AR            ,IPARTSP  ,IPARTR          ,
+     .                     IPARTP            ,IPARTT                   , IPARTS        ,IPARTQ  ,KXSP            ,
+     .                     IXR               ,IXP                      , IXT           ,N_H3D_PART_LIST ,
+     .                     NODAL_VECTOR_FVM,
+     .                     IS_WRITEN_NODE_FVM,AIRBAGS_TOTAL_FVM_IN_H3D_G,SMONVOL       ,SVOLMON  ,ISPMD         ,
+     .                     FVDATA_P          ,USER_NOD_ID%FVMBAG_SHIFT ,W              ,SW       ,X_C  )
+
+c
+            IF (NSPMD > 1 ) THEN
+              IF(KEYWORD == 'CONT'.OR.KEYWORD == 'PCONT/NORMAL'.OR.KEYWORD == 'PCONT/TANGENT'.OR.KEYWORD == 'FEXT'
+     .           .OR.(KEYWORD == 'CONT2'.OR.KEYWORD == 'PCONT2/NORMAL'.OR.KEYWORD == 'PCONT2/TANGENT')
+     .           .OR.(KEYWORD == 'CONT2/MOMENT')) THEN
+                CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+                CALL SPMD_OUTPITAB(NODE_ID,WEIGHT,NODGLOB,NODE_ID_P)
+                CALL SPMD_OUTPITAB(IS_WRITEN_NODE,WEIGHT,NODGLOB,IS_WRITEN_NODE_P)
+                IF(NINTSTAMP==0.OR.KEYWORD == 'CONT2'.OR.KEYWORD == 'PCONT2/NORMAL'.OR.KEYWORD == 'PCONT2/NORMAL'
+     .            .OR.KEYWORD == 'PCONT2/TANGENT'.OR.KEYWORD == 'FEXT') THEN
+                  CALL SPMD_H3D_SUM_R_NODAL(NODGLOB,NODAL_VECTOR,3*NUMNOD,NODAL_VECTOR_P,3*NUMNODG)
+                ELSEIF(KEYWORD == 'CONT')THEN
+                  CALL SPMD_H3D_SUM_R_NODAL_21(NODGLOB,NODAL_VECTOR,3*NUMNOD,NODAL_VECTOR_P,3*NUMNODG,FCONTG)
+                ELSEIF(KEYWORD == 'PCONT/NORMAL')THEN
+                  CALL SPMD_H3D_SUM_R_NODAL_21(NODGLOB,NODAL_VECTOR,3*NUMNOD,NODAL_VECTOR_P,3*NUMNODG,FNCONTG)
+                ELSEIF(KEYWORD == 'PCONT/TANGENT')THEN
+                  CALL SPMD_H3D_SUM_R_NODAL_21(NODGLOB,NODAL_VECTOR,3*NUMNOD,NODAL_VECTOR_P,3*NUMNODG,FTCONTG)
+                ELSEIF(KEYWORD == 'CONT2/MOMENT')THEN
+                  CALL SPMD_H3D_SUM_R_NODAL_21(NODGLOB,NODAL_VECTOR,3*NUMNOD,NODAL_VECTOR_P,3*NUMNODG,MCONT2)
+                ENDIF
+                CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+
+              ELSEIF(NINTSTAMP/=0.AND.((KEYWORD == 'CONT/TMAX').OR.(KEYWORD == 'MAXPCONT/NORMAL') .OR.
+     .             (KEYWORD == 'MAXPCONT/TANGENT'))) THEN
+                IF(KEYWORD == 'CONT/TMAX')THEN
+                  IF(ISPMD == 0) THEN
+                    NODAL_VECTOR_P(1:3*NUMNODG) =FCONT_MAX(1:3*NUMNODG)
+                  ENDIF
+                ELSEIF(KEYWORD == 'MAXPCONT/NORMAL')THEN
+                  IF(ISPMD == 0) THEN
+                    NODAL_VECTOR_P(1:3*NUMNODG) =FNCONT_MAX(1:3*NUMNODG)
+                  ENDIF
+                ELSEIF(KEYWORD == 'MAXPCONT/TANGENT')THEN
+                  IF(ISPMD == 0) THEN
+                    NODAL_VECTOR_P(1:3*NUMNODG) =FTCONT_MAX(1:3*NUMNODG)
+                  ENDIF
+                ENDIF
+
+              ELSE
+                CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+                CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,NODE_ID,NUMNOD,NODE_ID_P,NUMNODG)
+                CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,IS_WRITEN_NODE,NUMNOD,IS_WRITEN_NODE_P,NUMNODG)
+                CALL SPMD_H3D_GATHER_R_NODE(WEIGHT,NODAL_VECTOR,3*NUMNOD,NODAL_VECTOR_P,3*NUMNODG)
+                CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              ENDIF
+
+            ELSE
+
+              NODE_ID_P(1:NUMNOD) =  NODE_ID(1:NUMNOD)
+              IS_WRITEN_NODE_P(1:NUMNOD) =  IS_WRITEN_NODE(1:NUMNOD)
+              NODAL_VECTOR_P(1:3*NUMNOD) =  NODAL_VECTOR(1:3*NUMNOD)
+
+            ENDIF
+c
+            ! vector update for /NODE entities
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_NODAL_VECTOR(TT,H3D_DATA%IH3D,ITAB,NUMNODG,NODAL_VECTOR_P,NODE_ID_P,
+     .                             N_OUTP_DATA,IS_WRITEN_NODE_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+
+            ! vector update for virtual entities (FVMBAG polyhedron centroids)
+            IF(ISPMD == 0 .AND. AIRBAGS_TOTAL_FVM_IN_H3D_G > 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              DO J=1,AIRBAGS_TOTAL_FVM_IN_H3D_G
+                NODE_ID_FVM(J) = USER_NOD_ID%FVMBAG_SHIFT + J
+              ENDDO
+              CALL C_H3D_UPDATE_NODAL_VECTOR(TT,H3D_DATA%IH3D,ITAB,AIRBAGS_TOTAL_FVM_IN_H3D_G,NODAL_VECTOR_FVM,
+     .                             NODE_ID_FVM,
+     .                             N_OUTP_DATA,IS_WRITEN_NODE_FVM)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+
+c-----
+c nodal tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 1 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3)THEN
+c
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            N_H3D_PART_LIST = H3D_DATA%OUTPUT_LIST(I)%N_H3D_PART_LIST
+c          IF(ISPMD == 0) print *,'nodal tensor',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_NODAL_TENSOR(
+     .                       ELBUF_TAB, NODAL_TENSOR ,IFUNC      ,IPARG,GEO ,MAS       ,PM         ,
+     .                        ITAB, NODE_ID   ,INFO1        ,INFO2      ,
+     .                       IS_WRITEN_NODE,H3D_DATA%OUTPUT_LIST(I)%PART ,IPARTC,IPARTTG,
+     .                    IXC, IXTG,TEMP,IFLOW,RFLOW,IXS,IXQ,NV46,MONVOL   ,VOLMON, DIAG_SMS,MS,
+     .                     PDAMA2,X, STIFR, STIFN, A, D, V, CONT, FCONTG, FINT, FEXT,KEYWORD,
+     .                     BUFMAT   ,IXS10      ,IXS16      ,IXS20   ,IXT      ,
+     .                     IXP      ,IXR        ,IAD_ELEM   ,FR_ELEM ,WEIGHT   ,
+     .                     IPARTSP  ,IPARTR     ,IPARTP     ,IPARTT  ,IPARTS   ,
+     .                     IPARTQ   ,KXSP       ,N_H3D_PART_LIST)
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,NODE_ID,NUMNOD,NODE_ID_P,NUMNODG)
+              CALL SPMD_H3D_GATHER_I_NODE(WEIGHT,IS_WRITEN_NODE,NUMNOD,IS_WRITEN_NODE_P,NUMNODG)
+              CALL SPMD_H3D_GATHER_T_NODE(WEIGHT,NODAL_TENSOR,6*NUMNOD,NODAL_TENSOR_P,6*NUMNODG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              NODE_ID_P(1:NUMNOD) =  NODE_ID(1:NUMNOD)
+              IS_WRITEN_NODE_P(1:NUMNOD) =  IS_WRITEN_NODE(1:NUMNOD)
+              NODAL_TENSOR_P(1:6*NUMNOD) =  NODAL_TENSOR(1:6*NUMNOD)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_NODAL_TENSOR(TT,H3D_DATA%IH3D,ITAB,NUMNODG,NODAL_TENSOR_P,NODE_ID_P,
+     .                             N_OUTP_DATA,IS_WRITEN_NODE_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c 1d scalar
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 4 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1 .AND. (NUMELTRG+NUMELPG+NUMELRG) > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            IPT = H3D_DATA%OUTPUT_LIST(I)%IPT
+c          IF(ISPMD == 0) print *,'nodal scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            SZ_ANIN = SANIN - NDMA2
+            CALL H3D_ONED_SCALAR(ELBUF_TAB      ,IPARG    ,GEO  , IXT,
+     .                           IXP            ,IXR      ,PM   , OUTPUT%DATA%SCAL_SPRING,
+     .                           ONED_SCALAR    ,ONED_ID  ,ONED_ITY,
+     .                           IS_WRITEN_ONED ,IPARTT ,IPARTP,IPARTR,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                           KEYWORD, X , D   ,IPT, 
+     .                           NUMELP,  NUMELT,  NUMELR,NIXT,NIXP,
+     .                           NIXR,    NGROUP,  ANIM_FE,  MX_ANI,   NPARG,
+     .                           NPROPM,  NPROPG,  NUMMAT,   NUMGEO,   NUMNOD,
+     .                           SZ_ANIN, NUMELPG, NUMELRG,  NUMELTRG, NPART)
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(ONED_ID,NUMELT+NUMELP+NUMELR,ONED_ID_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(ONED_ITY,NUMELT+NUMELP+NUMELR,ONED_ITY_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_ONED,NUMELT+NUMELP+NUMELR,IS_WRITEN_ONED_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_R(ONED_SCALAR,NUMELT+NUMELP+NUMELR,ONED_SCALAR_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              ONED_ID_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ID(1:NUMELT+NUMELP+NUMELR)
+              ONED_ITY_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ITY(1:NUMELT+NUMELP+NUMELR)
+              IS_WRITEN_ONED_P(1:NUMELT+NUMELP+NUMELR) =  IS_WRITEN_ONED(1:NUMELT+NUMELP+NUMELR)
+              ONED_SCALAR_P(1:NUMELT+NUMELP+NUMELR) =  ONED_SCALAR(1:NUMELT+NUMELP+NUMELR)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_ONED_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMELTRG,NUMELPG,NUMELRG,ONED_SCALAR_P,ONED_ID_P,
+     .                             N_OUTP_DATA,ONED_ITY_P,IS_WRITEN_ONED_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c 1d vector
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 4 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 2 .AND. (NUMELTRG+NUMELPG+NUMELRG) > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+c          IF(ISPMD == 0) print *,'1d vector',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_ONED_VECTOR(ELBUF_TAB   ,IFUNC  ,IPARG    ,GEO  ,
+     .                  IXT          ,IXP    ,IXR    ,PM   ,
+     .                  OUTPUT%DATA%SCAL_SPRING,ONED_VECTOR,
+     .                  ONED_ID      ,ONED_ITY,INFO1 ,INFO2    , IS_WRITEN_ONED  ,
+     .                  IPARTT ,IPARTP,IPARTR,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                  KEYWORD      , X     , D     ,TORS   )
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(ONED_ID,NUMELT+NUMELP+NUMELR,ONED_ID_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(ONED_ITY,NUMELT+NUMELP+NUMELR,ONED_ITY_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_ONED,NUMELT+NUMELP+NUMELR,IS_WRITEN_ONED_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_R(ONED_VECTOR,3*(NUMELT+NUMELP+NUMELR),ONED_VECTOR_P,3*(NUMELTRG+NUMELPG+NUMELRG))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              ONED_ID_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ID(1:NUMELT+NUMELP+NUMELR)
+              ONED_ITY_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ITY(1:NUMELT+NUMELP+NUMELR)
+              IS_WRITEN_ONED_P(1:NUMELT+NUMELP+NUMELR) =  IS_WRITEN_ONED(1:NUMELT+NUMELP+NUMELR)
+              ONED_VECTOR_P(1:3*(NUMELT+NUMELP+NUMELR)) =  ONED_VECTOR(1:3*(NUMELT+NUMELP+NUMELR))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_ONED_VECTOR(TT,H3D_DATA%IH3D,ITAB,NUMELTRG,NUMELPG,NUMELRG,ONED_VECTOR_P,ONED_ID_P,
+     .                             N_OUTP_DATA,ONED_ITY_P,IS_WRITEN_ONED_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c 1d tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 4 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3 .AND. (NUMELTRG+NUMELPG+NUMELRG) > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            IPT   = H3D_DATA%OUTPUT_LIST(I)%IPT
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+c          IF(ISPMD == 0) print *,'1d tensor',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_ONED_TENSOR(ELBUF_TAB   ,IFUNC  ,IPARG    ,GEO  ,
+     .                  IXT          ,IXP    ,IXR    ,PM   ,
+     .                  OUTPUT%DATA%SCAL_SPRING,ONED_TENSOR,
+     .                  ONED_ID      ,ONED_ITY,INFO1 ,INFO2    , IS_WRITEN_ONED  ,
+     .                  IPARTT ,IPARTP,IPARTR,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                  KEYWORD      , X     , D     ,IPT)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(ONED_ID,NUMELT+NUMELP+NUMELR,ONED_ID_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(ONED_ITY,NUMELT+NUMELP+NUMELR,ONED_ITY_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_ONED,NUMELT+NUMELP+NUMELR,IS_WRITEN_ONED_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_R(ONED_TENSOR,6*(NUMELT+NUMELP+NUMELR),ONED_TENSOR_P,6*(NUMELTRG+NUMELPG+NUMELRG))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              ONED_ID_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ID(1:NUMELT+NUMELP+NUMELR)
+              ONED_ITY_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ITY(1:NUMELT+NUMELP+NUMELR)
+              IS_WRITEN_ONED_P(1:NUMELT+NUMELP+NUMELR) =  IS_WRITEN_ONED(1:NUMELT+NUMELP+NUMELR)
+              ONED_TENSOR_P(1:6*(NUMELT+NUMELP+NUMELR)) =  ONED_TENSOR(1:6*(NUMELT+NUMELP+NUMELR))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_ONED_TENSOR(TT,H3D_DATA%IH3D,ITAB,NUMELTRG,NUMELPG,NUMELRG,ONED_TENSOR_P,ONED_ID_P,
+     .                             N_OUTP_DATA,ONED_ITY_P,IS_WRITEN_ONED_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c 1d torsor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 4 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 4 .AND. (NUMELTRG+NUMELPG+NUMELRG) > 0)THEN
+c
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+c          IF(ISPMD == 0) print *,'nodal vector',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c          IF(ISPMD == 0) print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_ONED_TORSOR(IPARG,IFUNC ,IXT  ,IXP  ,
+     .                    IXR   ,TORS ,ONED_TORSOR,ONED_ID      ,
+     .                    ONED_ITY,INFO1 ,INFO2    , IS_WRITEN_ONED,
+     .                    IPARTT ,IPARTP,IPARTR,H3D_DATA%OUTPUT_LIST(I)%PART,KEYWORD)
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(ONED_ID,NUMELT+NUMELP+NUMELR,ONED_ID_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(ONED_ITY,NUMELT+NUMELP+NUMELR,ONED_ITY_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_ONED,NUMELT+NUMELP+NUMELR,IS_WRITEN_ONED_P,NUMELTRG+NUMELPG+NUMELRG)
+              CALL SPMD_H3D_GATHER_R(ONED_TORSOR,9*(NUMELT+NUMELP+NUMELR),ONED_TORSOR_P,9*(NUMELTRG+NUMELPG+NUMELRG))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              ONED_ID_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ID(1:NUMELT+NUMELP+NUMELR)
+              ONED_ITY_P(1:NUMELT+NUMELP+NUMELR) =  ONED_ITY(1:NUMELT+NUMELP+NUMELR)
+              IS_WRITEN_ONED_P(1:NUMELT+NUMELP+NUMELR) =  IS_WRITEN_ONED(1:NUMELT+NUMELP+NUMELR)
+              ONED_TORSOR_P(1:9*(NUMELT+NUMELP+NUMELR)) =  ONED_TORSOR(1:9*(NUMELT+NUMELP+NUMELR))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_ONED_TORSOR(TT,H3D_DATA%IH3D,ITAB,NUMELTRG,NUMELPG,NUMELRG,ONED_TORSOR_P,ONED_ID_P,
+     .           N_OUTP_DATA,ONED_ITY_P,IS_WRITEN_ONED_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+            ENDIF
+c-----
+c shell scalar
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 2 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1 .AND. (NUMELCG+NUMELTGG) > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IPT = H3D_DATA%OUTPUT_LIST(I)%IPT
+            ID_PLY = H3D_DATA%OUTPUT_LIST(I)%PLY
+            GAUSS = H3D_DATA%OUTPUT_LIST(I)%GAUSS
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            IDMDS = H3D_DATA%OUTPUT_LIST(I)%IDMDS
+            IMDSVAR = H3D_DATA%OUTPUT_LIST(I)%IMDSVAR
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            OBJECT_ID = H3D_DATA%OUTPUT_LIST(I)%OBJECT_ID
+            MODE = H3D_DATA%OUTPUT_LIST(I)%MODE
+c         IF(ISPMD == 0)  print *,'shell scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c         IF(ISPMD == 0)  print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            SHELL_STACKSIZE = 0
+            CALL H3D_SHELL_SCALAR(
+     .                       ELBUF_TAB ,SHELL_STACK ,IPARG        ,GEO        ,
+     .                       IXC       ,IXTG          ,PM         ,BUFMAT     ,
+     .                       EANI,
+     .                       IPM       ,IGEO      ,THKE          ,ERR_THK_SH4  ,ERR_THK_SH3,
+     .                       X         ,V             ,W            ,ALE_CONNECT,
+     .                       NERCVOIS  ,NESDVOIS      ,LERCVOIS     ,LESDVOIS   ,
+     .                       STACK     ,SHELL_ID  ,SHELL_ITY     ,
+     .                       IS_WRITEN_SHELL,IPARTC ,IPARTTG     ,LAYER        ,IPT        ,
+     .                       ID_PLY     ,IUVAR ,H3D_DATA%OUTPUT_LIST(I)%PART,KEYWORD,GLOB_THERM%ITHERM,
+     .                       D          ,MULTI_FVM ,IDMDS        ,IMDSVAR      ,MDS_MATID  ,
+     .                       OBJECT_ID  ,MODE      ,MAT_PARAM    ,H3D_DATA%LIGHT,MAX_SHELL_STACKSIZE,
+     .                       SHELL_STACKSIZE)
+
+c
+           
+            if (ispmd==0) then
+                IS_WRITEN_SHELL_P(1:SHELL_STACKSIZE) =  IS_WRITEN_SHELL(1:SHELL_STACKSIZE)
+                SHELL_STACK_P(1:SHELL_STACKSIZE) =  SHELL_STACK(1:SHELL_STACKSIZE)
+                SHELL_STACKSIZE_P0 = SHELL_STACKSIZE
+            else
+                SHELL_STACKSIZE_P0 = 1
+            endif
+            IF (NSPMD > 1 ) THEN
+               CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+
+               ! First Gather the size of the shell+triangle stack
+               CALL SPMD_GATHER(SHELL_STACKSIZE,GATHER_SIZE,1,1,IT_SPMD(1))
+
+               ! Then gather the shell+triangle stack to P0 & apply elemen offset
+               ! to fit with P0 order
+               CALL H3D_GATHER_ID_VAL(IS_WRITEN_SHELL,SHELL_STACK,SHELL_STACKSIZE,1,
+     *           IS_WRITEN_SHELL_P,SHELL_STACK_P,NUMELCG+NUMELTGG,
+     *           SHELL_STACKSIZE_P0,GATHER_SIZE,SH_TRIA_SPMD_OFFSETS,NSPMD,ISPMD,IT_SPMD)      
+
+               CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SHELL_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .                             NIXC,NUMELCG,IPARTC,IXTG,NIXTG,
+     .                             NUMELTGG,IPARTTG,SHELL_STACK_P,SHELL_ID_P,
+     .                             N_OUTP_DATA,SHELL_ITY_P,NUMELS,
+     .                             NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SHELL_P,
+     .                             SHELL_STACKSIZE_P0)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c shell vector
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 2 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 2 .AND. (NUMELCG+NUMELTGG) > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IPT = H3D_DATA%OUTPUT_LIST(I)%IPT
+            ID_PLY = H3D_DATA%OUTPUT_LIST(I)%PLY
+            GAUSS = H3D_DATA%OUTPUT_LIST(I)%GAUSS
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+c         IF(ISPMD == 0)  print *,'shell vector',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c         IF(ISPMD == 0)  print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_SHELL_VECTOR(
+     .                       ELBUF_TAB ,SHELL_VECTOR ,IFUNC      ,IPARG,GEO    ,
+     .                       IXQ       ,IXC       ,IXTG          ,PM       ,
+     .                       EL2FA     ,NBF       ,IAD          ,
+     .                       NBF_L     ,EANI      ,OUTPUT%DATA%SCAL_SPRING ,NBPART       ,IADG       ,
+     .                       IPM       ,IGEO      ,THKE          ,ERR_THK_SH4  ,ERR_THK_SH3,
+     .                       INVERT    ,X         ,V             ,W            ,
+     .                       NV46      ,NERCVOIS  ,NESDVOIS      ,LERCVOIS     ,LESDVOIS   ,
+     .                       STACK     ,SHELL_ID  ,SHELL_ITY     ,INFO1        ,INFO2      ,
+     .                       IS_WRITEN_SHELL,IPARTC ,IPARTTG     ,LAYER        ,IPT        ,
+     .                       ID_PLY     ,GAUSS     ,IUVAR ,H3D_DATA%OUTPUT_LIST(I)%PART,KEYWORD,
+     .                       D         ,MULTI_FVM)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SHELL,NUMELC+NUMELTG,IS_WRITEN_SHELL_P,NUMELCG+NUMELTGG)
+              CALL SPMD_H3D_GATHER_R(SHELL_VECTOR,3*(NUMELC+NUMELTG),SHELL_VECTOR_P,3*(NUMELCG+NUMELTGG))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SHELL_P(1:NUMELC+NUMELTG) =  IS_WRITEN_SHELL(1:NUMELC+NUMELTG)
+              SHELL_VECTOR_P(1:3*(NUMELC+NUMELTG)) =  SHELL_VECTOR(1:3*(NUMELC+NUMELTG))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+c            print *,'C_H3D_UPDATE_SHELL_VECTOR'
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SHELL_VECTOR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .                             NIXC,NUMELCG,IPARTC,IXTG,NIXTG,
+     .                             NUMELTGG,IPARTTG,SHELL_VECTOR_P,SHELL_ID_P,
+     .                             N_OUTP_DATA,SHELL_ITY_P,NUMELS,
+     .                             NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SHELL_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c shell tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 2 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3 .AND. (NUMELCG+NUMELTGG) > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IPT = H3D_DATA%OUTPUT_LIST(I)%IPT
+            ID_PLY = H3D_DATA%OUTPUT_LIST(I)%PLY
+            GAUSS = H3D_DATA%OUTPUT_LIST(I)%GAUSS
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            OBJECT_ID = H3D_DATA%OUTPUT_LIST(I)%OBJECT_ID
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+c         IF(ISPMD == 0)   print *,'shell tensor',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c         IF(ISPMD == 0)   print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            SHELL_STACKSIZE = 0
+            CALL H3D_SHELL_TENSOR(ELBUF_TAB,SHELL_TENSOR_STACK ,IPARG ,IFUNC ,INVERT,NELCUT,
+     .                   EL2FA    ,NBF   ,WAFT  ,TANI  ,IAD   ,
+     .                   NBF_L    ,NBPART,IADG  ,X     ,IXC   ,
+     .                   IGEO     ,IXTG  ,IPM   ,STACK ,SHELL_ID   ,SHELL_ITY    ,INFO1,
+     .                   INFO2    ,IS_WRITEN_SHELL ,IPARTC ,IPARTTG     ,LAYER        ,IPT        ,
+     .                   ID_PLY     ,GAUSS     ,IUVAR ,H3D_DATA%OUTPUT_LIST(I)%PART ,KEYWORD,D    ,
+     .                   OBJECT_ID  ,BUFMAT    ,MAT_PARAM,GEO ,DRAPE_SH4N, DRAPE_SH3N, DRAPEG,MAX_SHELL_STACKSIZE,
+     .                   SHELL_STACKSIZE)
+
+            if (ispmd==0) then
+                IS_WRITEN_SHELL_P(1:SHELL_STACKSIZE) =  IS_WRITEN_SHELL(1:SHELL_STACKSIZE)
+                SHELL_TENSOR_STACK_P(1:3*SHELL_STACKSIZE) =  SHELL_TENSOR_STACK(1:3*SHELL_STACKSIZE)
+                SHELL_STACKSIZE_P0 = SHELL_STACKSIZE
+            else
+                SHELL_STACKSIZE_P0 = 1
+            endif
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+
+              ! First Gather the size of the shell+triangle stack
+              CALL SPMD_GATHER(SHELL_STACKSIZE,GATHER_SIZE,1,1,IT_SPMD(1))
+
+              CALL H3D_GATHER_ID_VAL(IS_WRITEN_SHELL,SHELL_TENSOR_STACK,SHELL_STACKSIZE,3,
+     *           IS_WRITEN_SHELL_P,SHELL_TENSOR_STACK_P,NUMELCG+NUMELTGG,
+     *           SHELL_STACKSIZE_P0,GATHER_SIZE,SH_TRIA_SPMD_OFFSETS,NSPMD,ISPMD,IT_SPMD)
+   
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SHELL_P(1:NUMELC+NUMELTG) =  IS_WRITEN_SHELL(1:NUMELC+NUMELTG)
+              SHELL_TENSOR_P(1:3*(NUMELC+NUMELTG)) =  SHELL_TENSOR(1:3*(NUMELC+NUMELTG))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SHELL_TENSOR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .                             NIXC,NUMELCG,IPARTC,IXTG,NIXTG,
+     .                             NUMELTGG,IPARTTG,SHELL_TENSOR_STACK_P,SHELL_ID_P,
+     .                             N_OUTP_DATA,SHELL_ITY_P,NUMELS,
+     .                             NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SHELL_P,
+     .                             SHELL_STACKSIZE_P0)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+
+c-----
+c solid scalar
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 3.AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1 .AND. NUMELSG > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IR = H3D_DATA%OUTPUT_LIST(I)%IR
+            IS = H3D_DATA%OUTPUT_LIST(I)%IS
+            IT = H3D_DATA%OUTPUT_LIST(I)%IT
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            IDMDS = H3D_DATA%OUTPUT_LIST(I)%IDMDS
+            IMDSVAR = H3D_DATA%OUTPUT_LIST(I)%IMDSVAR
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            OBJECT_ID = H3D_DATA%OUTPUT_LIST(I)%OBJECT_ID
+            MODE = H3D_DATA%OUTPUT_LIST(I)%MODE
+c          IF(ISPMD == 0)  print *,'solid scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+            CALL H3D_SOLID_SCALAR(
+     .                      ELBUF_TAB ,SOLID_SCALAR ,IPARG        ,
+     .                      IXS       ,PM           ,BUFMAT     ,
+     .                      EANI      ,
+     .                      IPM       ,
+     .                      X         ,V             ,W            ,ALE_CONNECT,
+     .                      NERCVOIS,NESDVOIS, LERCVOIS,LESDVOIS,
+     .                      SOLID_ID  ,SOLID_ITY     ,IPARTS       ,LAYER      ,
+     .                      IR        ,IS        ,IT            ,IUVAR        ,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                      IS_WRITEN_SOLID,INFO1,KEYWORD       ,GLOB_THERM%ITHERM,OUTPUT%DATA%FANI_CELL    ,
+     .                      MULTI_FVM, IDMDS         ,IMDSVAR      ,
+     .                      OBJECT_ID ,MAT_PARAM ,MODE          )
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SOLID,NUMELS,IS_WRITEN_SOLID_P,NUMELSG)
+              CALL SPMD_H3D_GATHER_R(SOLID_SCALAR,NUMELS,SOLID_SCALAR_P,NUMELSG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SOLID_P(1:NUMELS) =  IS_WRITEN_SOLID(1:NUMELS)
+              SOLID_SCALAR_P(1:NUMELS) =  SOLID_SCALAR(1:NUMELS)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SOLID_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXS_P,
+     .                            NIXS,NUMELSG,IPARTS,SOLID_SCALAR_P,SOLID_ID_P,
+     .                            N_OUTP_DATA,SOLID_ITY_P,
+     .                            NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SOLID_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c solid vector
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 3.AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 2 .AND. NUMELSG > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IR = H3D_DATA%OUTPUT_LIST(I)%IR
+            IS = H3D_DATA%OUTPUT_LIST(I)%IS
+            IT = H3D_DATA%OUTPUT_LIST(I)%IT
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+c          IF(ISPMD == 0)  print *,'solid scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+            CALL H3D_SOLID_VECTOR(
+     .                      ELBUF_TAB ,SOLID_VECTOR ,IFUNC      ,IPARG,GEO    ,
+     .                      IXQ       ,IXS       ,IXTG          ,PM           ,
+     .                      EL2FA     ,NBF       ,IAD          ,
+     .                      NBF_L     ,EANI      ,OUTPUT%DATA%SCAL_SPRING ,NBPART       ,IADG       ,
+     .                      IPM       ,IGEO      ,THKE          ,ERR_THK_SH4  ,ERR_THK_SH3,
+     .                      INVERT    ,X         ,V             ,W            ,
+     .                      NV46      ,NERCVOIS  ,NESDVOIS      ,LERCVOIS     ,LESDVOIS   ,
+     .                      STACK     ,SOLID_ID  ,SOLID_ITY     ,IPARTS       ,LAYER      ,
+     .                      IR        ,IS        ,IT            ,IUVAR        ,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                      IS_WRITEN_SOLID,INFO1,KEYWORD       ,OUTPUT%DATA%FANI_CELL    ,
+     .                      H3D_DATA, MULTI_FVM)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SOLID,NUMELS,IS_WRITEN_SOLID_P,NUMELSG)
+              CALL SPMD_H3D_GATHER_R(SOLID_VECTOR,3*NUMELS,SOLID_VECTOR_P,3*NUMELSG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SOLID_P(1:NUMELS) =  IS_WRITEN_SOLID(1:NUMELS)
+              SOLID_VECTOR_P(1:3*NUMELS) =  SOLID_VECTOR(1:3*NUMELS)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SOLID_VECTOR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXS_P,
+     .                            NIXS,NUMELSG,IPARTS,SOLID_VECTOR_P,SOLID_ID_P,
+     .                            N_OUTP_DATA,SOLID_ITY_P,
+     .                            NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SOLID_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c solid tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 3.AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3 .AND. NUMELSG > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            INFO2 = H3D_DATA%OUTPUT_LIST(I)%INFO2
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IR = H3D_DATA%OUTPUT_LIST(I)%IR
+            IS = H3D_DATA%OUTPUT_LIST(I)%IS
+            IT = H3D_DATA%OUTPUT_LIST(I)%IT
+            OBJECT_ID = H3D_DATA%OUTPUT_LIST(I)%OBJECT_ID
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            IS_CORNER_DATA = H3D_DATA%OUTPUT_LIST(I)%IS_CORNER_DATA
+c         IF(ISPMD == 0)  print *,'solid tensor',N_OUTP_DATA,'KEYWORD',LAYER,IR,IS,IT
+c
+            CALL H3D_SOLID_TENSOR(
+     .                      ELBUF_TAB,SOLID_TENSOR, IPARG   ,IFUNC   ,IXS     ,PM      ,
+     2                    EL2FA    ,NNN     ,WAFT    ,TANI    ,
+     3                    NBPART   ,X       ,IADG    ,IPART   ,
+     4                    IPARTSP ,IPARTS  ,ISPH3D  ,IPM     ,IGEO     ,  SOLID_ID   ,SOLID_ITY  , IS_WRITEN_SOLID,
+     5                    LAYER   ,   IR   ,IS      ,IT      ,H3D_DATA%OUTPUT_LIST(I)%PART,INFO1  ,KEYWORD ,D    ,
+     6                    SOLID_TENSOR_CORNER,IS_CORNER_DATA , IXS10 ,MAX_NCORN,OBJECT_ID)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SOLID,NUMELS,IS_WRITEN_SOLID_P,NUMELSG)
+              CALL SPMD_H3D_GATHER_R(SOLID_TENSOR,6*NUMELS,SOLID_TENSOR_P,6*NUMELSG)
+              IF (IS_CORNER_DATA == 1)
+     .          CALL SPMD_H3D_GATHER_R(SOLID_TENSOR_CORNER,6*NUMELS*MAX_NCORN,SOLID_TENSOR_CORNER_P,6*NUMELSG*MAX_NCORN)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SOLID_P(1:NUMELS) =  IS_WRITEN_SOLID(1:NUMELS)
+              SOLID_TENSOR_P(1:6*NUMELS) =  SOLID_TENSOR(1:6*NUMELS)
+              IF (IS_CORNER_DATA == 1)
+     .          SOLID_TENSOR_CORNER_P(1:6*NUMELS*MAX_NCORN) =  SOLID_TENSOR_CORNER(1:6*NUMELS*MAX_NCORN)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SOLID_TENSOR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXS_P,
+     .                            NIXS,NUMELSG,IPARTS,SOLID_TENSOR_P,SOLID_ID_P,
+     .                            N_OUTP_DATA,SOLID_ITY_P,
+     .                            NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SOLID_P,
+     3                            SOLID_TENSOR_CORNER_P,IS_CORNER_DATA,ISOLNOD_P,MAX_NCORN)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c sph scalar
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 5.AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1 .AND. NUMSPHG > 0)THEN
+
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            OBJECT_ID = H3D_DATA%OUTPUT_LIST(I)%OBJECT_ID
+c          IF(ISPMD == 0)  print *,'SPH scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+            CALL H3D_SPH_SCALAR(
+     .                      ELBUF_TAB ,SPH_SCALAR,IFUNC         ,IPARG        ,
+     .                      KXSP      ,PM        ,IPART         ,
+     .                      IPM       ,
+     .                      SPH_ID  ,IPARTSP      ,IUVAR      ,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                      IS_WRITEN_SPH,KEYWORD,SPBUF, OBJECT_ID )
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(SPH_ID,NUMSPH,SPH_ID_P,NUMSPHG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SPH,NUMSPH,IS_WRITEN_SPH_P,NUMSPHG)
+              CALL SPMD_H3D_GATHER_R(SPH_SCALAR,NUMSPH,SPH_SCALAR_P,NUMSPHG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              SPH_ID_P(1:NUMSPH) =  SPH_ID(1:NUMSPH)
+              IS_WRITEN_SPH_P(1:NUMSPH) =  IS_WRITEN_SPH(1:NUMSPH)
+              SPH_SCALAR_P(1:NUMSPH) =  SPH_SCALAR(1:NUMSPH)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SPH_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,KXSP_P,
+     .                            NISP,NUMSPHG,IPARTS,SPH_SCALAR_P,SPH_ID_P,
+     .                            N_OUTP_DATA,
+     .                            NUMELQ,NUMELT,NUMELP,NUMELR,IS_WRITEN_SPH_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c sph tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 5.AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3 .AND. NUMSPHG > 0)THEN
+
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+c          IF(ISPMD == 0)  print *,'SPH tensor',N_OUTP_DATA,'KEYWORD',KEYWORD
+c
+            CALL H3D_SPH_TENSOR(
+     .                      ELBUF_TAB,SPH_TENSOR, IPARG   ,IFUNC   ,KXSP    ,PM      ,
+     2                    EL2FA    ,NNN     ,WAFT    ,TANI    ,
+     3                    NBPART   ,X       ,IADG    ,IPART   ,
+     4                    IPARTSP ,ISPH3D  ,IPM     ,IGEO     ,  SPH_ID   , IS_WRITEN_SPH,
+     5                    H3D_DATA%OUTPUT_LIST(I)%PART,KEYWORD  )
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(SPH_ID,NUMSPH,SPH_ID_P,NUMSPHG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SPH,NUMSPH,IS_WRITEN_SPH_P,NUMSPHG)
+              CALL SPMD_H3D_GATHER_R(SPH_TENSOR,6*NUMSPH,SPH_TENSOR_P,6*NUMSPHG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              SPH_ID_P(1:NUMSPH) =  SPH_ID(1:NUMSPH)
+              IS_WRITEN_SPH_P(1:NUMSPH) =  IS_WRITEN_SPH(1:NUMSPH)
+              SPH_TENSOR_P(1:6*NUMSPH) =  SPH_TENSOR(1:6*NUMSPH)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SPH_TENSOR(TT,H3D_DATA%IH3D,ITAB,NUMSPHG,IPARTS,SPH_TENSOR_P,SPH_ID_P,
+     .                            N_OUTP_DATA,IS_WRITEN_SPH_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c quad scalar
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 6 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1 .AND. NUMELQG > 0)THEN
+
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IR = H3D_DATA%OUTPUT_LIST(I)%IR
+            IS = H3D_DATA%OUTPUT_LIST(I)%IS
+            IT = H3D_DATA%OUTPUT_LIST(I)%IT
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            OBJECT_ID = H3D_DATA%OUTPUT_LIST(I)%OBJECT_ID
+
+
+c         IF(ISPMD == 0)  print *,'QUAD scalar',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c         IF(ISPMD == 0)  print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_QUAD_SCALAR(
+     .                       ELBUF_TAB     ,QUAD_SCALAR ,IPARG,
+     .                       IXQ           ,PM       ,
+     .                       EANI          ,
+     .                       IPM           ,
+     .                       X             ,V             ,W            ,ALE_CONNECT,
+     .                       NERCVOIS      ,NESDVOIS      ,LERCVOIS     ,LESDVOIS   ,
+     .                       QUAD_ID       ,
+     .                       IS_WRITEN_QUAD,IPARTQ ,LAYER        , NPART, 
+     .                       IUVAR         ,H3D_DATA%OUTPUT_LIST(I)%PART,KEYWORD,GLOB_THERM%ITHERM,
+     .                       BUFMAT        ,MULTI_FVM ,IR           ,IS           ,IT         ,
+     .                       OBJECT_ID     ,MAT_PARAM)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(QUAD_ID,NUMELQ,QUAD_ID_P,NUMELQG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_QUAD,NUMELQ,IS_WRITEN_QUAD_P,NUMELQG)
+              CALL SPMD_H3D_GATHER_R(QUAD_SCALAR,NUMELQ,QUAD_SCALAR_P,NUMELQG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              QUAD_ID_P(1:NUMELQ) =  QUAD_ID(1:NUMELQ)
+              IS_WRITEN_QUAD_P(1:NUMELQ) =  IS_WRITEN_QUAD(1:NUMELQ)
+              QUAD_SCALAR_P(1:NUMELQ) =  QUAD_SCALAR(1:NUMELQ)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+c            print *,'C_H3D_UPDATE_QUAD_SCALAR'
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_QUAD_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .                             NIXC,NUMELC,IPARTC,IXTG,NIXTG,
+     .                             NUMELTGG,IPARTTG,QUAD_SCALAR_P,QUAD_ID_P,
+     .                             N_OUTP_DATA,NUMELS,
+     .                             NUMELQG,NUMELT,NUMELP,NUMELR,IS_WRITEN_QUAD_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c quad vector
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 6 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 2 .AND. NUMELQG > 0)THEN
+
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IR = H3D_DATA%OUTPUT_LIST(I)%IR
+            IS = H3D_DATA%OUTPUT_LIST(I)%IS
+            IT = H3D_DATA%OUTPUT_LIST(I)%IT
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+
+c         IF(ISPMD == 0)  print *,'QUAD vector',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c         IF(ISPMD == 0)  print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_QUAD_VECTOR(
+     .                       ELBUF_TAB ,QUAD_VECTOR ,IFUNC      ,IPARG,GEO    ,
+     .                       IXQ       ,IXC       ,IXTG          ,PM       ,
+     .                       EL2FA     ,NBF       ,IAD          ,
+     .                       NBF_L     ,EANI      ,OUTPUT%DATA%SCAL_SPRING ,NBPART       ,IADG       ,
+     .                       IPM       ,IGEO      ,THKE          ,ERR_THK_SH4  ,ERR_THK_SH3,
+     .                       INVERT    ,X         ,V             ,W            ,
+     .                       NV46      ,NERCVOIS  ,NESDVOIS      ,LERCVOIS     ,LESDVOIS   ,
+     .                       STACK     ,QUAD_ID  ,INFO1        ,INFO2      ,
+     .                       IS_WRITEN_QUAD,IPARTQ ,IPARTTG     ,LAYER        ,IPT        ,
+     .                       ID_PLY     ,GAUSS     ,IUVAR ,H3D_DATA%OUTPUT_LIST(I)%PART,KEYWORD,
+     .                       BUFMAT    ,MULTI_FVM  ,IR          ,IS           ,IT           )
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(QUAD_ID,NUMELQ,QUAD_ID_P,NUMELQG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_QUAD,NUMELQ,IS_WRITEN_QUAD_P,NUMELQG)
+              CALL SPMD_H3D_GATHER_R(QUAD_VECTOR,3*NUMELQ,QUAD_VECTOR_P,3*NUMELQG)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              QUAD_ID_P(1:NUMELQ) =  QUAD_ID(1:NUMELQ)
+              IS_WRITEN_QUAD_P(1:NUMELQ) =  IS_WRITEN_QUAD(1:NUMELQ)
+              QUAD_VECTOR_P(1:3*NUMELQ) =  QUAD_VECTOR(1:3*NUMELQ)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+c            print *,'C_H3D_UPDATE_QUAD_VECTOR'
+              CALL C_H3D_UPDATE_QUAD_VECTOR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .                             NIXC,NUMELC,IPARTC,IXTG,NIXTG,
+     .                             NUMELTGG,IPARTTG,QUAD_VECTOR_P,QUAD_ID_P,
+     .                             N_OUTP_DATA,NUMELS,
+     .                             NUMELQG,NUMELT,NUMELP,NUMELR,IS_WRITEN_QUAD_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c quad tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 6 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3 .AND. NUMELQG > 0)THEN
+
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IR = H3D_DATA%OUTPUT_LIST(I)%IR
+            IS = H3D_DATA%OUTPUT_LIST(I)%IS
+            IT = H3D_DATA%OUTPUT_LIST(I)%IT
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+
+c         IF(ISPMD == 0)   print *,'QUAD tensor',N_OUTP_DATA,'IFUNC',IFUNC,'INFO1',INFO1,'INFO2',INFO2
+
+c         IF(ISPMD == 0)   print *,'H3D_DATA%OUTPUT_LIST(I)%PART',H3D_DATA%OUTPUT_LIST(I)%PART(1:NPART)
+
+            CALL H3D_QUAD_TENSOR(ELBUF_TAB,QUAD_TENSOR ,IPARG ,IFUNC ,INVERT,NELCUT,
+     .                   EL2FA    ,WAFT  ,TANI  ,IAD   ,
+     .                   NBPART,IADG  ,X     ,IXQ   ,
+     .                   IGEO     ,IXTG  ,IPM   ,STACK ,QUAD_ID    ,INFO1,
+     .                   INFO2    ,IS_WRITEN_QUAD ,IPARTQ ,IPARTTG     ,LAYER        ,IPT        ,
+     .                   ID_PLY     ,GAUSS     ,IUVAR ,H3D_DATA%OUTPUT_LIST(I)%PART ,KEYWORD ,
+     .                   IR        ,IS        ,IT      )
+
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(QUAD_ID,NUMELQ,QUAD_ID_P,NUMELQG)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_QUAD,NUMELQ,IS_WRITEN_QUAD_P,NUMELQG)
+              CALL SPMD_H3D_GATHER_R(QUAD_TENSOR,6*(NUMELQ),QUAD_TENSOR_P,6*(NUMELQG))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              QUAD_ID_P(1:NUMELQ) =  QUAD_ID(1:NUMELQ)
+              IS_WRITEN_QUAD_P(1:NUMELQ) =  IS_WRITEN_QUAD(1:NUMELQ)
+              QUAD_TENSOR_P(1:6*(NUMELQ)) =  QUAD_TENSOR(1:6*(NUMELQ))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_QUAD_TENSOR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,IXC_P,
+     .                             NIXC,NUMELCG,IPARTC,IXTG,NIXTG,
+     .                             NUMELTGG,IPARTTG,QUAD_TENSOR_P,QUAD_ID_P,
+     .                             N_OUTP_DATA,NUMELS,
+     .                             NUMELQG,NUMELT,NUMELP,NUMELR,IS_WRITEN_QUAD_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c
+c-----
+c skin scalar
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 7 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 1 .AND. NUMSKING > 0)THEN
+
+            IFUNC = H3D_DATA%OUTPUT_LIST(I)%ID
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+
+            CALL H3D_SKIN_SCALAR(
+     .                      ELBUF_TAB ,SKIN_SCALAR ,IFUNC      ,IPARG        ,GEO        ,
+     .                      IXS       ,IXS10 ,IXS16 , IXS20    ,PM          ,
+     .                      IPM       ,IGEO      ,X             ,V            ,W          ,
+     .                      IPARTS    ,H3D_DATA%OUTPUT_LIST(I)%PART,
+     .                      IS_WRITEN_SKIN,INFO1,KEYWORD       , H3D_DATA  ,
+     6                      IAD_ELEM        ,FR_ELEM     , WEIGHT    ,TAG_SKINS6,
+     7                      NPF  ,TF   ,BUFMAT,IBCL    ,ILOADP     ,LLOADP    ,FAC    ,
+     8                      NSENSOR,SENSORS%SENSOR_TAB,TAGNCONT,LOADP_HYD_INTER,XFRAME,FORC  ,
+     9                      NODAL_IPART ,IMAPSKP ,LOADS ,TABLE,IFRAME,MAT_PARAM,D,PBLAST)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SKIN,NUMSKIN,IS_WRITEN_SKIN_P,NUMSKING)
+              CALL SPMD_H3D_GATHER_R(SKIN_SCALAR,NUMSKIN,SKIN_SCALAR_P,NUMSKING)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SKIN_P(1:NUMSKIN) =  IS_WRITEN_SKIN(1:NUMSKIN)
+              SKIN_SCALAR_P(1:NUMSKIN) =  SKIN_SCALAR(1:NUMSKIN)
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              DO II=1,NUMSKING
+                SKIN_ID_P(II) = II
+              ENDDO
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SKIN_SCALAR(TT,H3D_DATA%IH3D,ITAB,NUMNOD,
+     .                            SKIN_SCALAR_P,SKIN_ID_P,N_OUTP_DATA,
+     .                            NUMSKING,IS_WRITEN_SKIN_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c skin vector
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 7 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 2 .AND. NUMSKING > 0)THEN
+
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            INFO1 = H3D_DATA%OUTPUT_LIST(I)%INFO1
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            CALL H3D_SKIN_VECTOR(SKIN_VECTOR,NODAL_IPART,NSENSOR,
+     .                    IS_WRITEN_SKIN  ,H3D_DATA%OUTPUT_LIST(I)%PART,INFO1   ,KEYWORD ,
+     .                    IBCL,ILOADP,LLOADP,FAC ,NPF,TF ,SENSORS%SENSOR_TAB,
+     .                    TAGNCONT,LOADP_HYD_INTER,FORC,XFRAME,X ,V ,IMAPSKP,LOADS ,
+     .                    TABLE,IFRAME,D,PBLAST)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SKIN,NUMSKIN,IS_WRITEN_SKIN_P,NUMSKING)
+              CALL SPMD_H3D_GATHER_R(SKIN_VECTOR,3*NUMSKIN,SKIN_VECTOR_P,3*(NUMSKING))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SKIN_P(1:NUMSKIN) =  IS_WRITEN_SKIN(1:NUMSKIN)
+              SKIN_VECTOR_P(1:3*(NUMSKIN)) =  SKIN_VECTOR(1:3*(NUMSKIN))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+              DO II=1,NUMSKING
+                SKIN_ID_P(II) = II
+              ENDDO
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SKIN_VECTOR(TT,H3D_DATA%IH3D,
+     .                             NUMSKING,SKIN_VECTOR_P,SKIN_ID_P,
+     .                             N_OUTP_DATA,IS_WRITEN_SKIN_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c-----
+c skin tensor
+c-----
+          ELSEIF(H3D_DATA%OUTPUT_LIST(I)%OK /= 0 .AND. H3D_DATA%OUTPUT_LIST(I)%ETYPE == 7 .AND.
+     .       H3D_DATA%OUTPUT_LIST(I)%OUTP_TYPE == 3 .AND. NUMSKING > 0)THEN
+
+            N_OUTP_DATA = H3D_DATA%OUTPUT_LIST(I)%N_OUTP
+            LAYER = H3D_DATA%OUTPUT_LIST(I)%LAYER
+            IUVAR = H3D_DATA%OUTPUT_LIST(I)%IUVAR
+            KEYWORD = H3D_DATA%OUTPUT_LIST(I)%KEYWORD
+            CALL H3D_SKIN_TENSOR(
+     .                    ELBUF_TAB,SKIN_TENSOR, IPARG   ,IXS     ,X     ,PM  ,
+     4                    IPARTS  ,IPM     ,IGEO    ,IXS10   ,IXS16   ,IXS20   ,
+     5                    IS_WRITEN_SKIN  ,H3D_DATA%OUTPUT_LIST(I)%PART,INFO1   ,
+     6                    KEYWORD ,IAD_ELEM        ,FR_ELEM     , WEIGHT   ,TAG_SKINS6)
+c
+            IF (NSPMD > 1 ) THEN
+              CALL STARTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+              CALL SPMD_H3D_GATHER_I(IS_WRITEN_SKIN,NUMSKIN,IS_WRITEN_SKIN_P,NUMSKING)
+              CALL SPMD_H3D_GATHER_R(SKIN_TENSOR,3*(NUMSKIN),SKIN_TENSOR_P,3*(NUMSKING))
+              CALL STOPTIME(TIMERS,MACRO_TIMER_SPMDH3D)
+            ELSE
+              IS_WRITEN_SKIN_P(1:NUMSKIN) =  IS_WRITEN_SKIN(1:NUMSKIN)
+              SKIN_TENSOR_P(1:3*(NUMSKIN)) = SKIN_TENSOR(1:3*(NUMSKIN))
+            ENDIF
+c
+            IF(ISPMD == 0) THEN
+C-----usr_id not important but should be unique ---------
+              DO II=1,NUMSKING
+                SKIN_ID_P(II) = II
+              ENDDO
+              CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+              CALL C_H3D_UPDATE_SKIN_TENSOR(TT,H3D_DATA%IH3D,
+     .                             NUMSKING,SKIN_TENSOR_P,SKIN_ID_P,
+     .                             N_OUTP_DATA,IS_WRITEN_SKIN_P)
+              CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+
+            ENDIF
+c
+          ENDIF
+        ENDDO
+
+c-----
+c virtual nodes
+c-----
+        !A POSTERIORI CHECK ---
+        !CHECK IF MAXIMUM VIRTUAL NODE IDENTIFIER IS WITHIN [0,2147483647=HUGE]
+        ITMP = USER_NOD_ID%FVMBAG_LEN + USER_NOD_ID%RWALL_LEN   !total number of virtual nodes
+        IF(ITMP > 0)THEN
+          IF(ITMP >= HUGE(ITMP) - USER_NOD_ID%INPUT_MAX)THEN      !test is in fact ( USER_NOD_ID%INPUT_MAX + ITMP >= HUGE)   but LHS might be over HUGE written like this.
+            CALL ANCMSG(MSGID=305,ANMODE=ANINFO)
+            CALL ARRET(2)
+          END IF
+        ENDIF
+c-----
+c deallocate
+c-----
+        ! FVMBAG visualization
+        IF(ALLOCATED(NODAL_SCALAR_FVM)) call my_dealloc(NODAL_SCALAR_FVM)
+        IF(ALLOCATED(NODAL_VECTOR_FVM)) call my_dealloc(NODAL_VECTOR_FVM)
+        IF(ALLOCATED(NODE_ID_FVM)) call my_dealloc(NODE_ID_FVM)
+        IF(ALLOCATED(IS_WRITEN_NODE_FVM)) call my_dealloc(IS_WRITEN_NODE_FVM)
+
+        if (ispmd ==0)then
+          ! FVDATA_P deallocate
+          IF(ALLOCATED(FVDATA_P))THEN
+            DO J=1,NFVBAG
+              IF(ASSOCIATED(FVDATA_P(J)%CENTROID_POLH)) call my_dealloc(FVDATA_P(J)%CENTROID_POLH)
+              IF(ASSOCIATED(FVDATA_P(J)%PPOLH)) call my_dealloc(FVDATA_P(J)%PPOLH)
+              IF(ASSOCIATED(FVDATA_P(J)%SSPPOLH)) call my_dealloc(FVDATA_P(J)%SSPPOLH)
+              IF(ASSOCIATED(FVDATA_P(J)%DTPOLH)) call my_dealloc(FVDATA_P(J)%DTPOLH)
+              IF(ASSOCIATED(FVDATA_P(J)%QPOLH)) call my_dealloc(FVDATA_P(J)%QPOLH)
+              IF(ASSOCIATED(FVDATA_P(J)%MPOLH)) call my_dealloc(FVDATA_P(J)%MPOLH)
+              IF(ASSOCIATED(FVDATA_P(J)%RPOLH)) call my_dealloc(FVDATA_P(J)%RPOLH)
+              IF(ASSOCIATED(FVDATA_P(J)%TPOLH)) call my_dealloc(FVDATA_P(J)%TPOLH)
+            ENDDO
+            DEALLOCATE(FVDATA_P)
+          ENDIF
+        ENDIF
+
+        call my_dealloc(NODAL_SCALAR)
+        call my_dealloc(NODAL_VECTOR)
+        call my_dealloc(NODE_ID)
+        call my_dealloc(IS_WRITEN_NODE)
+        call my_dealloc(IS_WRITEN_NODE_P)
+        call my_dealloc(NODAL_VECTOR_P)
+        call my_dealloc(NODAL_SCALAR_P)
+        call my_dealloc(NODE_ID_P)
+c
+        call my_dealloc(ONED_SCALAR)
+        call my_dealloc(ONED_VECTOR)
+        call my_dealloc(ONED_TENSOR)
+        call my_dealloc(ONED_TORSOR)
+        call my_dealloc(ONED_ID)
+        call my_dealloc(ONED_ITY)
+        call my_dealloc(IS_WRITEN_ONED)
+        call my_dealloc(IS_WRITEN_ONED_P)
+        call my_dealloc(ONED_ITY_P)
+        call my_dealloc(ONED_ID_P)
+        call my_dealloc(ONED_SCALAR_P)
+        call my_dealloc(ONED_VECTOR_P)
+        call my_dealloc(ONED_TENSOR_P)
+        call my_dealloc(ONED_TORSOR_P)
+c
+        call my_dealloc(SHELL_SCALAR)
+        call my_dealloc(SHELL_VECTOR)
+        call my_dealloc(SHELL_TENSOR)
+        call my_dealloc(SHELL_ID)
+        call my_dealloc(SHELL_ITY)
+        call my_dealloc(IS_WRITEN_SHELL)
+        call my_dealloc(SHELL_SCALAR_P)
+        call my_dealloc(IS_WRITEN_SHELL_P)
+        call my_dealloc(SHELL_TENSOR_P)
+        call my_dealloc(SHELL_ID_P)
+        call my_dealloc(SHELL_ITY_P)
+c
+        call my_dealloc(SOLID_SCALAR)
+        call my_dealloc(SOLID_VECTOR)
+        call my_dealloc(SOLID_TENSOR)
+        call my_dealloc(SOLID_TENSOR_CORNER)
+        call my_dealloc(SOLID_ID)
+        call my_dealloc(ISOLNOD)
+        call my_dealloc(SOLID_ITY)
+        call my_dealloc(IS_WRITEN_SOLID)
+        call my_dealloc(SOLID_SCALAR_P)
+        call my_dealloc(SOLID_VECTOR_P)
+        call my_dealloc(SOLID_TENSOR_P)
+        call my_dealloc(SOLID_TENSOR_CORNER_P)
+        call my_dealloc(IS_WRITEN_SOLID_P)
+        call my_dealloc(SOLID_ID_P)
+        call my_dealloc(ISOLNOD_P)
+        call my_dealloc(SOLID_ITY_P)
+c
+        call my_dealloc(SPH_SCALAR)
+        call my_dealloc(SPH_TENSOR)
+        call my_dealloc(SPH_ID)
+        call my_dealloc(IS_WRITEN_SPH)
+        call my_dealloc(SPH_SCALAR_P)
+        call my_dealloc(SPH_TENSOR_P)
+        call my_dealloc(IS_WRITEN_SPH_P)
+        call my_dealloc(SPH_ID_P)
+c
+        call my_dealloc(QUAD_SCALAR)
+        call my_dealloc(QUAD_VECTOR)
+        call my_dealloc(QUAD_TENSOR)
+        call my_dealloc(QUAD_ID)
+        call my_dealloc(IS_WRITEN_QUAD)
+        call my_dealloc(QUAD_SCALAR_P)
+        call my_dealloc(QUAD_TENSOR_P)
+        call my_dealloc(IS_WRITEN_QUAD_P)
+        call my_dealloc(QUAD_ID_P)
+c
+        call my_dealloc(SKIN_TENSOR)
+        call my_dealloc(SKIN_VECTOR)
+        call my_dealloc(SKIN_SCALAR)
+        call my_dealloc(IS_WRITEN_SKIN)
+        call my_dealloc(SKIN_TENSOR_P)
+        call my_dealloc(SKIN_VECTOR_P)
+        call my_dealloc(SKIN_SCALAR_P)
+        call my_dealloc(IS_WRITEN_SKIN_P)
+        call my_dealloc(SKIN_ID_P)
+        call my_dealloc(IXSKIN_TMP)
+        call my_dealloc(IXSKIN_P)
+        IF (NUMSKINP>0) DEALLOCATE(NODAL_IPART,IMAPSKP)
+c
+        call my_dealloc(ITAB_P)
+
+
+        call my_dealloc(IXTG_P)
+        call my_dealloc(IXS_P)
+        call my_dealloc(IXP_P)
+        call my_dealloc(IXR_P)
+        call my_dealloc(KXSP_P)
+        call my_dealloc(IXT_P)
+        call my_dealloc(IXC_P)
+        call my_dealloc(IXS10_P)
+        call my_dealloc(IXS16_P)
+        call my_dealloc(IXS20_P)
+        call my_dealloc(IPARTC_P)
+        call my_dealloc(IPARTTG_P)
+        call my_dealloc(IPARTQ_P)
+        call my_dealloc(IPARTS_P)
+        call my_dealloc(IPARTR_P)
+        call my_dealloc(IPARTP_P)
+        call my_dealloc(IPARTT_P)
+        call my_dealloc(IPARTSP_P)
+        call my_dealloc(IPARTS10_P)
+        call my_dealloc(IPARTS16_P)
+        call my_dealloc(IPARTS20_P)
+        call my_dealloc(IXQ_P)
+        call my_dealloc(IXC_TMP)
+        call my_dealloc(IXTG_TMP)
+c     DEALLOCATE(  IXS_TMP)
+        call my_dealloc(IXR_TMP)
+        call my_dealloc(IXP_TMP)
+        call my_dealloc(KXSP_TMP)
+        call my_dealloc(IXT_TMP)
+        call my_dealloc(IXS10_TMP)
+        call my_dealloc(IXS16_TMP)
+        call my_dealloc(IXS20_TMP)
+        call my_dealloc(IXQ_TMP)
+        call my_dealloc(SUB_ID)
+        call my_dealloc(SUB_LEVEL)
+        call my_dealloc(SUB_NCHILD)
+        IF(ALLOCATED(SUB_CHILD)) DEALLOCATE( SUB_CHILD,SUB_IAD,SUB_TITLE)
+
+
+        IF (ALLOCATED(NODAL_IPART)) call my_dealloc(NODAL_IPART)
+
+c
+        IF (ALLOCATED(TAGNOD)) call my_dealloc(TAGNOD)
+c
+        call my_dealloc(TAGNOD_P)
+c
+        call my_dealloc(MAS)
+C
+        IF(ISPMD == 0)  THEN
+          CALL STARTIME(TIMERS,MACRO_TIMER_LIBH3D)
+          CALL C_H3D_WRITE_TOC()
+          CALL STOPTIME(TIMERS,MACRO_TIMER_LIBH3D)
+        ENDIF
+C
+        IF (ISPMD==0) THEN
+          INQUIRE(FILE=TMP_NAME(1:LEN_TMP_NAME), SIZE=H3DTOTALSIZE8)
+          H3DTOTALSIZE8 = H3DTOTALSIZE8/(1024*1024)
+          H3DTOTALSIZE = H3DTOTALSIZE8
+          WRITE (IOUT,1000)  FILNAM(1:FILEN),H3D_DATA%IH3D,NCYCLE,TT
+          WRITE (ISTDO,1000) FILNAM(1:FILEN),H3D_DATA%IH3D,NCYCLE,TT
+        ENDIF
+c-----------
+        CALL STOPTIME(TIMERS,MACRO_TIMER_GENH3D)
+        RETURN
+ 1000   FORMAT (4X,' H3D FILE:',1X,A,' UPDATED:  FRAME=',1X,I5,' , NC=',1X,I7,' , TIME=',1X,G11.4)
+
+
+ 2000   FORMAT (4X,/,
+     .        4X,'------------------------------------------------------------',/,
+     .        4X,'  H3D LIBRARY VERSION:',1X,I4,'.',I1,/,
+     .        4X,'------------------------------------------------------------',
+     .        4X)
+      END SUBROUTINE GENH3D

@@ -1,0 +1,243 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+      my_real, PARAMETER ::  ZERO = 0.
+      my_real, PARAMETER ::  ONE = 1.
+
+
+      COMMON /CONST/
+C--------------------------------------
+C      Integers
+C--------------------------------------
+     . TWO, THREE,FOUR,FIVE,SIX ,SEVEN, EIGHT,NINE,TEN,
+     . ELEVEN,TWELVE ,FOURTEEN,FIFTEEN,SIXTEEN,TWENTY, TWENTY4,TWENTY5,
+     . TWENTY7,THIRTY ,THIRTY2,THIRTY6,FOURTY,FOURTY5,FOURTY8,
+     . FIFTY, SIXTY4,EIGHTY,EIGHTY16,EIGHTY19,
+     . HUNDRED,HUNDRED28,HUNDRED50,HUNDRED80,THREE100,TWOHUNDRED25,TWOHUNDRED95,
+     . TWOHUNDRED98,TWOHUNDRED93, THREEHUNDRED24,FIVEHUNDRED12,THREE1000,
+     . TWO1000,EIGHTEEN,CINQUANTE4,
+C--------------------------------------
+C      10^n
+C--------------------------------------          
+     . EP02,EP03,EP04,EP05,EP06,EP07,EP08 ,EP09 ,EP10,EP11,EP12, 
+     . EP13,EP14,EP15,EP16,EP17,EP18,EP19,EP20,EP29,EP30,EP31, 
+     . EP35,EP36,EP37,
+C--------------------------------------
+C      10^-n
+C-------------------------------------- 
+     . EM01,EM02,EM03,EM04,EM05,EM06,EM07,EM08,EM09,EM10,EM11,
+     . EM12,EM13,EM14,EM15,EM16,EM17,EM18,EM19,EM20,EM30,EM35,
+C--------------------------------------
+C      m10^-n
+C--------------------------------------     
+     . ZEP1,ZEP2 ,ZEP3 ,ZEP4,ZEP5,ZEP6,ZEP7,ZEP8,ZEP9,ZEP01,
+     . ZEP02,ZEP03,ZEP04,ZEP05,ZEP06,ZEP07,ZEP08,ZEP09,TWOEM3, 
+     . THREEEM3,FOUREM3,FIVEEM3,SIXEM3,SEVENEM3,EIGHTEM3,  
+     . NINEEM3,TWOEM4,THREEEM4,FOUREM4,FIVEEM4,SIXEM4,   
+     . SEVENEM4,EIGHTEM4,NINEEM4,TWOEM5,THREEEM5,FOUREM5,
+     . FIVEEM5,SIXEM5,SEVENEM5,EIGHTEM5,NINEEM5,TWOEM6, 
+     . THREEEM6,FOUREM6,FIVEEM6,SIXEM6,SEVENEM6,EIGHTEM6 , 
+     . NINEEM6,           
+C--------------------------------------
+C      m10^n
+C--------------------------------------
+     . TWOEP30, THREEEP30,FOUREP30,ZEP9EP30,ONEP1EP30,ONEP2EP30,
+C--------------------------------------
+C      Fractions
+C--------------------------------------
+     . HALF,THIRD,FOURTH,ONE_FIFTH,ONE_OVER_6,ONE_OVER_8,ONE_OVER_9,ONE_OVER_12,  
+     . ONE_OVER_16,ONE_OVER_64,ONE_OVER_512,TWO_THIRD,THREE_HALF,THREE_OVER_4,TRHEE_OVER_14,TSEIZE,
+     . FOUR_OVER_3,FOUR_OVER_5,QNEUF,FIVE_OVER_3,FIVE_OVER_4,FIVE_OVER_6 ,SIX_OVER_5,SEVEN_HALF,   
+     . SEVEN_OVER_5,SEVEN_OVER_9,NINE_OVER_2,NSEIZE,NINE_OVER_20,
+C--------------------------------------
+C      0.xxxx
+C--------------------------------------         
+     . ZEP11,ZEP12,ZEP13,ZEP14,ZEP15,ZEP16,ZEP17,ZEP18,ZEP19,ZEP21,
+     . ZEP23,ZEP25,ZEP26,ZEP213,ZEP29,ZEP33,ZEP34,ZEP35,ZEP37,ZEP38,
+     . ZEP333,ZEP373,ZEP41,ZEP43,ZEP45,ZEP46,ZEP47,ZEP499,ZEP4187,
+     . ZEP62,ZEP65,ZEP66,ZEP67,ZEP71,ZEP74,ZEP707,ZEP81,ZEP82,ZEP84,
+     . ZEP85,ZEP87,ZEP89,ZEP92,ZEP93,ZEP94,ZEP95,ZEP96,ZEP97,ZEP99,
+     . ZEP995,ZEP997,ZEP999,ZEP9999,ZEP99999,ZEP931,ZEP015,ZEP015625,
+     . ZEP025,ZEP037,ZEP072169,ZEP075,
+C--------------------------------------
+C      1.xxxx
+C--------------------------------------    
+     . ONEP01,ONEP001,ONEP0001,ONEP00001,ONEP02,ONEP03,ONEP04,ONEP05,ONEP06,
+     . ONEP08,ONEP09,ONEP1,ONEP11,ONEP12,ONEP13,ONEP14,ONEP15 ,ONEP16 ,ONEP17,
+     . ONEP18,ONEP19,ONEP136,ONEP138,ONEP2,ONEP21,ONEP23,ONEP24,ONEP25,ONEP26, 
+     . ONEP27,ONEP28,ONEP251,ONEP252,ONEP3,ONEP31,ONEP32,ONEP33,ONEP34,ONEP35,
+     . ONEP36,ONEP37,ONEP38,ONEP39,ONEP333,ONEP3348,ONEP369,ONEP4,ONEP41,ONEP42, 
+     . ONEP44,ONEP45,ONEP46,ONEP48,ONEP49,ONEP414,ONEP484,ONEP5 ,ONEP51,ONEP52,
+     . ONEP57,ONEP59,ONEP6,ONEP62,ONEP65,ONEP66,ONEP67,ONEP68,ONEP7,ONEP72,ONEP73,
+     . ONEP75,ONEP78,ONEP732,ONEP8,ONEP82,ONEP84,ONEP88,ONEP833,ONEP8688,
+     . ONEP9,ONEP92,ONEP96,ONEP98,
+C--------------------------------------
+C      *.xxxx, 
+C--------------------------------------  
+     . TWOP03,TWOP05,TWOP06,TWOP07,TWOP08,TWOP1,TWOP2,
+     . TWOP30,TWOP4,TWOP5,TWOP60,TWOP8,TWOP11,TWOP12,TWOP13,
+     . TWOP16,TWOP19,TWOP23,TWOP24,TWOP25,TWOP33,TWOP38,TWOP45,
+     . TWOP47,TWOP52,TWOP83,TWOP84,TWOP85,TWOP185,TWOP261,
+     . TWOP645,THREEP02,THREEP06,THREEP14,THREEP15,THREEP25,THREEP27,
+     . THREEP44,THREEP46,THREEP52,THREEP72,THREEP76,THREEP8,THREEP94,
+     . THREEP266,THREEP464,THREEP4641,FOURP186,FOURP40,FOURP76,
+     . FIVEP5,FIVEP56,FIVEP76,SIP2832,NINEP24,NINEP38,NINEP793,ELEVENP5,
+     . TWELVEP6,FOURTEENP2,SIXTEENP5,O88P9844,ONZEP225,
+     . NINEP637EM5,ZEP999EP31,
+     . ZEP54,ZEP1381966,ZEP5854102,ONEP001EM32,ONEP3EM5,EIGHTP314EM5,     
+C--------------------------------------
+C      fractions
+C--------------------------------------
+     . ZEP426667,ZEP222,ZEP00666666667,ZEP01666666667 ,ZEP444,ONEP222,
+     . ONEP8333,TWOP444,TWOP6666666667,TWOP6667,FIVEP333, 
+C-------------------------------------- 
+C--------------------------------------
+C      Physics 
+C--------------------------------------
+     . R_IGC,
+C--------------------------------------
+C      Maths 
+C--------------------------------------
+     . SQR2,SQR3,SQR5,SQR6,SQR7,SQR3_2,SQR4_3,SQR16_3,PI,INVPI,            
+C--------------------------------------
+C      alias
+C--------------------------------------          
+     . EM3,EM4,EM5,EM6,EM7,EM8,EM9,EP9,
+     . FIVEEM2,TWOEM2,NINEEM2,ZEP80,UNP20,UNP30,UNP70,UNP90,   
+     . VAR1,VAR2 , VAR3, VAR4 , VAR5, VAR6, VAR7, VAR8, VAR9,VAR10, 
+     . VAR11,VAR12,VAR13, VAR14,VAR15,VAR16,VAR17,VAR18,VAR19,VAR20,     
+     . VAR22,VAR23,VAR24,VAR25,VAR26,VAR27,VAR28, VAR29,     
+     . VAR30,VAR31,VAR32,VAR33, VAR34,VAR35,VAR36,VAR37,VAR38,VAR39,
+     . VAR40,VAR41,VAR42,VAR43, VAR44,VAR45,VAR46,VAR47,VAR48,VAR49,
+     . VAR50,VAR51,VAR52,VAR53, VAR54,VAR56,VAR57,VAR58,VAR59,VAR60,
+     . VAR61,VAR62,VAR63,VAR64, VAR65,VAR66,VAR67   
+C real
+       my_real
+C--------------------------------------
+C      Integers
+C--------------------------------------
+     . TWO, THREE,FOUR,FIVE,SIX ,SEVEN, EIGHT,NINE,TEN,
+     . ELEVEN,TWELVE ,FOURTEEN,FIFTEEN,SIXTEEN,TWENTY, TWENTY4,TWENTY5,
+     . TWENTY7,THIRTY ,THIRTY2,THIRTY6,FOURTY,FOURTY5,FOURTY8,
+     . FIFTY, SIXTY4,EIGHTY,EIGHTY16,EIGHTY19,
+     . HUNDRED,HUNDRED28,HUNDRED50,HUNDRED80,THREE100,TWOHUNDRED25,TWOHUNDRED95,
+     . TWOHUNDRED98,TWOHUNDRED93, THREEHUNDRED24,FIVEHUNDRED12,THREE1000,
+     . TWO1000,EIGHTEEN,CINQUANTE4,
+C--------------------------------------
+C      10^n
+C--------------------------------------          
+     . EP02,EP03,EP04,EP05,EP06,EP07,EP08 ,EP09 ,EP10,EP11,EP12, 
+     . EP13,EP14,EP15,EP16,EP17,EP18,EP19,EP20,EP29,EP30,EP31, 
+     . EP35,EP36,EP37,
+C--------------------------------------
+C      10^-n
+C-------------------------------------- 
+     . EM01,EM02,EM03,EM04,EM05,EM06,EM07,EM08,EM09,EM10,EM11,
+     . EM12,EM13,EM14,EM15,EM16,EM17,EM18,EM19,EM20,EM30,EM35,
+C--------------------------------------
+C      m10^-n
+C--------------------------------------     
+     . ZEP1,ZEP2 ,ZEP3 ,ZEP4,ZEP5,ZEP6,ZEP7,ZEP8,ZEP9,ZEP01,
+     . ZEP02,ZEP03,ZEP04,ZEP05,ZEP06,ZEP07,ZEP08,ZEP09,TWOEM3, 
+     . THREEEM3,FOUREM3,FIVEEM3,SIXEM3,SEVENEM3,EIGHTEM3,  
+     . NINEEM3,TWOEM4,THREEEM4,FOUREM4,FIVEEM4,SIXEM4,   
+     . SEVENEM4,EIGHTEM4,NINEEM4,TWOEM5,THREEEM5,FOUREM5,
+     . FIVEEM5,SIXEM5,SEVENEM5,EIGHTEM5,NINEEM5,TWOEM6, 
+     . THREEEM6,FOUREM6,FIVEEM6,SIXEM6,SEVENEM6,EIGHTEM6 , 
+     . NINEEM6, 
+C--------------------------------------
+C      m10^n
+C--------------------------------------
+     . TWOEP30, THREEEP30,FOUREP30,ZEP9EP30,ONEP1EP30,ONEP2EP30,
+C--------------------------------------
+C      Fractions
+C--------------------------------------
+     . HALF,THIRD,FOURTH,ONE_FIFTH,ONE_OVER_6,ONE_OVER_8,ONE_OVER_9,ONE_OVER_12,  
+     . ONE_OVER_16,ONE_OVER_64,ONE_OVER_512,TWO_THIRD,THREE_HALF,THREE_OVER_4,TRHEE_OVER_14,TSEIZE,
+     . FOUR_OVER_3,FOUR_OVER_5,QNEUF,FIVE_OVER_3,FIVE_OVER_4,FIVE_OVER_6 ,SIX_OVER_5,SEVEN_HALF,   
+     . SEVEN_OVER_5,SEVEN_OVER_9,NINE_OVER_2,NSEIZE,NINE_OVER_20,
+C--------------------------------------
+C      0.xxxx
+C--------------------------------------         
+     . ZEP11,ZEP12,ZEP13,ZEP14,ZEP15,ZEP16,ZEP17,ZEP18,ZEP19,ZEP21,
+     . ZEP23,ZEP25,ZEP26,ZEP213,ZEP29,ZEP33,ZEP34,ZEP35,ZEP37,ZEP38,
+     . ZEP333,ZEP373,ZEP41,ZEP43,ZEP45,ZEP46,ZEP47,ZEP499,ZEP4187,
+     . ZEP62,ZEP65,ZEP66,ZEP67,ZEP71,ZEP74,ZEP707,ZEP81,ZEP82,ZEP84,
+     . ZEP85,ZEP87,ZEP89,ZEP92,ZEP93,ZEP94,ZEP95,ZEP96,ZEP97,ZEP99,
+     . ZEP995,ZEP997,ZEP999,ZEP9999,ZEP99999,ZEP931,ZEP015,ZEP015625,
+     . ZEP025,ZEP037,ZEP072169,ZEP075,
+C--------------------------------------
+C      1.xxxx
+C--------------------------------------    
+     . ONEP01,ONEP001,ONEP0001,ONEP00001,ONEP02,ONEP03,ONEP04,ONEP05,ONEP06,
+     . ONEP08,ONEP09,ONEP1,ONEP11,ONEP12,ONEP13,ONEP14,ONEP15 ,ONEP16 ,ONEP17,
+     . ONEP18,ONEP19,ONEP136,ONEP138,ONEP2,ONEP21,ONEP23,ONEP24,ONEP25,ONEP26, 
+     . ONEP27,ONEP28,ONEP251,ONEP252,ONEP3,ONEP31,ONEP32,ONEP33,ONEP34,ONEP35,
+     . ONEP36,ONEP37,ONEP38,ONEP39,ONEP333,ONEP3348,ONEP369,ONEP4,ONEP41,ONEP42, 
+     . ONEP44,ONEP45,ONEP46,ONEP48,ONEP49,ONEP414,ONEP484,ONEP5 ,ONEP51,ONEP52,
+     . ONEP57,ONEP59,ONEP6,ONEP62,ONEP65,ONEP66,ONEP67,ONEP68,ONEP7,ONEP72,ONEP73,
+     . ONEP75,ONEP78,ONEP732,ONEP8,ONEP82,ONEP84,ONEP88,ONEP833,ONEP8688,
+     . ONEP9,ONEP92,ONEP96,ONEP98,
+C--------------------------------------
+C      *.xxxx, 
+C--------------------------------------  
+     . TWOP03,TWOP05,TWOP06,TWOP07,TWOP08,TWOP1,TWOP2,
+     . TWOP30,TWOP4,TWOP5,TWOP60,TWOP8,TWOP11,TWOP12,TWOP13,
+     . TWOP16,TWOP19,TWOP23,TWOP24,TWOP25,TWOP33,TWOP38,TWOP45,
+     . TWOP47,TWOP52,TWOP83,TWOP84,TWOP85,TWOP185,TWOP261,
+     . TWOP645,THREEP02,THREEP06,THREEP14,THREEP15,THREEP25,THREEP27,
+     . THREEP44,THREEP46,THREEP52,THREEP72,THREEP76,THREEP8,THREEP94,
+     . THREEP266,THREEP464,THREEP4641,FOURP186,FOURP40,FOURP76,
+     . FIVEP5,FIVEP56,FIVEP76,SIP2832,NINEP24,NINEP38,NINEP793,ELEVENP5,
+     . TWELVEP6,FOURTEENP2,SIXTEENP5,O88P9844,ONZEP225,
+     . NINEP637EM5,ZEP999EP31,
+     . ZEP54,ZEP1381966,ZEP5854102,ONEP001EM32,ONEP3EM5,EIGHTP314EM5,       
+C--------------------------------------
+C      Fractions
+C--------------------------------------
+     . ZEP426667,ZEP222,ZEP00666666667,ZEP01666666667 ,ZEP444,ONEP222,
+     . ONEP8333,TWOP444,TWOP6666666667,TWOP6667,FIVEP333, 
+C--------------------------------------
+C      Physics 
+C--------------------------------------
+     . R_IGC,
+C--------------------------------------
+C      Math                        
+C--------------------------------------
+     . SQR2,SQR3,SQR5,SQR6,SQR7,SQR3_2,SQR4_3,SQR16_3,PI,INVPI,             
+C--------------------------------------
+C      alias
+C--------------------------------------          
+     . EM3,EM4,EM5,EM6,EM7,EM8,EM9,EP9,
+     . FIVEEM2,TWOEM2,NINEEM2,ZEP80,UNP20,UNP30,UNP70,UNP90,   
+     . VAR1,VAR2 , VAR3, VAR4 , VAR5, VAR6, VAR7, VAR8, VAR9,VAR10, 
+     . VAR11,VAR12,VAR13, VAR14,VAR15,VAR16,VAR17,VAR18,VAR19,VAR20,     
+     . VAR22,VAR23,VAR24,VAR25,VAR26,VAR27,VAR28, VAR29,     
+     . VAR30,VAR31,VAR32,VAR33, VAR34,VAR35,VAR36,VAR37,VAR38,VAR39,
+     . VAR40,VAR41,VAR42,VAR43, VAR44,VAR45,VAR46,VAR47,VAR48,VAR49,
+     . VAR50,VAR51,VAR52,VAR53, VAR54,VAR56,VAR57,VAR58,VAR59,VAR60,
+     . VAR61,VAR62,VAR63,VAR64, VAR65,VAR66,VAR67  
+
+
+
+

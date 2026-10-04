@@ -1,0 +1,1289 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    pfluid                ../engine/source/loads/general/pfluid/pfluid.F
+!||--- called by ------------------------------------------------------
+!||    resol                 ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    finter                ../engine/source/tools/curve/finter.F
+!||    get_u_numsens         ../engine/source/user_interface/usensor.F
+!||    get_u_sens_fpar       ../engine/source/user_interface/usensor.F
+!||    get_u_sens_ipar       ../engine/source/user_interface/usensor.F
+!||    get_u_sens_value      ../engine/source/user_interface/usensor.F
+!||    set_u_sens_value      ../engine/source/user_interface/usensor.F
+!||--- uses       -----------------------------------------------------
+!||    h3d_mod               ../engine/share/modules/h3d_mod.F
+!||    python_funct_mod      ../common_source/modules/python_mod.F90
+!||    sensor_mod            ../common_source/modules/sensor_mod.F90
+!||    th_surf_mod           ../common_source/modules/interfaces/th_surf_mod.F
+!||====================================================================
+      SUBROUTINE PFLUID(ILOADP     ,RLOAD      ,NPC    ,TF     ,A          ,
+     2                  V          ,X          ,XFRAME ,MS     ,       
+     3                  NSENSOR    ,SENSOR_TAB ,WFEXC  ,WFEXT  ,IADC       ,
+     4                  FSKY       ,FSKYV      ,LLOADP ,FEXT   ,H3D_DATA   ,
+     5                  TH_SURF    ,PYTHON )
+C-----------------------------------------------
+C   D e s c r i p t i o n
+C----------------------------------------------- 
+C This subroutine is modeling a pressure load on given structural faces (4 or 3 nodes). 
+C The pressure load results into a normal force at face centroid. This normal force is then expanded to the nodes composing the face.
+C
+C ILOADP     : Integer array related to /LOAD/PBLAST option
+C RLOAD      : Real array related to /LOAD/PBLAST option
+C NPC        : integer array for /FUNCT options
+C TF         : real array for /FUNCT options
+C A          : nodal accelerations
+C V          : nodal velocities
+C X          : nodal coordinates
+C XFRAME     : array for /FRAME option
+C AR         : rotationnal acceleration
+C VR         : rotationnal velocities
+C SENSOR_TAB : data structure for /SENSOR option
+C WEIGHT     : -
+C WFEXC      : -
+C IADC       : (Parith/on only) contains index to be used with FSKY array
+C FSKY       : (Parith/on only) Nodal force    (directly apply as a nodal acceleration in A array in case of Parith/off)
+C LLOADP     : array used to retrieve nodes N1,N2,N3,N4 of the structural face to be loaded
+C FEXT       : storage of nodal forces for animation purpose (/ANIM/VECT/FEXT)
+C H3D_DATA   : data structure for H3D parameters
+C
+C FORCE STORAGE :
+C Parith/off : Forces are introduced as acceleration directly in A(1:3, 1:NUMNOD) array
+C Parith/on  : Forces are saved in FSKY array and will be assembled later using a suitable order
+C
+C SOURCE CODE
+C There are currently 3 parts in this source file
+C  -1- "PART-1. PARITH/OFF"
+C  -2- "PART-2. PARITH/ON, non vectorial code"
+C  -3- "PART-3. PARITH/ON, vectorial code"
+C-----------------------------------------------
+C   M o d u l e s
+C----------------------------------------------- 
+      USE PYTHON_FUNCT_MOD
+      USE H3D_MOD 
+      USE SENSOR_MOD
+      USE TH_SURF_MOD , ONLY : TH_SURF_
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+!#include      "com06_c.inc"
+#include      "com08_c.inc"
+#include      "parit_c.inc"
+#include      "scr14_c.inc"
+#include      "scr16_c.inc"
+#include      "tabsiz_c.inc"
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   E x t e r n a l  F u n c t i o n s
+C-----------------------------------------------
+      INTEGER  GET_U_NUMSENS,GET_U_SENS_FPAR,GET_U_SENS_IPAR,GET_U_SENS_VALUE,SET_U_SENS_VALUE
+      EXTERNAL GET_U_NUMSENS,GET_U_SENS_FPAR,GET_U_SENS_IPAR,GET_U_SENS_VALUE,SET_U_SENS_VALUE
+C-----------------------------------------------,
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: MS(NUMNOD)
+      INTEGER ,INTENT(IN) :: NSENSOR
+      INTEGER NPC(SNPC),LLOADP(SLLOADP)
+      INTEGER ILOADP(SIZLOADP,NLOADP)
+      INTEGER IADC(DSNCOL)
+      my_real RLOAD(LFACLOAD,NLOADP), TF(STF), A(3,NUMNOD), V(3,NUMNOD),
+     .        X(3,NUMNOD), XFRAME(NXFRAME,NUMFRAM+1),WFEXC,
+     .        FSKY(8,SFSKY/8), FSKYV(SFSKY/8,8),FEXT(3,NUMNOD)
+      TYPE(H3D_DATABASE) :: H3D_DATA
+      TYPE (SENSOR_STR_) ,DIMENSION(NSENSOR) ,INTENT(IN) :: SENSOR_TAB
+      TYPE (TH_SURF_) , INTENT(INOUT) :: TH_SURF
+      TYPE(PYTHON_) :: PYTHON
+      DOUBLE PRECISION,INTENT(INOUT) :: WFEXT
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NL, N1, N2, N3, N4, FUN_HSP, K1, K2, K3, ISENS,K,
+     .        IAD,N_OLD,IFRA1,DIR_HSP,I,
+     .        FUN_CX,FUN_VEL,DIR_VEL,IFRA2, IANIM,IJK,UP_BOUND,NS,KSURF,NSEGPL
+      my_real NX, NY, NZ, AA,FX, FY, FZ, DYDX, TS,
+     .        SIXTH,WFEXTT,X_OLD,XSENS,FCX,FCY,
+     .        FCX1,FCY1,FCX2,FCY2,VEL,VSEG,FINTER,
+     .        CENTROID_DEPTH,PVEL,NORM,NSIGN,AREA,PA,MASS,AN,VN,PVEL0
+      EXTERNAL FINTER
+      INTEGER :: ISMOOTH
+C-----------------------------------------------
+C   S o u r c e   L i n e s
+C-----------------------------------------------
+
+      ! init.
+      SIXTH  = ONE_OVER_6  
+      WFEXC  = ZERO
+      WFEXTT = ZERO
+      N_OLD  = 0
+      X_OLD  = ZERO
+      NSEGPL = 0
+      IANIM  = ANIM_V(5)+OUTP_V(5) + H3D_DATA%N_VECT_FINT + ANIM_V(6)+OUTP_V(6) + H3D_DATA%N_VECT_FEXT
+
+C---------------------------------------
+C PART-1. PARITH/OFF
+C---------------------------------------
+
+      IF(IPARIT == 0) THEN
+      
+        DO NL=1,NLOADP_F  !loop over /LOAD/PFLUID options
+        
+          !user parameters (Defined in Starter while reading input file hm_read_pblast.F, and transmitted to Engine with Restart file)                                                                    
+          FUN_HSP = ILOADP(7,NL)                                                                     
+          DIR_HSP = ILOADP(8,NL)                                                                     
+          IFRA1   = ILOADP(9,NL)                                                                       
+          FCY     = RLOAD(1,NL)                                                                          
+          FCX     = RLOAD(2,NL)                                                                          
+          FUN_CX  = ILOADP(10,NL)                                                                     
+          FCY1    = RLOAD(3,NL)                                                                         
+          FCX1    = RLOAD(4,NL)                                                                         
+          FUN_VEL = ILOADP(11,NL)                                                                    
+          FCY2    = RLOAD(5,NL)                                                                         
+          FCX2    = RLOAD(6,NL)                                                                                                      
+          DIR_VEL = MAX(ILOADP(12,NL),1)   !To avoid a check bound issue when the velocity options are useless                                                       
+          IFRA2   = ILOADP(13,NL) 
+          IFRA2   = MAX(IFRA2,1)                                                                     
+          ISENS   = 0 
+          
+          !possible sensor                                                                                 
+          XSENS = ONE                                                                              
+          DO K=1,NSENSOR                                                                           
+            IF(ILOADP(6,NL) == SENSOR_TAB(K)%SENS_ID) ISENS=K      ! should be moved in Starter to optimize performance
+          ENDDO                                                                                    
+          IF(ISENS == 0)THEN                                                                       
+             TS=TT                                                                                 
+          ELSE                                                                                     
+             TS = TT-SENSOR_TAB(ISENS)%TSTART                                                              
+             IF(TS < ZERO) CYCLE                                                                   
+          ENDIF  
+          
+!$OMP DO SCHEDULE(GUIDED,MVSIZ)                                                                                            
+          DO I = 1,ILOADP(1,NL)/4    
+            !Structural face is N1,N2,N3,N4                                                              
+            N1=LLOADP(ILOADP(4,NL)+4*(I-1))                                                        
+            N2=LLOADP(ILOADP(4,NL)+4*(I-1)+1)                                                      
+            N3=LLOADP(ILOADP(4,NL)+4*(I-1)+2)                                                      
+            N4=LLOADP(ILOADP(4,NL)+4*(I-1)+3)                                                      
+            AA=ZERO                                                                              
+            VEL=ZERO                                                                             
+            PVEL=ZERO                                                                              
+            !---QUADRAGLE--------------------------------------------
+            IF(N4 /= 0 .AND. N1 /= N2 .AND. N1 /= N3 .AND. N1 /= N4 .AND. N2 /= N3 .AND. N2 /= N4 .AND. N3 /= N4 )THEN  !we could optimize performance by moving this check in Starter                     
+              K1=3*DIR_HSP-2                                                                       
+              K2=3*DIR_HSP-1                                                                       
+              K3=3*DIR_HSP                                                                         
+              ! hydrostatic pressure                                                               
+              IF(FUN_HSP /= 0)THEN                                                                
+                CENTROID_DEPTH =                 (XFRAME(K1,IFRA1)*(X(1,N1)+X(1,N2)+X(1,N3)+X(1,N4))/FOUR)
+                CENTROID_DEPTH = CENTROID_DEPTH +(XFRAME(K2,IFRA1)*(X(2,N1)+X(2,N2)+X(2,N3)+X(2,N4))/FOUR)
+                CENTROID_DEPTH = CENTROID_DEPTH +(XFRAME(K3,IFRA1)*(X(3,N1)+X(3,N2)+X(3,N3)+X(3,N4))/FOUR)              
+                ISMOOTH = 0
+                IF (FUN_HSP > 0) ISMOOTH = NPC(2*NFUNCT+FUN_HSP+1)
+                IF(ISMOOTH < 0) THEN
+                  CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX , AA)
+                  AA = AA*FCY
+                ELSE
+                  AA = FCY*FINTER(FUN_HSP,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX,NPC,TF,DYDX) 
+                ENDIF
+              ENDIF  
+              !normal vector                                                                              
+              NX=(X(2,N3)-X(2,N1))*(X(3,N4)-X(3,N2)) - (X(3,N3)-X(3,N1))*(X(2,N4)-X(2,N2))        
+              NY=(X(3,N3)-X(3,N1))*(X(1,N4)-X(1,N2)) - (X(1,N3)-X(1,N1))*(X(3,N4)-X(3,N2))        
+              NZ=(X(1,N3)-X(1,N1))*(X(2,N4)-X(2,N2)) - (X(2,N3)-X(2,N1))*(X(1,N4)-X(1,N2))        
+              NORM = SQRT(NX*NX+NY*NY+NZ*NZ)                                                       
+              AREA = HALF * NORM 
+              PA = AA                                                                  
+              AA = AA * AREA                                                                                                                                                                      
+              
+              !face velocity
+              K1=3*DIR_VEL-2                                                                       
+              K2=3*DIR_VEL-1                                                                       
+              K3=3*DIR_VEL               
+              VSEG =        (XFRAME(K1,IFRA2)*(V(1,N1) + V(1,N2) + V(1,N3) + V(1,N4)) /FOUR)              
+              VSEG = VSEG + (XFRAME(K2,IFRA2)*(V(2,N1) + V(2,N2) + V(2,N3) + V(2,N4)) /FOUR)                             
+              VSEG = VSEG + (XFRAME(K3,IFRA2)*(V(3,N1) + V(3,N2) + V(3,N3) + V(3,N4)) /FOUR)                               
+
+              !VEL,PVEL, and NSIGN
+              IF(FUN_VEL /= 0)THEN                                                                
+                ISMOOTH = 0
+                IF (FUN_VEL > 0) ISMOOTH = NPC(2*NFUNCT+FUN_VEL+1)
+                IF(ISMOOTH < 0) THEN
+                  CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX2, VEL)
+                  VEL = VEL*FCY2 - VSEG
+                ELSE
+                  VEL =  FCY2*FINTER(FUN_VEL,TT*FCX2,NPC,TF,DYDX) - VSEG                             
+                ENDIF
+              ELSE                                                                                 
+                 VEL =  -VSEG                                                                     
+              ENDIF                                                                                                
+              IF(FUN_CX /= 0)  THEN                                                                   
+                PVEL = ( (-(NX/NORM)*VEL*XFRAME(K1,IFRA2)-(NY/NORM)*VEL*XFRAME(K2,IFRA2)-(NZ/NORM)*VEL*XFRAME(K3,IFRA2))**2 )                               
+                ISMOOTH = 0
+                IF (FUN_CX > 0) ISMOOTH = NPC(2*NFUNCT+FUN_CX+1)
+                IF(ISMOOTH < 0) THEN
+                  CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX1, PVEL0)
+                  PVEL = PVEL*PVEL0*FCY1/TWO
+                ELSE
+                  PVEL=PVEL*FCY1*FINTER(FUN_CX,TT*FCX1,NPC,TF,DYDX)/TWO  
+                ENDIF
+              ENDIF                                      
+              NSIGN = VEL*(NX*XFRAME(K1,IFRA2) + NY*XFRAME(K2,IFRA2) +  NZ*XFRAME(K3,IFRA2))   !  <Vseg.d,n>  where d is flow direction X,Y,Z    ! IFRA2=1 is general frame, IFRA2 in [2:NFRAME+1] are for user frames
+              NSIGN = SIGN(ONE,NSIGN)                                              
+              
+              !hydrostatic pressure                  
+              FX=-AA*(NX/NORM)                                         
+              FY=-AA*(NY/NORM)                                         
+              FZ=-AA*(NZ/NORM)
+              !drag force
+              FX=FX+PVEL*HALF*NX*NSIGN
+              FY=FY+PVEL*HALF*NY*NSIGN
+              FZ=FZ+PVEL*HALF*NZ*NSIGN
+              !expanding on the 4-node-face
+              FX=FX*FOURTH
+              FY=FY*FOURTH
+              FZ=FZ*FOURTH                                  
+                                                                                             
+              !External Force Work
+              WFEXTT=WFEXTT+DT1*(FX*(V(1,N1)+V(1,N2)+V(1,N3)+V(1,N4))
+     +                          +FY*(V(2,N1)+V(2,N2)+V(2,N3)+V(2,N4))
+     +                          +FZ*(V(3,N1)+V(3,N2)+V(3,N3)+V(3,N4)))
+     
+#include "lockon.inc"
+              !/PARITH/OFF: force is directly added in A array. It will be divided by nodal mass later
+              !-node_1
+              A(1,N1)=A(1,N1)+FX                                                                   
+              A(2,N1)=A(2,N1)+FY                                                                   
+              A(3,N1)=A(3,N1)+FZ                                                                                                                                               
+              !-node_2
+              A(1,N2)=A(1,N2)+FX                                                                   
+              A(2,N2)=A(2,N2)+FY                                                                   
+              A(3,N2)=A(3,N2)+FZ                                                                                                                                               
+              !-node_3
+              A(1,N3)=A(1,N3)+FX                                                                   
+              A(2,N3)=A(2,N3)+FY                                                                   
+              A(3,N3)=A(3,N3)+FZ                                                                                                                                                  
+              !-node_4
+              A(1,N4)=A(1,N4)+FX                                                                   
+              A(2,N4)=A(2,N4)+FY                                                                   
+              A(3,N4)=A(3,N4)+FZ 
+#include "lockoff.inc" 
+
+              IF(IANIM  > 0) THEN                
+#include "lockon.inc"
+                FEXT(1,N1) = FEXT(1,N1)+FX                                                         
+                FEXT(2,N1) = FEXT(2,N1)+FY                                                         
+                FEXT(3,N1) = FEXT(3,N1)+FZ    
+                !                                                                             
+                FEXT(1,N2) = FEXT(1,N2)+FX                                                         
+                FEXT(2,N2) = FEXT(2,N2)+FY                                                         
+                FEXT(3,N2) = FEXT(3,N2)+FZ  
+                !
+                FEXT(1,N3) = FEXT(1,N3)+FX                                                         
+                FEXT(2,N3) = FEXT(2,N3)+FY                                                         
+                FEXT(3,N3) = FEXT(3,N3)+FZ
+                !
+                FEXT(1,N4) = FEXT(1,N4)+FX                                                         
+                FEXT(2,N4) = FEXT(2,N4)+FY                                                         
+                FEXT(3,N4) = FEXT(3,N4)+FZ  
+#include "lockoff.inc"
+              ENDIF  
+C 
+             IF(TH_SURF%LOADP_FLAG >0 ) THEN
+                !mean velocity (/TH/SURF)
+                VN =       V(1,N1)*NX + V(2,N1)*NY + V(3,N1)*NZ
+                VN =  VN + V(1,N2)*NX + V(2,N2)*NY + V(3,N2)*NZ
+                VN =  VN + V(1,N3)*NX + V(2,N3)*NY + V(3,N3)*NZ
+                VN =  VN + V(1,N4)*NX + V(2,N4)*NY + V(3,N4)*NZ
+                VN = VN / FOUR
+                !mean acceleration (/TH/SURF)
+                AN =  FX*NX + FY*NY + FZ*NZ
+                MASS = ( MS(N1)+MS(N2)+MS(N3)+MS(N4) ) / FOUR
+                AN = AN / MASS
+                !TH_SURF%CHANNELS output
+                NSEGPL = NSEGPL + 1
+#include "lockon.inc"
+                DO NS=TH_SURF%LOADP_KSEGS(NSEGPL) +1,TH_SURF%LOADP_KSEGS(NSEGPL+1)
+                   KSURF = TH_SURF%LOADP_SEGS(NS)
+                   TH_SURF%CHANNELS(3,KSURF)= TH_SURF%CHANNELS(3,KSURF) + AREA*VN ! velocity
+                   TH_SURF%CHANNELS(4,KSURF)= TH_SURF%CHANNELS(4,KSURF) + AREA*PA ! pressure
+                   TH_SURF%CHANNELS(5,KSURF)= TH_SURF%CHANNELS(5,KSURF) + AREA
+                ENDDO
+#include "lockoff.inc"
+             ENDIF
+             
+
+            !---TRIANGLE--------------------------------------------                                                                                                     
+            ELSE     
+              IF(N1 == N2)THEN                                                                      
+                N2 = N3                                                                             
+                N3 = N4                                                                             
+                N4 = 0                                                                              
+              ELSEIF(N1 == N3)THEN                                                                  
+                N3 = N4                                                                             
+                N4 = 0                                                                              
+              ELSEIF(N1 == N4)THEN                                                                  
+                N4 = 0                                                                              
+              ELSEIF(N2 == N3)THEN                                                                  
+                N3 = N4                                                                             
+                N4 = 0                                                                              
+              ELSEIF(N2 == N4)THEN                                                                  
+                N2 = N3                                                                             
+                N3 = N4                                                                             
+                N4 = 0                                                                              
+              ELSEIF(N3 == N4)THEN                                                                  
+                N4 = 0                                                                              
+              ENDIF                                                                                 
+              
+              !hydrostatic pressure                                                         
+              IF(FUN_HSP /= 0)THEN                                                                 
+                 K1=3*DIR_HSP-2                                                                     
+                 K2=3*DIR_HSP-1                                                                     
+                 K3=3*DIR_HSP                                                                       
+                                                                             
+                 CENTROID_DEPTH =                (XFRAME(K1,IFRA1)*(X(1,N1)+X(1,N2)+X(1,N3))/THREE)                  
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K2,IFRA1)*(X(2,N1)+X(2,N2)+X(2,N3))/THREE)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K3,IFRA1)*(X(3,N1)+X(3,N2)+X(3,N3))/THREE)                      
+                 ISMOOTH = 0
+                 IF (FUN_HSP > 0) ISMOOTH = NPC(2*NFUNCT+FUN_HSP+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH, (CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX ,AA   )
+                   AA = AA*FCY
+                 ELSE
+                   AA = FCY*FINTER(FUN_HSP,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX,NPC,TF,DYDX) 
+                 ENDIF
+              ENDIF  
+              !normal vector                                                                                                                                                                                           
+              NX   = (X(2,N3)-X(2,N1))*(X(3,N3)-X(3,N2)) - (X(3,N3)-X(3,N1))*(X(2,N3)-X(2,N2))                                                                                                                         
+              NY   = (X(3,N3)-X(3,N1))*(X(1,N3)-X(1,N2)) - (X(1,N3)-X(1,N1))*(X(3,N3)-X(3,N2))                                                                                                                         
+              NZ   = (X(1,N3)-X(1,N1))*(X(2,N3)-X(2,N2)) - (X(2,N3)-X(2,N1))*(X(1,N3)-X(1,N2))                                                                                                                         
+              NORM = SQRT(NX*NX+NY*NY+NZ*NZ)                                                                                                                                                                           
+              AREA = HALF * NORM   
+              PA = AA                                                                                                                                                                                    
+              AA = AA * AREA                                                                                                                                                                                           
+
+              !face velocity                                                                                                                                                                                           
+              K1=3*DIR_VEL-2                                                                                                                                                                                           
+              K2=3*DIR_VEL-1                                                                                                                                                                                           
+              K3=3*DIR_VEL                                                                                                                                                                                             
+              VSEG=     (XFRAME(K1,IFRA2)* (V(1,N1) + V(1,N2) + V(1,N3)) /THREE)                                                                                                                                       
+              VSEG=VSEG+(XFRAME(K2,IFRA2)* (V(2,N1) + V(2,N2) + V(2,N3)) /THREE)                                                                                                                                       
+              VSEG=VSEG+(XFRAME(K3,IFRA2)* (V(3,N1) + V(3,N2) + V(3,N3)) /THREE)                                                                                                                                       
+                                                                                                                                                                                                                       
+              ! VEL,PVEL,and NSIGN                                                                                                                                                                                     
+              IF(FUN_VEL /= 0)THEN                                                                                                                                                                                     
+                 ISMOOTH = 0
+                 IF (FUN_VEL > 0) ISMOOTH = NPC(2*NFUNCT+FUN_VEL+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX2 , VEL   )
+                   VEL = VEL*FCY2 - VSEG
+                 ELSE
+                  VEL = FCY2*FINTER(FUN_VEL,TT*FCX2,NPC,TF,DYDX) - VSEG                                                                                                                                                 
+                 ENDIF
+              ELSE                                                                                                                                                                                                     
+                 VEL = -VSEG                                                                                                                                                                                           
+              ENDIF                                                                                                                                                                                                    
+              IF(FUN_CX /= 0)THEN                                                                                                                                                                                      
+                PVEL = (  (-(NX/NORM)*VEL*XFRAME(K1,IFRA2)-(NY/NORM)*VEL*XFRAME(K2,IFRA2)-(NZ/NORM)*VEL*XFRAME(K3,IFRA2))**2  )                                                                                        
+                ISMOOTH = 0
+                IF (FUN_CX > 0) ISMOOTH = NPC(2*NFUNCT+FUN_CX+1)
+                IF(ISMOOTH < 0) THEN
+                  CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX1 , PVEL0)
+                  PVEL = PVEL*PVEL0*FCY1/TWO
+                ELSE
+                  PVEL=PVEL*FCY1*FINTER(FUN_CX,TT*FCX1,NPC,TF,DYDX)/TWO                                                                                                                                                  
+                ENDIF
+              ENDIF                                                                                                                                                                                                    
+              NSIGN = VEL*(NX*XFRAME(K1,IFRA2) + NY*XFRAME(K2,IFRA2) +  NZ*XFRAME(K3,IFRA2))   !  <Vseg.d,n>  where d is flow direction X,Y,Z    ! IFRA2=1 is general frame, IFRA2 in [2:NFRAME+1] are for user frames 
+              NSIGN = SIGN(ONE,NSIGN)                                                                                                                                                                                  
+                                                                                                                                                                                                                       
+              !hydrostatic pressure                                                                                                                                                                                    
+              FX=-AA*(NX/NORM)                                                                                                                                                                                         
+              FY=-AA*(NY/NORM)                                                                                                                                                                                         
+              FZ=-AA*(NZ/NORM)                                                                                                                                                                                         
+              !drag force                                                                                                                                                                                              
+              FX=FX+PVEL*HALF*NX*NSIGN                                                                                                                                                                                 
+              FY=FY+PVEL*HALF*NY*NSIGN                                                                                                                                                                                 
+              FZ=FZ+PVEL*HALF*NZ*NSIGN                                                                                                                                                                                 
+              !expanding on the 4-node-face                                                                                                                                                                            
+              FX=FX*THIRD                                                                                                                                                                                              
+              FY=FY*THIRD                                                                                                                                                                                              
+              FZ=FZ*THIRD                                                                                                                                                                                              
+
+              !External Force Work
+              WFEXTT=WFEXTT+DT1*(FX*(V(1,N1)+V(1,N2)+V(1,N3))
+     +                          +FY*(V(2,N1)+V(2,N2)+V(2,N3))  
+     +                          +FZ*(V(3,N1)+V(3,N2)+V(3,N3)))  
+     
+
+#include "lockon.inc"
+              !/PARITH/OFF: force is directly added in A array. It will be dividedby nodal mass later
+              !-node_1
+              A(1,N1)=A(1,N1)+FX                                                                    
+              A(2,N1)=A(2,N1)+FY                                                                    
+              A(3,N1)=A(3,N1)+FZ                                                                                                                                                    
+              !-node_2
+              A(1,N2)=A(1,N2)+FX                                                                    
+              A(2,N2)=A(2,N2)+FY                                                                    
+              A(3,N2)=A(3,N2)+FZ                                                                                                                                                   
+              !-node_3
+              A(1,N3)=A(1,N3)+FX                                                                    
+              A(2,N3)=A(2,N3)+FY                                                                    
+              A(3,N3)=A(3,N3)+FZ                                                                    
+#include "lockoff.inc"                                                                    
+
+     
+     
+              IF(IANIM  > 0) THEN  
+#include "lockon.inc"
+                FEXT(1,N1) = FEXT(1,N1)+FX                                                         
+                FEXT(2,N1) = FEXT(2,N1)+FY                                                         
+                FEXT(3,N1) = FEXT(3,N1)+FZ    
+                !                                                                             
+                FEXT(1,N2) = FEXT(1,N2)+FX                                                         
+                FEXT(2,N2) = FEXT(2,N2)+FY                                                         
+                FEXT(3,N2) = FEXT(3,N2)+FZ  
+                !
+                FEXT(1,N3) = FEXT(1,N3)+FX                                                         
+                FEXT(2,N3) = FEXT(2,N3)+FY                                                         
+                FEXT(3,N3) = FEXT(3,N3)+FZ                                     
+#include "lockoff.inc"
+              ENDIF        
+
+             IF(TH_SURF%LOADP_FLAG >0 ) THEN
+                !mean velocity (/TH/SURF)
+                VN =       V(1,N1)*NX + V(2,N1)*NY + V(3,N1)*NZ
+                VN =  VN + V(1,N2)*NX + V(2,N2)*NY + V(3,N2)*NZ
+                VN =  VN + V(1,N3)*NX + V(2,N3)*NY + V(3,N3)*NZ
+                VN = THIRD * VN
+                !mean acceleration (/TH/SURF)
+                AN =  FX*NX + FY*NY + FZ*NZ
+                MASS = THIRD * ( MS(N1)+MS(N2)+MS(N3) )
+                AN = AN / MASS
+                !TH_SURF%CHANNELS output
+                NSEGPL = NSEGPL + 1
+#include "lockon.inc"                
+                DO NS=TH_SURF%LOADP_KSEGS(NSEGPL) +1,TH_SURF%LOADP_KSEGS(NSEGPL+1)
+                   KSURF = TH_SURF%LOADP_SEGS(NS)
+                   TH_SURF%CHANNELS(3,KSURF)= TH_SURF%CHANNELS(3,KSURF) + AREA*VN ! velocity
+                   TH_SURF%CHANNELS(4,KSURF)= TH_SURF%CHANNELS(4,KSURF) + AREA*PA ! pressure
+                   TH_SURF%CHANNELS(5,KSURF)= TH_SURF%CHANNELS(5,KSURF) + AREA
+                ENDDO
+#include "lockoff.inc"                
+             ENDIF  
+                                                                    
+            ENDIF! quadrangle / triangle                                                                                  
+          ENDDO !next I   
+!$OMP END DO
+                                                                                        
+        ENDDO !nextNL
+
+!$OMP ATOMIC
+              WFEXT = WFEXT + WFEXTT
+
+
+
+
+      ELSE  !IF(IPARIT == 0) THEN
+        
+        !otherwise  IPARIT /= 0 
+       
+C---------------------------------------
+C PART-2. PARITH/ON, non vectorial code
+C---------------------------------------
+       IF(IVECTOR == 0) THEN
+
+         
+         DO NL=1,NLOADP_F !loop over /LOAD/PFLUID options
+         
+           !user parameters (Defined in Starter while reading input file hm_read_pblast.F, and transmitted to Engine with Restart file) 
+           FUN_HSP = ILOADP(7,NL)
+           DIR_HSP = ILOADP(8,NL)
+           IFRA1   = ILOADP(9,NL)
+           FCY     = RLOAD(1,NL)
+           FCX     = RLOAD(2,NL)
+           FUN_CX  = ILOADP(10,NL)
+           FCY1    = RLOAD(3,NL)
+           FCX1    = RLOAD(4,NL)
+           FUN_VEL = ILOADP(11,NL)
+           FCY2    = RLOAD(5,NL)
+           FCX2    = RLOAD(6,NL)
+           DIR_VEL = MAX(ILOADP(12,NL),1) ! To avoid a check bound issue when velocity is useless
+           IFRA2   = ILOADP(13,NL)
+           ISENS   = 0
+           XSENS   = ONE
+
+
+          ! FLUSH fsky array to 0.
+!$OMP DO SCHEDULE(GUIDED,MVSIZ)           
+           DO I = 1,ILOADP(1,NL)/4
+             !nodes of structural face : N1,N2,N3,N4
+             N1=LLOADP(ILOADP(4,NL)+4*(I-1))
+             N2=LLOADP(ILOADP(4,NL)+4*(I-1)+1)
+             N3=LLOADP(ILOADP(4,NL)+4*(I-1)+2)
+             N4=LLOADP(ILOADP(4,NL)+4*(I-1)+3)
+             !---QUADRAGLE--------------------------------------------
+             IF(N4 /= 0 .AND. N1 /= N2 .AND. N1 /= N3 .AND. N1 /= N4 .AND.N2 /= N3 .AND. N2 /= N4 .AND. N3 /= N4 )THEN
+              UP_BOUND=4
+             ELSE
+              UP_BOUND=3
+             ENDIF
+             DO IJK=1,UP_BOUND
+                  IAD = IADC(ILOADP(4,NL)+4*(I-1)+(IJK-1))
+                  FSKY(1:3,IAD) = ZERO
+             ENDDO
+           ENDDO
+!$OMP END DO     
+      
+           !possible sensor 
+           DO K=1,NSENSOR
+             IF(ILOADP(6,NL) == SENSOR_TAB(K)%SENS_ID) ISENS=K
+           ENDDO
+           IF(ISENS == 0)THEN
+              TS=TT
+           ELSE                        
+              TS = TT- SENSOR_TAB(ISENS)%TSTART 
+              IF(TS < ZERO) CYCLE     
+           ENDIF
+
+!$OMP DO SCHEDULE(GUIDED,MVSIZ)                      
+           DO I = 1,ILOADP(1,NL)/4
+           
+             !nodes of structural face : N1,N2,N3,N4
+             N1=LLOADP(ILOADP(4,NL)+4*(I-1))
+             N2=LLOADP(ILOADP(4,NL)+4*(I-1)+1)
+             N3=LLOADP(ILOADP(4,NL)+4*(I-1)+2)
+             N4=LLOADP(ILOADP(4,NL)+4*(I-1)+3)
+
+             AA = ZERO
+             VEL=ZERO
+             PVEL=ZERO
+             
+             !---QUADRAGLE--------------------------------------------
+             IF(N4 /= 0 .AND. N1 /= N2 .AND. N1 /= N3 .AND. N1 /= N4 .AND.N2 /= N3 .AND. N2 /= N4 .AND. N3 /= N4 )THEN
+
+               !hydrostatic pressure  
+               K1=3*DIR_HSP-2
+               K2=3*DIR_HSP-1
+               K3=3*DIR_HSP
+               IF(FUN_HSP /= 0) THEN
+                 CENTROID_DEPTH =                (XFRAME(K1,IFRA1)*(X(1,N1)+X(1,N2)+X(1,N3)+X(1,N4))/FOUR)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K2,IFRA1)*(X(2,N1)+X(2,N2)+X(2,N3)+X(2,N4))/FOUR)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K3,IFRA1)*(X(3,N1)+X(3,N2)+X(3,N3)+X(3,N4))/FOUR)
+                 ISMOOTH = 0
+                 IF (FUN_HSP > 0) ISMOOTH = NPC(2*NFUNCT+FUN_HSP+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,  (CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX , AA  )
+                   AA = AA*FCY
+                 ELSE
+                  AA = FCY*FINTER(FUN_HSP,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX,NPC,TF,DYDX)
+                 ENDIF
+
+               ENDIF
+               !normal vector
+               NX   = (X(2,N3)-X(2,N1))*(X(3,N4)-X(3,N2))-(X(3,N3)-X(3,N1))*(X(2,N4)-X(2,N2))
+               NY   = (X(3,N3)-X(3,N1))*(X(1,N4)-X(1,N2))-(X(1,N3)-X(1,N1))*(X(3,N4)-X(3,N2))
+               NZ   = (X(1,N3)-X(1,N1))*(X(2,N4)-X(2,N2))-(X(2,N3)-X(2,N1))*(X(1,N4)-X(1,N2))
+               NORM = SQRT(NX*NX+NY*NY+NZ*NZ)
+               AREA = HALF * NORM
+               PA = AA
+               AA = AA * AREA
+
+               !structural face velocity
+               K1=3*DIR_VEL-2                                                                       
+               K2=3*DIR_VEL-1                                                                       
+               K3=3*DIR_VEL 
+               VSEG=     (XFRAME(K1,IFRA2)*(V(1,N1) + V(1,N2) + V(1,N3) + V(1,N4)) /FOUR)
+               VSEG=VSEG+(XFRAME(K2,IFRA2)*(V(2,N1) + V(2,N2) + V(2,N3) + V(2,N4)) /FOUR)
+               VSEG=VSEG+(XFRAME(K3,IFRA2)*(V(3,N1) + V(3,N2) + V(3,N3) + V(3,N4)) /FOUR)
+               
+               !VEL, PVEL, and NSIGN
+               IF(FUN_VEL /= 0)THEN
+                 ISMOOTH = 0
+                 IF (FUN_VEL > 0) ISMOOTH = NPC(2*NFUNCT+FUN_VEL+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH, TT*FCX2 ,VEL )
+                   VEL = VEL*FCY2 - VSEG
+                 ELSE
+                   VEL =  FCY2*FINTER(FUN_VEL,TT*FCX2,NPC,TF,DYDX) - VSEG
+                 ENDIF
+               ELSE
+                  VEL =  -VSEG
+               ENDIF
+               IF(FUN_CX /= 0)THEN   
+                 PVEL = (  (-(NX/NORM)*VEL*XFRAME(K1,IFRA2) -(NY/NORM)*VEL*XFRAME(K2,IFRA2)-(NZ/NORM)*VEL*XFRAME(K3,IFRA2))**2  )
+                 ISMOOTH = 0
+                 IF (FUN_CX > 0) ISMOOTH = NPC(2*NFUNCT+FUN_CX+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX1, PVEL0)
+                   PVEL = PVEL*PVEL0*FCY1/TWO
+                 ELSE
+                   PVEL=PVEL*FCY1*FINTER(FUN_CX,TT*FCX1,NPC,TF,DYDX)/TWO  
+                 ENDIF
+               ENDIF                                                                        
+               NSIGN = VEL*(NX*XFRAME(K1,IFRA2) + NY*XFRAME(K2,IFRA2) +  NZ*XFRAME(K3,IFRA2))   !  <Vseg.d,n>  where d is flow direction X,Y,Z    ! IFRA2=1 is general frame, IFRA2 in [2:NFRAME+1] are for user frames
+               NSIGN = SIGN(ONE,NSIGN)    
+                                           
+               !hydrostatic pressure                 
+               FX=-AA*(NX/NORM)                                        
+               FY=-AA*(NY/NORM)                                        
+               FZ=-AA*(NZ/NORM)
+               !drag force
+               FX=FX+PVEL*HALF*NX*NSIGN
+               FY=FY+PVEL*HALF*NY*NSIGN
+               FZ=FZ+PVEL*HALF*NZ*NSIGN
+               !expanding on the 4-node-face
+               FX=FX*FOURTH
+               FY=FY*FOURTH
+               FZ=FZ*FOURTH                 
+
+               !NODE_1 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1))
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !NODE_2 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+1)
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !NODE_3 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+2)
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !NODE_4 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+3)
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !External force work
+               WFEXTT=WFEXTT+DT1*(FX*(V(1,N1)+V(1,N2)+V(1,N3)+V(1,N4))
+     +                           +FY*(V(2,N1)+V(2,N2)+V(2,N3)+V(2,N4))
+     +                           +FZ*(V(3,N1)+V(3,N2)+V(3,N3)+V(3,N4)))
+     
+              IF(IANIM  > 0) THEN  
+#include "lockon.inc"
+                FEXT(1,N1) = FEXT(1,N1)+FX                                                         
+                FEXT(2,N1) = FEXT(2,N1)+FY                                                         
+                FEXT(3,N1) = FEXT(3,N1)+FZ    
+                !                                                                             
+                FEXT(1,N2) = FEXT(1,N2)+FX                                                         
+                FEXT(2,N2) = FEXT(2,N2)+FY                                                         
+                FEXT(3,N2) = FEXT(3,N2)+FZ  
+                !
+                FEXT(1,N3) = FEXT(1,N3)+FX                                                         
+                FEXT(2,N3) = FEXT(2,N3)+FY                                                         
+                FEXT(3,N3) = FEXT(3,N3)+FZ
+                !
+                FEXT(1,N4) = FEXT(1,N4)+FX                                                         
+                FEXT(2,N4) = FEXT(2,N4)+FY                                                         
+                FEXT(3,N4) = FEXT(3,N4)+FZ                                      
+#include "lockoff.inc"                                                                    
+              ENDIF 
+C 
+              IF(TH_SURF%LOADP_FLAG >0 ) THEN
+                !mean velocity (/TH/SURF)
+                VN =       V(1,N1)*NX + V(2,N1)*NY + V(3,N1)*NZ
+                VN =  VN + V(1,N2)*NX + V(2,N2)*NY + V(3,N2)*NZ
+                VN =  VN + V(1,N3)*NX + V(2,N3)*NY + V(3,N3)*NZ
+                VN =  VN + V(1,N4)*NX + V(2,N4)*NY + V(3,N4)*NZ
+                VN =  VN / FOUR
+                !mean acceleration (/TH/SURF)
+                AN =  FX*NX + FY*NY + FZ*NZ
+                MASS = ( MS(N1)+MS(N2)+MS(N3)+MS(N4) ) / FOUR
+                AN = AN / MASS
+                !TH_SURF%CHANNELS output
+                NSEGPL = NSEGPL + 1
+                DO NS=TH_SURF%LOADP_KSEGS(NSEGPL) +1,TH_SURF%LOADP_KSEGS(NSEGPL+1)
+#include "lockon.inc"
+                   KSURF = TH_SURF%LOADP_SEGS(NS)
+                   TH_SURF%CHANNELS(3,KSURF)= TH_SURF%CHANNELS(3,KSURF) + AREA*VN ! velocity
+                   TH_SURF%CHANNELS(4,KSURF)= TH_SURF%CHANNELS(4,KSURF) + AREA*PA ! pressure
+                   TH_SURF%CHANNELS(5,KSURF)= TH_SURF%CHANNELS(5,KSURF) + AREA
+#include "lockoff.inc"                                                                    
+                ENDDO
+              ENDIF       
+C
+             ELSE
+
+              !---TRIANGLE--------------------------------------------                                                                                                     
+              IF(N1 == N2)THEN
+                N2 = N3
+                N3 = N4
+                N4 = 0
+              ELSEIF(N1 == N3)THEN
+                N3 = N4
+                N4 = 0
+              ELSEIF(N1 == N4)THEN
+                N4 = 0
+              ELSEIF(N2 == N3)THEN
+                N3 = N4
+                N4 = 0
+              ELSEIF(N2 == N4)THEN
+                N2 = N3
+                N3 = N4
+                N4 = 0
+              ELSEIF(N3 == N4)THEN
+                N4 = 0
+              ENDIF
+ 
+               !hydrostatic pressure
+               IF(FUN_HSP /= 0)THEN
+                 K1=3*DIR_HSP-2
+                 K2=3*DIR_HSP-1
+                 K3=3*DIR_HSP
+                 CENTROID_DEPTH =                  (XFRAME(K1,IFRA1)*(X(1,N1)+X(1,N2)+X(1,N3))/THREE)
+                 CENTROID_DEPTH = CENTROID_DEPTH + (XFRAME(K2,IFRA1)*(X(2,N1)+X(2,N2)+X(2,N3))/THREE)
+                 CENTROID_DEPTH = CENTROID_DEPTH + (XFRAME(K3,IFRA1)*(X(3,N1)+X(3,N2)+X(3,N3))/THREE)
+                 ISMOOTH = 0
+                 IF (FUN_HSP > 0) ISMOOTH = NPC(2*NFUNCT+FUN_HSP+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX , AA)
+                   AA = AA*FCY
+                 ELSE
+                   AA = FCY*FINTER(FUN_HSP,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX,NPC,TF,DYDX) 
+                 ENDIF
+
+               ENDIF
+
+               !normal vector
+               NX   = (X(2,N3)-X(2,N1))*(X(3,N3)-X(3,N2))-(X(3,N3)-X(3,N1))*(X(2,N3)-X(2,N2))
+               NY   = (X(3,N3)-X(3,N1))*(X(1,N3)-X(1,N2))-(X(1,N3)-X(1,N1))*(X(3,N3)-X(3,N2))
+               NZ   = (X(1,N3)-X(1,N1))*(X(2,N3)-X(2,N2))-(X(2,N3)-X(2,N1))*(X(1,N3)-X(1,N2))
+               NORM = SQRT(NX*NX+NY*NY+NZ*NZ)
+               AREA = HALF * NORM
+               PA = AA
+               AA = AA * AREA
+
+               !structural face velocity
+               K1=3*DIR_VEL-2                                                                       
+               K2=3*DIR_VEL-1                                                                       
+               K3=3*DIR_VEL  
+               VSEG=     (XFRAME(K1,IFRA2)*(V(1,N1) + V(1,N2) + V(1,N3)) /THREE)
+               VSEG=VSEG+(XFRAME(K2,IFRA2)*(V(2,N1) + V(2,N2) + V(2,N3)) /THREE)
+               VSEG=VSEG+(XFRAME(K3,IFRA2)*(V(3,N1) + V(3,N2) + V(3,N3)) /THREE)
+               
+               !VEL, PVEL, and NSIGN
+               IF(FUN_VEL /= 0)THEN
+                 ISMOOTH = 0
+                 IF (FUN_VEL > 0) ISMOOTH = NPC(2*NFUNCT+FUN_VEL+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH, TT*FCX2 ,VEL )
+                   VEL = VEL*FCY2 - VSEG
+                 ELSE
+                   VEL =  FCY2*FINTER(FUN_VEL,TT*FCX2,NPC,TF,DYDX) - VSEG
+                 ENDIF
+               ELSE
+                  VEL =  -VSEG
+               ENDIF
+               IF(FUN_CX /= 0) THEN  
+                 PVEL = (  (-(NX/NORM)*VEL*XFRAME(K1,IFRA2)-(NY/NORM)*VEL*XFRAME(K2,IFRA2)-(NZ/NORM)*VEL*XFRAME(K3,IFRA2))**2  )
+                 ISMOOTH = 0
+                 IF (FUN_CX > 0) ISMOOTH = NPC(2*NFUNCT+FUN_CX+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX1, PVEL0)
+                   PVEL = PVEL*PVEL0*FCY1/TWO
+                 ELSE
+                   PVEL=PVEL*FCY1*FINTER(FUN_CX,TT*FCX1,NPC,TF,DYDX)/TWO  
+                 ENDIF
+               ENDIF                                                                       
+               NSIGN = VEL*(NX*XFRAME(K1,IFRA2) + NY*XFRAME(K2,IFRA2) +  NZ*XFRAME(K3,IFRA2))   !  <Vseg.d,n>  where d is flow direction X,Y,Z    ! IFRA2=1 is general frame, IFRA2 in [2:NFRAME+1] are for user frames
+               NSIGN = SIGN(ONE,NSIGN)    
+               
+               !hydrostatic pressure                  
+               FX=-AA*(NX/NORM)                                         
+               FY=-AA*(NY/NORM)                                         
+               FZ=-AA*(NZ/NORM)
+               !drag force
+               FX=FX+PVEL*HALF*NX*NSIGN
+               FY=FY+PVEL*HALF*NY*NSIGN
+               FZ=FZ+PVEL*HALF*NZ*NSIGN
+               !expanding on the 4-node-face
+               FX=FX*THIRD
+               FY=FY*THIRD
+               FZ=FZ*THIRD  
+
+               !NODE_1 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1))
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !NODE_2 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+1)
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !NODE_3 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+2)
+               FSKY(1,IAD) = FX
+               FSKY(2,IAD) = FY
+               FSKY(3,IAD) = FZ
+
+               !external force work
+               WFEXTT=WFEXTT+DT1*(FX*(V(1,N1)+V(1,N2)+V(1,N3))
+     +                           +FY*(V(2,N1)+V(2,N2)+V(2,N3))
+     +                           +FZ*(V(3,N1)+V(3,N2)+V(3,N3)))
+     
+              IF(IANIM  > 0) THEN  
+#include "lockon.inc"
+                FEXT(1,N1) = FEXT(1,N1)+FX                                                         
+                FEXT(2,N1) = FEXT(2,N1)+FY                                                         
+                FEXT(3,N1) = FEXT(3,N1)+FZ    
+                !                                                                             
+                FEXT(1,N2) = FEXT(1,N2)+FX                                                         
+                FEXT(2,N2) = FEXT(2,N2)+FY                                                         
+                FEXT(3,N2) = FEXT(3,N2)+FZ  
+                !
+                FEXT(1,N3) = FEXT(1,N3)+FX                                                         
+                FEXT(2,N3) = FEXT(2,N3)+FY                                                         
+                FEXT(3,N3) = FEXT(3,N3)+FZ                                  
+#include "lockoff.inc"                                                                    
+              ENDIF
+C 
+              IF(TH_SURF%LOADP_FLAG >0 ) THEN
+              
+                !mean velocity (/TH/SURF)
+                VN =       V(1,N1)*NX + V(2,N1)*NY + V(3,N1)*NZ
+                VN =  VN + V(1,N2)*NX + V(2,N2)*NY + V(3,N2)*NZ
+                VN =  VN + V(1,N3)*NX + V(2,N3)*NY + V(3,N3)*NZ
+                VN = THIRD * VN
+
+                !mean acceleration (/TH/SURF)
+                AN =  FX*NX + FY*NY + FZ*NZ
+                MASS = THIRD * ( MS(N1)+MS(N2)+MS(N3) )
+                AN = AN / MASS
+                              
+                NSEGPL = NSEGPL + 1
+                DO NS=TH_SURF%LOADP_KSEGS(NSEGPL) +1,TH_SURF%LOADP_KSEGS(NSEGPL+1)
+#include "lockon.inc"
+                   KSURF = TH_SURF%LOADP_SEGS(NS)
+                   TH_SURF%CHANNELS(3,KSURF)= TH_SURF%CHANNELS(3,KSURF) + AREA*VN ! velocity
+                   TH_SURF%CHANNELS(4,KSURF)= TH_SURF%CHANNELS(4,KSURF) + AREA*PA ! pressure
+                   TH_SURF%CHANNELS(5,KSURF)= TH_SURF%CHANNELS(5,KSURF) + AREA
+#include "lockoff.inc"                                                                    
+                ENDDO
+              ENDIF       
+C                   
+             ENDIF
+           ENDDO!next I
+!$OMP END DO           
+         ENDDO!next NL
+
+!$OMP ATOMIC
+                WFEXT = WFEXT + WFEXTT
+
+         ELSE
+         
+C-----------------------------------
+C PART-3. PARITH/ON, vectorial code
+C-----------------------------------
+
+         DO NL=1,NLOADP_F !loop over /LOAD/PFLUID options
+         
+           !user parameters (Defined in Starter while reading input file hm_read_pblast.F, and transmitted to Engine with Restart file) 
+           FUN_HSP = ILOADP(7,NL)
+           DIR_HSP = ILOADP(8,NL)
+           IFRA1   = ILOADP(9,NL)
+           FCY     = RLOAD(1,NL)
+           FCX     = RLOAD(2,NL)
+           FUN_CX  = ILOADP(10,NL)
+           FCY1    = RLOAD(3,NL)
+           FCX1    = RLOAD(4,NL)
+           FUN_VEL = ILOADP(11,NL)
+           FCY2    = RLOAD(5,NL)
+           FCX2    = RLOAD(6,NL)
+           DIR_VEL = MAX(ILOADP(12,NL),1)! To avoid a check bound issue when the velocity options is useless
+           IFRA2   = ILOADP(13,NL)
+           ISENS   = 0
+           XSENS   = ONE
+
+           !possible sensor
+           DO K=1,NSENSOR
+             IF(ILOADP(6,NL) == SENSOR_TAB(K)%SENS_ID) ISENS=K
+           ENDDO
+           IF(ISENS == 0)THEN
+              TS=TT
+           ELSE                        
+              TS = TT- SENSOR_TAB(ISENS)%TSTART 
+              IF(TS < ZERO) CYCLE     
+           ENDIF
+!$OMP DO SCHEDULE(GUIDED,MVSIZ)           
+           DO I = 1,ILOADP(1,NL)/4
+           
+             !nodes of the structural face
+             N1=LLOADP(ILOADP(4,NL)+4*(I-1))
+             N2=LLOADP(ILOADP(4,NL)+4*(I-1)+1)
+             N3=LLOADP(ILOADP(4,NL)+4*(I-1)+2)
+             N4=LLOADP(ILOADP(4,NL)+4*(I-1)+3)
+
+             AA = ZERO
+             VEL = ZERO
+             PVEL = ZERO
+ 
+             IF(N4 /= 0 .AND. N1 /= N2 .AND. N1 /= N3 .AND. N1 /= N4 .AND. N2 /= N3 .AND. N2 /= N4 .AND. N3 /= N4 )THEN
+
+               !hydrostatic pressure
+               K1=3*DIR_HSP-2
+               K2=3*DIR_HSP-1
+               K3=3*DIR_HSP
+               IF(FUN_HSP /= 0) THEN
+                 CENTROID_DEPTH =          (XFRAME(K1,IFRA1)*(X(1,N1)+X(1,N2)+X(1,N3)+X(1,N4))/FOUR)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K2,IFRA1)*(X(2,N1)+X(2,N2)+X(2,N3)+X(2,N4))/FOUR)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K3,IFRA1)*(X(3,N1)+X(3,N2)+X(3,N3)+X(3,N4))/FOUR)
+                 ISMOOTH = 0
+                 IF (FUN_HSP > 0) ISMOOTH = NPC(2*NFUNCT+FUN_HSP+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX , AA)
+                   AA = AA*FCY
+                 ELSE
+                   AA = FCY*FINTER(FUN_HSP,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX,NPC,TF,DYDX) 
+                 ENDIF
+               ENDIF
+               
+               !normal vector
+               NX   = (X(2,N3)-X(2,N1))*(X(3,N4)-X(3,N2)) - (X(3,N3)-X(3,N1))*(X(2,N4)-X(2,N2))
+               NY   = (X(3,N3)-X(3,N1))*(X(1,N4)-X(1,N2)) - (X(1,N3)-X(1,N1))*(X(3,N4)-X(3,N2))
+               NZ   = (X(1,N3)-X(1,N1))*(X(2,N4)-X(2,N2)) - (X(2,N3)-X(2,N1))*(X(1,N4)-X(1,N2))
+               NORM = SQRT(NX*NX+NY*NY+NZ*NZ)
+               AREA = HALF * NORM
+               PA = AA
+               AA = AA * AREA
+
+               !structural face velocity
+               K1=3*DIR_VEL-2                                                                       
+               K2=3*DIR_VEL-1                                                                       
+               K3=3*DIR_VEL 
+               VSEG=     (XFRAME(K1,IFRA2)*(V(1,N1) + V(1,N2) + V(1,N3) + V(1,N4)) /FOUR)
+               VSEG=VSEG+(XFRAME(K2,IFRA2)*(V(2,N1) + V(2,N2) + V(2,N3) + V(2,N4)) /FOUR)
+               VSEG=VSEG+(XFRAME(K3,IFRA2)*(V(3,N1) + V(3,N2) + V(3,N3) + V(3,N4)) /FOUR)
+               
+               !VEL,PVEL and NSIGN  
+               IF(FUN_VEL /= 0)THEN
+                 ISMOOTH = 0
+                 IF (FUN_VEL > 0) ISMOOTH = NPC(2*NFUNCT+FUN_VEL+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH, TT*FCX2 ,VEL )
+                   VEL = VEL*FCY2 - VSEG
+                 ELSE
+                   VEL =  FCY2*FINTER(FUN_VEL,TT*FCX2,NPC,TF,DYDX) - VSEG
+                 ENDIF
+               ELSE
+                  VEL =  -VSEG
+               ENDIF
+               IF(FUN_CX /= 0) THEN  
+                 PVEL = (-NX/NORM*VEL*XFRAME(K1,IFRA2)- (NY/NORM)*VEL*XFRAME(K2,IFRA2)-(NZ/NORM)*VEL*XFRAME(K3,IFRA2))**2
+                 ISMOOTH = 0
+                 IF (FUN_CX > 0) ISMOOTH = NPC(2*NFUNCT+FUN_CX+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX1, PVEL0)
+                   PVEL = PVEL*PVEL0*FCY1/TWO
+                 ELSE
+                   PVEL = PVEL * FCY1*FINTER(FUN_CX,TT*FCX1,NPC,TF,DYDX)/TWO
+                 ENDIF
+
+               ENDIF                                                                        
+               NSIGN = VEL*(NX*XFRAME(K1,IFRA2) + NY*XFRAME(K2,IFRA2) +  NZ*XFRAME(K3,IFRA2))   !  <Vseg.d,n>  where d is flow direction X,Y,Z    ! IFRA2=1 is general frame, IFRA2 in [2:NFRAME+1] are for user frames
+               NSIGN = SIGN(ONE,NSIGN)    
+               
+               !hydrostatic pressure                 
+               FX=-AA*(NX/NORM)                                        
+               FY=-AA*(NY/NORM)                                        
+               FZ=-AA*(NZ/NORM)
+               !drag force
+               FX=FX+PVEL*HALF*NX*NSIGN
+               FY=FY+PVEL*HALF*NY*NSIGN
+               FZ=FZ+PVEL*HALF*NZ*NSIGN
+               !expanding on the 4-node-face
+               FX=FX*FOURTH
+               FY=FY*FOURTH
+               FZ=FZ*FOURTH  
+
+               !NODE_1 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1))
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+
+               !NODE_2 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+1)
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+
+               !NODE_3 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+2)
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+
+               !NODE_4 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+3)
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+               
+               !external force work               
+               WFEXTT=WFEXTT+DT1*(FX*(V(1,N1)+V(1,N2)+V(1,N3)+V(1,N4))
+     +                           +FY*(V(2,N1)+V(2,N2)+V(2,N3)+V(2,N4))
+     +                           +FZ*(V(3,N1)+V(3,N2)+V(3,N3)+V(3,N4)))
+     
+              IF(IANIM  > 0) THEN  
+#include "lockon.inc"
+                FEXT(1,N1) = FEXT(1,N1)+FX                                                         
+                FEXT(2,N1) = FEXT(2,N1)+FY                                                         
+                FEXT(3,N1) = FEXT(3,N1)+FZ    
+                !                                                                             
+                FEXT(1,N2) = FEXT(1,N2)+FX                                                         
+                FEXT(2,N2) = FEXT(2,N2)+FY                                                         
+                FEXT(3,N2) = FEXT(3,N2)+FZ  
+                !
+                FEXT(1,N3) = FEXT(1,N3)+FX                                                         
+                FEXT(2,N3) = FEXT(2,N3)+FY                                                         
+                FEXT(3,N3) = FEXT(3,N3)+FZ
+                !
+                FEXT(1,N4) = FEXT(1,N4)+FX                                                         
+                FEXT(2,N4) = FEXT(2,N4)+FY                                                         
+                FEXT(3,N4) = FEXT(3,N4)+FZ                                      
+#include "lockoff.inc"                                                                    
+              ENDIF       
+C 
+              IF(TH_SURF%LOADP_FLAG >0 ) THEN
+              
+                !mean velocity (/TH/SURF)
+                VN =       V(1,N1)*NX + V(2,N1)*NY + V(3,N1)*NZ
+                VN =  VN + V(1,N2)*NX + V(2,N2)*NY + V(3,N2)*NZ
+                VN =  VN + V(1,N3)*NX + V(2,N3)*NY + V(3,N3)*NZ
+                VN =  VN + V(1,N4)*NX + V(2,N4)*NY + V(3,N4)*NZ
+                VN =  VN / FOUR
+
+                !mean acceleration (/TH/SURF)
+                AN =  FX*NX + FY*NY + FZ*NZ
+                MASS = ( MS(N1)+MS(N2)+MS(N3)+MS(N4) ) / FOUR
+                AN = AN / MASS
+                              
+                NSEGPL = NSEGPL + 1
+                DO NS=TH_SURF%LOADP_KSEGS(NSEGPL) +1,TH_SURF%LOADP_KSEGS(NSEGPL+1)
+#include "lockon.inc"
+                   KSURF = TH_SURF%LOADP_SEGS(NS)
+                   TH_SURF%CHANNELS(3,KSURF)= TH_SURF%CHANNELS(3,KSURF) + AREA*VN ! velocity
+                   TH_SURF%CHANNELS(4,KSURF)= TH_SURF%CHANNELS(4,KSURF) + AREA*PA ! pressure
+                   TH_SURF%CHANNELS(5,KSURF)= TH_SURF%CHANNELS(5,KSURF) + AREA
+#include "lockoff.inc"                                                                    
+                ENDDO
+              ENDIF 
+               
+             ELSE
+
+              !---TRIANGLE--------------------------------------------                                                                                                                  
+              IF(N1 == N2)THEN
+                N2 = N3
+                N3 = N4
+                N4 = 0
+              ELSEIF(N1 == N3)THEN
+                N3 = N4
+                N4 = 0
+              ELSEIF(N1 == N4)THEN
+                N4 = 0
+              ELSEIF(N2 == N3)THEN
+                N3 = N4
+                N4 = 0
+              ELSEIF(N2 == N4)THEN
+                N2 = N3
+                N3 = N4
+                N4 = 0
+              ELSEIF(N3 == N4)THEN
+                N4 = 0
+              ENDIF
+ 
+               !hydrostatic load
+               K1=3*DIR_HSP-2
+               K2=3*DIR_HSP-1
+               K3=3*DIR_HSP
+               IF(FUN_HSP /= 0)THEN
+                 CENTROID_DEPTH =                (XFRAME(K1,IFRA1)*(X(1,N1)+X(1,N2)+X(1,N3))/THREE)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K2,IFRA1)*(X(2,N1)+X(2,N2)+X(2,N3))/THREE)
+                 CENTROID_DEPTH = CENTROID_DEPTH+(XFRAME(K3,IFRA1)*(X(3,N1)+X(3,N2)+X(3,N3))/THREE)
+                 ISMOOTH = 0
+                 IF (FUN_HSP > 0) ISMOOTH = NPC(2*NFUNCT+FUN_HSP+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX , AA)
+                   AA = AA*FCY
+                 ELSE
+                   AA = FCY*FINTER(FUN_HSP,(CENTROID_DEPTH-XFRAME(9+DIR_HSP,IFRA1))*FCX,NPC,TF,DYDX) 
+                 ENDIF
+
+               ENDIF
+               
+               !normal vector
+               NX   = (X(2,N3)-X(2,N1))*(X(3,N3)-X(3,N2)) - (X(3,N3)-X(3,N1))*(X(2,N3)-X(2,N2))
+               NY   = (X(3,N3)-X(3,N1))*(X(1,N3)-X(1,N2)) - (X(1,N3)-X(1,N1))*(X(3,N3)-X(3,N2))
+               NZ   = (X(1,N3)-X(1,N1))*(X(2,N3)-X(2,N2)) - (X(2,N3)-X(2,N1))*(X(1,N3)-X(1,N2))
+               NORM = SQRT(NX*NX+NY*NY+NZ*NZ)
+               AREA = HALF * NORM
+               PA = AA
+               AA = AA * AREA
+
+               !structural face velocity
+               K1=3*DIR_VEL-2                                                                       
+               K2=3*DIR_VEL-1                                                                       
+               K3=3*DIR_VEL 
+               VSEG=     (XFRAME(K1,IFRA2)* (V(1,N1) + V(1,N2) + V(1,N3)) /THREE)
+               VSEG=VSEG+(XFRAME(K2,IFRA2)* (V(2,N1) + V(2,N2) + V(2,N3)) /THREE)
+               VSEG=VSEG+(XFRAME(K3,IFRA2)* (V(3,N1) + V(3,N2) + V(3,N3)) /THREE)
+               
+               !VEL,PVEL, and NSIGN
+               IF(FUN_VEL /= 0)THEN
+                 ISMOOTH = 0
+                 IF (FUN_VEL > 0) ISMOOTH = NPC(2*NFUNCT+FUN_VEL+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH, TT*FCX2 ,VEL )
+                   VEL = VEL*FCY2 - VSEG
+                 ELSE
+                   VEL =  FCY2*FINTER(FUN_VEL,TT*FCX2,NPC,TF,DYDX) - VSEG
+                 ENDIF
+               ELSE
+                  VEL = -VSEG
+               ENDIF
+               IF(FUN_CX /= 0)THEN   
+                 PVEL = (  (-(NX/NORM)*VEL*XFRAME(K1,IFRA2)-(NY/NORM)*VEL*XFRAME(K2,IFRA2)-(NZ/NORM)*VEL*XFRAME(K3,IFRA2))**2  )
+                 ISMOOTH = 0
+                 IF (FUN_CX > 0) ISMOOTH = NPC(2*NFUNCT+FUN_CX+1)
+                 IF(ISMOOTH < 0) THEN
+                   CALL PYTHON_CALL_FUNCT1D(PYTHON, -ISMOOTH,TT*FCX1, PVEL0)
+                   PVEL = PVEL*PVEL0*FCY1/TWO
+                 ELSE
+                   PVEL = PVEL * FCY1* FINTER(FUN_CX,TT*FCX1,NPC,TF,DYDX)/TWO
+                 ENDIF
+
+               ENDIF                                                                       
+               NSIGN = VEL*(NX*XFRAME(K1,IFRA2) + NY*XFRAME(K2,IFRA2) +  NZ*XFRAME(K3,IFRA2))   !  <Vseg.d,n>  where d is flow direction X,Y,Z    ! IFRA2=1 is general frame, IFRA2 in [2:NFRAME+1] are for user frames
+               NSIGN = SIGN(ONE,NSIGN)    
+               
+               !hydrostatic pressure                 
+               FX=-AA*(NX/NORM)                                        
+               FY=-AA*(NY/NORM)                                        
+               FZ=-AA*(NZ/NORM)
+               !drag force
+               FX=FX+PVEL*HALF*NX*NSIGN
+               FY=FY+PVEL*HALF*NY*NSIGN
+               FZ=FZ+PVEL*HALF*NZ*NSIGN
+               !expanding on the 4-node-face
+               FX=FX*THIRD
+               FY=FY*THIRD
+               FZ=FZ*THIRD  
+
+               !NODE_1 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1))
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+               IF(IANIM  > 0) THEN
+#include "lockon.inc"               
+                 FEXT(1,N1) = FEXT(1,N1)+FX
+                 FEXT(2,N1) = FEXT(2,N1)+FY
+                 FEXT(3,N1) = FEXT(3,N1)+FZ
+#include "lockoff.inc"                 
+               ENDIF
+
+               !NODE_2 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+1)
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+               IF(IANIM  > 0) THEN
+#include "lockon.inc"               
+                 FEXT(1,N2) = FEXT(1,N2)+FX
+                 FEXT(2,N2) = FEXT(2,N2)+FY
+                 FEXT(3,N2) = FEXT(3,N2)+FZ
+#include "lockoff.inc"                 
+               ENDIF
+
+               !NODE_3 : storing nodal force in FSKY array (it will be assembled later)
+               IAD = IADC(ILOADP(4,NL)+4*(I-1)+2)
+               FSKYV(IAD,1) = FX
+               FSKYV(IAD,2) = FY
+               FSKYV(IAD,3) = FZ
+               IF(IANIM  > 0) THEN
+#include "lockon.inc"               
+                 FEXT(1,N3) = FEXT(1,N3)+FX
+                 FEXT(2,N3) = FEXT(2,N3)+FY
+                 FEXT(3,N3) = FEXT(3,N3)+FZ
+#include "lockoff.inc"                 
+               ENDIF
+C 
+              IF(TH_SURF%LOADP_FLAG >0 ) THEN
+              
+                !mean velocity (/TH/SURF)
+                VN =  V(1,N1)*NX + V(2,N1)*NY + V(3,N1)*NZ
+                VN =  VN + V(1,N2)*NX + V(2,N2)*NY + V(3,N2)*NZ
+                VN =  VN + V(1,N3)*NX + V(2,N3)*NY + V(3,N3)*NZ
+                VN = THIRD * VN
+
+                !mean acceleration (/TH/SURF)
+                AN =  FX*NX + FY*NY + FZ*NZ
+                MASS = THIRD * ( MS(N1)+MS(N2)+MS(N3)+MS(N4) )
+                AN = AN / MASS  
+                                            
+                NSEGPL = NSEGPL + 1
+                DO NS=TH_SURF%LOADP_KSEGS(NSEGPL) +1,TH_SURF%LOADP_KSEGS(NSEGPL+1)
+#include "lockon.inc"
+                   KSURF = TH_SURF%LOADP_SEGS(NS)
+                   TH_SURF%CHANNELS(3,KSURF)= TH_SURF%CHANNELS(3,KSURF) + AREA*VN ! velocity
+                   TH_SURF%CHANNELS(4,KSURF)= TH_SURF%CHANNELS(4,KSURF) + AREA*PA ! pressure
+                   TH_SURF%CHANNELS(5,KSURF)= TH_SURF%CHANNELS(5,KSURF) + AREA
+#include "lockoff.inc"                                                                    
+                ENDDO
+              ENDIF 
+                
+               !external force work
+               WFEXTT=WFEXTT+DT1*(FX*(V(1,N1)+V(1,N2)+V(1,N3))
+     +                           +FY*(V(2,N1)+V(2,N2)+V(2,N3))
+     +                           +FZ*(V(3,N1)+V(3,N2)+V(3,N3)))
+             ENDIF
+           ENDDO!next I
+!$OMP END DO           
+         ENDDO!next NL
+C
+!$OMP ATOMIC
+                WFEXT = WFEXT + WFEXTT
+         ENDIF ! IF(IVECTOR == 0)
+
+
+       ENDIF
+C
+      RETURN
+      END

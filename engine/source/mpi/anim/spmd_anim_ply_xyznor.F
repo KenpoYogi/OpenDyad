@@ -1,0 +1,174 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_anim_ply_xyznor   ../engine/source/mpi/anim/spmd_anim_ply_xyznor.F
+!||--- called by ------------------------------------------------------
+!||    xyznor_ply             ../engine/source/output/anim/generate/xyznor_ply.F
+!||--- calls      -----------------------------------------------------
+!||    write_s_c              ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod            ../engine/share/modules/plyxfem_mod.F
+!||    spmd_mod               ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE SPMD_ANIM_PLY_XYZNOR( NODGLOB,IPLY,XNORM,EMPSIZPL)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE PLYXFEM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "scr14_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NODGLOB(*)
+      INTEGER IPLY, EMPSIZPL
+      my_real
+     .   XNORM(3,*)
+ 
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER MSGOFF,MSGOFF2
+      INTEGER I, ND, EMPL, P, ITAG, INORM(3), IXNN
+
+      INTEGER PLYSIZ
+      my_real
+     .   S3000,S
+C
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: WRTBUF
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: FSENDBUF,FRECBUF
+      INTEGER, DIMENSION(:), ALLOCATABLE :: ISENDBUF,IRECBUF
+C-----------------------------------------------
+      DATA MSGOFF/7058/
+      DATA MSGOFF2/7059/
+C-----------------------------------------------
+      S3000 = THREE1000
+      IXNN = S3000
+      IF(FMT_ANI==4)IXNN=0
+C
+      IF (ISPMD ==0) THEN
+        PLYSIZ  = PLYNOD (IPLY)%PLYNUMNODS
+        ALLOCATE(WRTBUF(3,PLYSIZG(IPLY)))
+
+C The plynods of proc 0
+        DO ND=1,PLYSIZ
+             I = PLYNOD(IPLY)%NODES(ND)
+             EMPL =  PLYNOD(IPLY)%PLYNODID(ND)-EMPSIZPL
+
+             S = SQRT(XNORM(1,I)**2 + XNORM(2,I)**2 + XNORM(3,I)**2)
+             IF(S/=ZERO)THEN
+                S = S3000 / S
+                INORM(1) = XNORM(1,I) * S
+                INORM(2) = XNORM(2,I) * S
+                INORM(3) = XNORM(3,I) * S
+             ELSE
+                INORM(1) = 0
+                INORM(2) = 0
+                INORM(3) = IXNN
+             END IF
+
+             WRTBUF(1,EMPL)= INORM(1)
+             WRTBUF(2,EMPL)= INORM(2)
+             WRTBUF(3,EMPL)= INORM(3)
+        END DO
+C The plynods of other procs
+           DO P=2,NSPMD
+              ALLOCATE(IRECBUF(PLYIADNOD(IPLY,P)))
+              ALLOCATE(FRECBUF(3,PLYIADNOD(IPLY,P)))
+
+              ITAG=MSGOFF
+
+              CALL SPMD_RECV(IRECBUF(1:PLYIADNOD(IPLY,P)),
+     .                       PLYIADNOD(IPLY,P),IT_SPMD(P),ITAG)
+
+              ITAG=MSGOFF2
+              CALL SPMD_RECV(FRECBUF(1:3,1:PLYIADNOD(IPLY,P)),
+     .                       PLYIADNOD(IPLY,P)*3,IT_SPMD(P),ITAG)
+
+              DO I=1,PLYIADNOD(IPLY,P)
+                 EMPL = IRECBUF(I)-EMPSIZPL
+                 WRTBUF(1,EMPL)=FRECBUF(1,I)
+                 WRTBUF(2,EMPL)=FRECBUF(2,I)
+                 WRTBUF(3,EMPL)=FRECBUF(3,I)
+              ENDDO
+              DEALLOCATE(IRECBUF,FRECBUF)
+           ENDDO
+
+           CALL WRITE_S_C(WRTBUF,3*PLYSIZG(IPLY))
+           DEALLOCATE(WRTBUF)
+           EMPSIZPL=EMPSIZPL+PLYSIZG(IPLY)
+
+      ELSE
+        PLYSIZ = PLYNOD(IPLY)%PLYNUMNODS
+        ALLOCATE (FSENDBUF(3,PLYSIZ))
+        ALLOCATE (ISENDBUF(PLYSIZ))
+
+        DO ND=1,PLYSIZ
+             I = PLYNOD(IPLY)%NODES(ND)
+
+             S = SQRT(XNORM(1,I)**2 + XNORM(2,I)**2 + XNORM(3,I)**2)
+             IF(S/=ZERO)THEN
+                S = S3000 / S
+                INORM(1) = XNORM(1,I) * S
+                INORM(2) = XNORM(2,I) * S
+                INORM(3) = XNORM(3,I) * S
+             ELSE
+                INORM(1) = 0
+                INORM(2) = 0
+                INORM(3) = IXNN
+             END IF
+
+           FSENDBUF(1,ND) = INORM(1)
+           FSENDBUF(2,ND) = INORM(2)
+           FSENDBUF(3,ND) = INORM(3)
+
+           ISENDBUF(ND) =  PLYNOD(IPLY)%PLYNODID(ND)
+        END DO
+
+        ITAG=MSGOFF
+        CALL SPMD_SEND(ISENDBUF(1:PLYSIZ),PLYSIZ,IT_SPMD(1),ITAG)
+
+        ITAG=MSGOFF2
+        CALL SPMD_SEND(FSENDBUF(1:3,1:PLYSIZ),PLYSIZ*3,IT_SPMD(1),ITAG)
+C
+        DEALLOCATE(ISENDBUF,FSENDBUF)
+      ENDIF
+
+#endif
+      RETURN
+      END

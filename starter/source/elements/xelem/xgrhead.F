@@ -1,0 +1,186 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    xgrhead        ../starter/source/elements/xelem/xgrhead.F
+!||--- called by ------------------------------------------------------
+!||    lectur         ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg         ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod    ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE XGRHEAD(
+     1       KXX,  GEO,     INUM,    ITR1,
+     2       EADD, INDEX,   ITRI,    IPARTX,     
+     3       ND,   IGRSURF,
+     4       CEP,  XEP,IPM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE GROUPDEF_MOD
+C-----------------------------------------------
+C            A R G U M E N T S
+C-----------------------------------------------
+C     KXX(5,NUMELX)     ARRAY CONECS+PID+No MULTISTRAND ELEMENTS    E
+C     GEO(NPROPG,NUMGEO)ARRAY OF PID CHARACTERISTICS                E
+C     INUM(6,NUMELX)    WORKING ARRAY                              E/S
+C     ITR1(NSELR)       WORKING ARRAY                              E/S
+C     EADD(NUMELX)      ARRAY OF ADDRESSES IN IDAM CHGT DAMIER       S
+C     INDEX(NUMELX)     WORKING ARRAY                              E/S
+C     ITRI(4,NUMELX)    WORKING ARRAY                              E/S
+C     IPARTX(NUMELX)    PART ARRAY                                 E/S
+C     CEP(NUMELX)    PROC ARRAY                                    E/S
+C     XEP(NUMEX)    PROC ARRAY                                    E/S
+C-----------------------------------------------
+C   I M P L I C I T   T Y P E S
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C O M M O N   B L O C K S
+C-----------------------------------------------
+#include      "vect01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D U M M Y   A R G U M E N T S
+C-----------------------------------------------
+      INTEGER KXX(5,*),INUM(6,*),IPARTX(*),
+     .        EADD(*),ITR1(*),INDEX(*),ITRI(4,*),
+     .        ND, CEP(*), XEP(*),
+     .        IPM(NPROPMI,*)
+      my_real :: GEO(NPROPG,*)
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER 
+     .        I, K, ISSN, NN, MID, PID ,
+     .        II, J, II2,JJ2,JJ, II3, JJ3,
+     .        MSKMTN,MSKISN,MSKPID, MODE, WORK(70000)
+C
+      DATA MSKMTN /O'07770000000'/
+      DATA MSKISN /O'00000000700'/
+      DATA MSKPID /O'07777777777'/
+C
+      TYPE (SURF_)   , DIMENSION(NSURF)   :: IGRSURF
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+C----------------------------------------------------------
+C   GLOBAL TRI ON ALL CRITERIA FOR ALL ELEMENTS
+C----------------------------------------------------------
+C
+      DO I=1,NUMELX
+        EADD(I)=1
+        ITRI(4,I)=I
+        INDEX(I)=I
+        INUM(1,I)=IPARTX(I)
+        INUM(2,I)=KXX(1,I)
+        INUM(3,I)=KXX(2,I)
+        INUM(4,I)=KXX(3,I)
+        INUM(5,I)=KXX(4,I)
+        INUM(6,I)=KXX(5,I)
+      ENDDO
+
+      DO I=1,NUMELX
+        XEP(I)=CEP(I)
+      ENDDO
+
+      DO I = 1, NUMELX
+        MID= KXX(1,I)
+        PID= KXX(2,I)
+        MTN= NINT(GEO(12,PID))
+        IF (MTN<28.OR.MTN>31) THEN
+          CALL ANCMSG(MSGID=413,
+     .                MSGTYPE=MSGERROR,
+     .                ANMODE=ANINFO_BLIND_1,
+     .                I1=KXX(5,I),
+     .                C1='MATERIAL',
+     .                I2=IPM(1,MID),
+     .                C2='MATERIAL',
+     .                I3=MTN)
+        ENDIF
+
+        ISSN = 0
+        IF(GEO(5,PID)/=ZERO) ISSN=1
+C        
+        ISSN=ISHFT(ISSN,6)
+        MTN=ISHFT(MTN,21)
+C
+        ITRI(1,I)=MTN+ISSN
+        ITRI(2,I)=PID
+        ITRI(3,I)=KXX(3,I)
+        ITRI(4,I)=0
+      ENDDO
+C
+      MODE=0
+      CALL MY_ORDERS( MODE, WORK, ITRI, INDEX, NUMELX , 4)
+C
+      DO I=1,NUMELX
+        IPARTX(I) =INUM(1,INDEX(I))
+      ENDDO
+      DO I=1,NUMELX
+        CEP(I)=XEP(INDEX(I))
+      ENDDO
+      DO  K=1,5
+        DO  I=1,NUMELX
+          KXX(K,I)=INUM(K+1,INDEX(I))
+        ENDDO
+      ENDDO
+C
+C INDEX INVERSION (IN ITR1)
+C
+      DO I=1,NUMELX
+        ITR1(INDEX(I))=I
+      ENDDO
+
+
+C
+C RENAMING FOR SURFACES
+C ow a verifier IBUFSSG - ITYP == 100
+       DO I=1,NSURF
+         NN=IGRSURF(I)%NSEG
+         DO J=1,NN 
+           IF(IGRSURF(I)%ELTYP(J) == 100)
+     .        IGRSURF(I)%ELEM(J) = ITR1(IGRSURF(I)%ELEM(J))
+         ENDDO
+       ENDDO
+C--------------------------------------------------------------
+C         DETERMINATION OF SUPER_GROUPS
+C--------------------------------------------------------------
+      ND=1
+      DO I=2,NUMELX
+        II=ITRI(1,INDEX(I))
+        JJ=ITRI(1,INDEX(I-1))
+        II2=ITRI(2,INDEX(I))
+        JJ2=ITRI(2,INDEX(I-1))
+        II3=ITRI(3,INDEX(I))
+        JJ3=ITRI(3,INDEX(I-1))
+        IF(II/=JJ.OR.II2/=JJ2.OR.II3/=JJ3) THEN
+          ND=ND+1
+          EADD(ND)=I
+        ENDIF
+      ENDDO
+      EADD(ND+1) = NUMELX+1
+C
+      RETURN
+      END

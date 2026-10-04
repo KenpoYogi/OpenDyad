@@ -1,0 +1,19 @@
+# Copyright (C) 2026 SISW Siemens Industry Software Inc. ("Holder")
+# Model is licensed by Holder under CC BY-NC 4.0
+# (https://creativecommons.org/licenses/by-nc/4.0/legalcode).
+/VERS/100
+/TITLE
+TEST DE DETENTE
+/RUN/EOSPUFFDET3DCU/1
+1200.
+/DTIX
+ .5   .5
+/ANIM/ELEM/P
+/ANIM/ELEM/DENS
+/ANIM/ELEM/ENER
+/ANIM/DT
+0. 5000.
+/TFILE
+.5
+/PRINT/-10
+/MON/ON

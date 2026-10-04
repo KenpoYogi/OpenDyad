@@ -1,0 +1,559 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    i25main_slid             ../engine/source/interfaces/int25/i25main_slid.F
+!||--- called by ------------------------------------------------------
+!||    inttri                   ../engine/source/interfaces/intsort/inttri.F
+!||--- calls      -----------------------------------------------------
+!||    allocate_comm_struct     ../engine/share/modules/mpi_comm_mod.F
+!||    ancmsg                   ../engine/source/output/message/message.F
+!||    arret                    ../engine/source/system/arret.F
+!||    deallocate_comm_struct   ../engine/share/modules/mpi_comm_mod.F
+!||    i25comp_1                ../engine/source/interfaces/int25/i25comp_1.F
+!||    i25prep_add              ../engine/source/interfaces/int25/i25slid.F
+!||    i25prep_nindex           ../engine/source/interfaces/int25/i25slid.F
+!||    i25prep_send             ../engine/source/interfaces/int25/i25slid.F
+!||    i25prep_sizbufs          ../engine/source/interfaces/int25/i25slid.F
+!||    i25prep_slid_2           ../engine/source/interfaces/int25/i25slid.F
+!||    my_barrier               ../engine/source/system/machine.F
+!||    spmd_i25_slide_exch      ../engine/source/mpi/interfaces/spmd_i25slide.F
+!||    spmd_i25_slide_gat       ../engine/source/mpi/interfaces/spmd_i25slide.F
+!||    upgrade_cand_opt         ../common_source/interf/upgrade_multimp.F
+!||--- uses       -----------------------------------------------------
+!||    h3d_mod                  ../engine/share/modules/h3d_mod.F
+!||    intbufdef_mod            ../common_source/modules/interfaces/intbufdef_mod.F90
+!||    message_mod              ../engine/share/message_module/message_mod.F
+!||    mpi_commod               ../engine/share/modules/mpi_comm_mod.F
+!||    my_alloc_mod             ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod           ../common_source/tools/memory/my_dealloc.F90
+!||    parameters_mod           ../common_source/modules/interfaces/parameters_mod.F
+!||    sensor_mod               ../common_source/modules/sensor_mod.F90
+!||    tri7box                  ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE I25MAIN_SLID(
+     1       IPARI    ,IAD_ELEM ,FR_ELEM  ,ITAB     ,SENSOR_TAB,
+     2       NSENSOR  ,INTLIST25,INTBUF_TAB ,IAD_FRNOR,FR_NOR ,
+     3       X        ,V       ,MS      ,TEMP   ,KINET   ,
+     4       NODNX_SMS,JTASK   ,NB_DST2, MAIN_PROC,
+     5       NEWFRONT ,ISENDTO ,IRCVFROM ,NBINTC,
+     6       INTLIST ,ISLEN7   ,IRLEN7  ,IRLEN7T  ,ISLEN7T,
+     7       NB_DST1 ,H3D_DATA,   ICODT, ISKEW,PARAMETERS,NODADT_THERM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE TRI7BOX
+      USE INTBUFDEF_MOD  
+      USE MPI_COMMOD  
+      USE H3D_MOD
+      USE SENSOR_MOD
+      USE PARAMETERS_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "spmd_c.inc"
+#include      "task_c.inc"
+#include      "warn_c.inc" 
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ,INTENT(IN) :: NSENSOR
+      INTEGER ,INTENT(IN) :: NODADT_THERM
+      INTEGER IPARI(NPARI,*), ITAB(*), INTLIST25(*), JTASK,
+     .        IAD_ELEM(2,*) ,FR_ELEM(*), IAD_FRNOR(NINTER25,NSPMD+1), FR_NOR(*),
+     .        KINET(*), NODNX_SMS(*), NB_DST1(PARASIZ), NB_DST2(PARASIZ)
+      INTEGER, INTENT(IN) :: ICODT(*),ISKEW(*)
+      my_real :: X(3,*), V(3,*), MS(*), TEMP(*)
+      TYPE(INTBUF_STRUCT_),DIMENSION(NINTER) :: INTBUF_TAB
+      INTEGER MAIN_PROC(NUMNOD)
+      INTEGER NBINTC,ISLEN7,IRLEN7,
+     .        IRLEN7T,ISLEN7T,
+     .        NEWFRONT(*), INTLIST(*),
+     .        ISENDTO(NINTER+1,*) ,IRCVFROM(NINTER+1,*)
+      TYPE(H3D_DATABASE) :: H3D_DATA
+      TYPE (SENSOR_STR_) ,DIMENSION(NSENSOR) ,INTENT(IN) :: SENSOR_TAB
+      TYPE (PARAMETERS_) ,INTENT(IN):: PARAMETERS
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NIN, NI25, LENT25, IERROR, ITYP, 
+     .        IFQ, IGAP, INTTH, ILEV, IVIS2,
+     . I_STOK_GLO, I,J, NSNR, INACTI, NADMSR,
+     . P, RSIZ(NINTER25), ISIZ(NINTER25), SIZBUFS(NSPMD),
+     .        NADMAX, LADMAX, NSLIDMX, NSENDTOT, NSNF, NSNL, NSNRF, NSNRL,INTFRIC ,
+     .        FLAGREMN, LREMNORMAX, ISTIF_MSDT, IFSUB_CAREA
+      INTEGER SIZOPT, K_STOK, I_OPT_STOK
+      INTEGER, DIMENSION(:), ALLOCATABLE :: NADD, KADD, 
+     .                                      NSLIDE, FR_SLIDE, INDXTOSEND
+C
+      TYPE(real_pointer),    DIMENSION(NSPMD,NINTER25) :: RBUFS,RBUFR
+      TYPE(int_pointer) ,    DIMENSION(NSPMD,NINTER25) :: IBUFS,IBUFR  
+
+C     Gather the three structures + comm_pattern 
+      TYPE(MPI_COMM_STRUCT) :: COMM_INT
+      TYPE(MPI_COMM_STRUCT) :: COMM_REAL
+      TYPE(MPI_COMM_STRUCT) :: COMM_SIZ
+
+      INTEGER COMM_PATTERN(NSPMD,NINTER25)  !COMM_PATTERN(K,NIN) = 1 <=> ISPMD and K have to communicate
+      INTEGER SIZBUFS_GLOB(NSPMD,NINTER25)  !number of nodes to send per proc per interf
+      INTEGER SIZBUFR_GLOB(NSPMD,NINTER25)  !number of nodes to recv per proc per interf
+      INTEGER NB_TOT
+      INTEGER :: NRTM, NSN
+C-----------------------------------------------
+
+
+
+
+      DO NI25=1,NINTER25
+C
+        NIN = INTLIST25(NI25)
+        NSN   =IPARI(5,NIN)
+C
+C       Initialisation
+        NSNF = NSN*(JTASK-1) / NTHREAD
+        NSNL = NSN*JTASK / NTHREAD
+C
+        INTBUF_TAB(NIN)%ISLIDE(4*NSNF+1:4*NSNL)=0
+
+      END DO
+C
+      IF(NSPMD > 1)THEN
+        DO NI25=1,NINTER25
+          NIN = INTLIST25(NI25)
+          NSNR  =IPARI(24,NIN)
+          NSNRF = 1 + NSNR*(JTASK-1) / NTHREAD
+          NSNRL = NSNR*JTASK / NTHREAD
+          ISLIDE_FI(NIN)%P(1:4,NSNRF:NSNRL)=0
+        END DO
+      END IF
+C
+      CALL MY_BARRIER
+C
+C-----------------------------------------------------------------------
+C       Second node leaving its previous impacted segment ...
+C-----------------------------------------------------------------------  
+!$OMP SINGLE
+      DO NI25=1,NINTER25
+        NIN = INTLIST25(NI25)
+        IPARI(29,NIN) = 0
+      END DO
+!$OMP END SINGLE
+
+      DO NI25=1,NINTER25
+        NIN = INTLIST25(NI25)
+        CALL I25COMP_1(
+     1    IPARI   ,INTBUF_TAB(NIN),X   ,ITAB      ,NIN       ,
+     2    KINET     ,JTASK    ,NB_DST1(JTASK),V   ,NSENSOR   ,
+     3    SENSOR_TAB)
+      ENDDO
+C
+      CALL MY_BARRIER
+C
+C-----------------------------------------------------------------------
+!$OMP SINGLE
+        CALL ALLOCATE_COMM_STRUCT(COMM_INT,NSPMD,NINTER25) 
+        CALL ALLOCATE_COMM_STRUCT(COMM_REAL,NSPMD,NINTER25) 
+        CALL ALLOCATE_COMM_STRUCT(COMM_SIZ,NSPMD,NINTER25) 
+
+C
+        NSLIDMX=0
+        NADMAX =0
+
+        SIZBUFR_GLOB(1:NSPMD,1:NINTER25) = 0
+        SIZBUFS_GLOB(1:NSPMD,1:NINTER25) = 0
+        ISIZ(1:NINTER25) = 0
+        RSIZ(1:NINTER25) = 0
+
+
+!        : fill comm_pattern such that comm_pattern (p, nin) = 1 => comm between ISPMD and P
+!       For the NIN interface (necessary symmetry between processors)
+        COMM_PATTERN(1:NSPMD,1:NINTER25) = 0
+        DO NI25=1,NINTER25
+C
+          NIN = INTLIST25(NI25)
+C
+          IPARI(29,NIN) = 0
+C
+          DO P = 1,NSPMD
+             LENT25 = IAD_FRNOR(NI25,P+1)-IAD_FRNOR(NI25,P)
+             IF(P /= ISPMD +1 .AND. LENT25 /= 0) THEN
+                COMM_PATTERN(P,NI25) = 1
+             ENDIF
+          ENDDO
+        ENDDO
+
+        DO NI25=1,NINTER25
+          SIZBUFS(1:NSPMD) = 0
+C
+          NIN = INTLIST25(NI25)
+C
+          IPARI(29,NIN) = 0
+C
+C         STARTT=INTBUF_TAB(NIN)%VARIABLES(3)
+C         STOPT =INTBUF_TAB(NIN)%VARIABLES(11)
+C         IF(STARTT>TT) CYCLE
+C         IF(TT>STOPT)  CYCLE
+C
+C         Look if interface is activated 
+C         ISENS = IPARI(64,NIN)  
+C         IF(ISENS/=0)  THEN         ! Interface activated by sensor
+C            TS = SENSOR_TAB(ISENS)%TSTART
+C         ELSE
+C            TS = TT
+C         ENDIF
+C         IF(TT<TS) CYCLE
+C
+C precalculer LENS
+          LENT25 = IAD_FRNOR(NI25,NSPMD+1)-IAD_FRNOR(NI25,1)
+
+          NSN   =IPARI(5,NIN)
+          NSNR  =IPARI(24,NIN)
+          NADMSR=IPARI(67,NIN)
+
+          NSLIDMX =MAX(NSLIDMX,NSN+NSNR)
+          NADMAX  =MAX(NADMAX ,NADMSR)
+
+        END DO
+
+        LENT25 = LENT25 + NSNT25
+!       ALLOCATE(BUFR(LENT25),STAT=IERROR)
+
+C-----------------------------------------------------------------------
+        IF(NSPMD == 1) THEN
+
+          call my_alloc(NADD, 1, "NADD")
+          call my_alloc(KADD, 1, "KADD")
+          call my_alloc(NSLIDE, 1, "NSLIDE")
+          call my_alloc(FR_SLIDE, 1, "FR_SLIDE")
+          call my_alloc(INDXTOSEND, 1, "INDXTOSEND")
+
+        ELSE
+C-----------------------------------------------------------------------
+C         spmd only <=> sending secondary nodes that slide on a boundary vertex
+C-----------------------------------------------------------------------
+C
+          call my_alloc(NADD, NADMAX+1, "NADD", stat=IERROR)
+          IF(IERROR/=0) THEN
+            CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+            CALL ARRET(2)
+          ENDIF
+C
+          LADMAX = 4*NSLIDMX
+          call my_alloc(KADD, LADMAX, "KADD", stat=IERROR)
+          IF(IERROR/=0) THEN
+            CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+            CALL ARRET(2)
+          ENDIF
+C
+          DO NI25=1,NINTER25
+C
+             NIN = INTLIST25(NI25)
+
+             IPARI(29,NIN) = 0
+C
+C ==========================================================================
+C            Post Asynchronous reception of the sizes
+             CALL SPMD_I25_SLIDE_EXCH(IBUFR    ,RBUFR      ,ISIZ(NI25)     ,RSIZ(NI25) 
+     .                            ,SIZBUFR_GLOB,COMM_INT,COMM_REAL,COMM_SIZ
+     .                            ,2                ,NI25, COMM_PATTERN)
+
+C ==========================================================================
+
+C
+             NSN   =IPARI(5,NIN)
+             NSNR  =IPARI(24,NIN)
+             INACTI=IPARI(22,NIN)
+             NADMSR=IPARI(67,NIN)
+             ILEV  =IPARI(20,NIN)
+             IGAP  =IPARI(21,NIN)
+             IFQ   =IPARI(31,NIN) 
+             INTTH =IPARI(47,NIN)
+             INTFRIC =IPARI(72,NIN)
+             IVIS2 =IPARI(14,NIN)
+             ISTIF_MSDT = IPARI(97,NIN)
+             IFSUB_CAREA =0
+             IF(IPARI(36,NIN)> 0.AND.PARAMETERS%INTCAREA > 0) IFSUB_CAREA = 1
+             ITYP  = 25
+C
+C            Nadd (1: Nadmsr+1), Kadd <=> Sky Line list of the send nodes concerns / All the Sommets Frontiers
+             NADD(1:NADMSR+1)=0
+             CALL I25PREP_ADD(
+     1      NIN    ,NI25     ,NSN          ,NSNR      ,ITAB     ,
+     2      NADMSR ,INTBUF_TAB(NIN)%ADMSR  ,IAD_FRNOR ,FR_NOR   ,NADD   ,
+     3      KADD   ,INTBUF_TAB(NIN)%ISLIDE) 
+C
+C           compute size of buffer for send
+            CALL I25PREP_NINDEX(
+     1        NIN    ,NI25   ,NSN    ,NSNR   ,
+     3        ITAB   ,INTBUF_TAB(NIN)%NSV,IAD_FRNOR,FR_NOR ,NADD ,
+     4        KADD   ,SIZBUFS,NSENDTOT)
+C
+            call my_alloc(FR_SLIDE, 4*NSENDTOT, "FR_SLIDE", stat=IERROR)
+            call my_alloc(INDXTOSEND, NSENDTOT, "INDXTOSEND", stat=IERROR)
+            IF(IERROR/=0) THEN
+              CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+              CALL ARRET(2)
+            ENDIF
+            FR_SLIDE(1:4*NSENDTOT)=0
+C
+C           compute index of nodes to send to the all domains
+            CALL I25PREP_SIZBUFS(
+     1        NIN    ,NI25   ,NSN    ,NSNR   ,ITYP     ,
+     2        IFQ    ,INACTI ,IGAP   ,INTTH  ,ILEV     ,
+     3        ITAB   ,INTBUF_TAB(NIN)%NSV,IAD_FRNOR,FR_NOR ,NADD ,
+     4        KADD   ,RSIZ(NI25)    ,ISIZ(NI25),SIZBUFS,FR_SLIDE ,
+     5        INDXTOSEND,INTFRIC   , IVIS2   ,ISTIF_MSDT,IFSUB_CAREA)
+C
+            DO P=1,NSPMD
+              NULLIFY(RBUFS(P,NI25)%P)
+              NULLIFY(IBUFS(P,NI25)%P)
+              IF(SIZBUFS(P) > 0) THEN 
+               ALLOCATE(RBUFS(P,NI25)%P(RSIZ(NI25)*SIZBUFS(P)),STAT=IERROR)
+               ALLOCATE(IBUFS(P,NI25)%P(ISIZ(NI25)*SIZBUFS(P)),STAT=IERROR)
+               IBUFS(P,NI25)%P(1:ISIZ(NI25)*SIZBUFS(P)) = -1
+               RBUFS(P,NI25)%P(1:RSIZ(NI25)*SIZBUFS(P)) = -1
+              ENDIF
+              SIZBUFS_GLOB(P,NI25)=SIZBUFS(P)
+              IF(IERROR/=0) THEN
+                CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+                CALL ARRET(2)
+              ENDIF
+            END DO
+
+C ==========================================================================
+C           Send sizes
+            CALL SPMD_I25_SLIDE_EXCH(IBUFS    ,RBUFS      ,ISIZ(NI25)     ,RSIZ(NI25) 
+     .                    ,SIZBUFS_GLOB       ,COMM_INT,COMM_REAL,COMM_SIZ
+     .                    ,0                  ,NI25, COMM_PATTERN)
+
+C ==========================================================================
+
+            CALL I25PREP_SEND(
+     1        NIN    ,NI25     ,NSN      ,NSNR   ,ITYP    ,
+     2        IFQ    ,INACTI   ,IGAP     ,INTTH  ,ILEV    ,
+     3        ITAB   ,IAD_FRNOR,FR_NOR   ,
+     4        LENT25 ,NADD     ,KADD     ,KINET    ,
+     5        NODNX_SMS ,X     ,V        ,MS    ,TEMP  ,
+     .        INTBUF_TAB(NIN)  ,RBUFS, IBUFS,
+     6        RSIZ(NI25),      ISIZ(NI25),  SIZBUFS, FR_SLIDE,INDXTOSEND, 
+     7        MAIN_PROC,INTFRIC ,IVIS2  , ICODT  ,ISKEW ,
+     8        ISTIF_MSDT,IFSUB_CAREA,PARAMETERS%INTAREAN) 
+
+
+C ==========================================================================
+C           Send buffers 
+            CALL SPMD_I25_SLIDE_EXCH(IBUFS    ,RBUFS      ,ISIZ(NI25)     ,RSIZ(NI25) 
+     .                    ,SIZBUFS_GLOB       ,COMM_INT,COMM_REAL,COMM_SIZ
+     .                    ,1                  ,NI25, COMM_PATTERN)
+C ==========================================================================
+
+            call my_dealloc(FR_SLIDE)
+            call my_dealloc(INDXTOSEND)
+
+
+          END DO ! NI25 = 1:NINTER25
+         
+        END IF ! IF(NSPMD > 1)THEN
+C-----------------------------------------------------------------------
+C
+C       Decompactage
+        DO NI25=1,NINTER25
+C
+          NIN = INTLIST25(NI25)
+
+          IPARI(29,NIN) = 0
+C
+C         Receive buffer ( + wait for sizes)
+          IF(NSPMD > 1) THEN
+            CALL SPMD_I25_SLIDE_EXCH(IBUFR    ,RBUFR      ,ISIZ(NI25)     ,RSIZ(NI25) 
+     .                    ,SIZBUFR_GLOB       ,COMM_INT,COMM_REAL,COMM_SIZ
+     .                    ,3                  ,NI25, COMM_PATTERN)
+          ENDIF
+C
+          NRTM  =IPARI(4,NIN)
+          NSN   =IPARI(5,NIN)
+          IVIS2 =IPARI(14,NIN)
+          NSNR  =IPARI(24,NIN)
+          INACTI=IPARI(22,NIN)
+          NADMSR=IPARI(67,NIN)
+          ILEV  =IPARI(20,NIN)
+          IGAP  =IPARI(21,NIN)
+          IFQ   =IPARI(31,NIN) 
+          INTTH =IPARI(47,NIN)
+          INTFRIC =IPARI(72,NIN)
+          FLAGREMN =IPARI(63,NIN)
+          LREMNORMAX =IPARI(82,NIN)
+          ISTIF_MSDT = IPARI(97,NIN)
+          IFSUB_CAREA =0
+          IF(IPARI(36,NIN)> 0.AND.PARAMETERS%INTCAREA > 0) IFSUB_CAREA = 1
+          ITYP  = 25
+
+C         filter => keep only old impacts + candidates for sliding
+          IF(NSPMD > 1) THEN
+C           output: for this interface, list of nodes to add to nsnfi
+
+
+C ============================================================================
+C Two possible approaches:
+C                    1                                2
+C    wait for all procs (sync) | wait on a size
+C    allocation of xrem/irem | reception in rbufr/ibufr
+C    reception in xrem/irem | copy from *bufr to *rem
+C
+C  Ici on teste (2)  
+            NB_TOT = 0
+            DO P =1,NSPMD
+               SIZBUFS(P) = SIZBUFR_GLOB(P,NI25)
+               NB_TOT = NB_TOT +SIZBUFS(P)
+            ENDDO
+            IF(ALLOCATED(XREM)) call my_dealloc(XREM)
+            IF(ALLOCATED(IREM)) call my_dealloc(IREM)
+            call my_alloc(XREM, RSIZ(NI25), NB_TOT, "XREM")
+            call my_alloc(IREM, ISIZ(NI25), NB_TOT, "IREM")
+
+
+            NB_TOT = 0
+            DO P = 1,NSPMD
+               DO I = 1,SIZBUFS(P)
+         !       IF(IREM(3,NB_TOT+1) == ISPMD + 1) THEN 
+         !        ! If PMAIN is the current processor: adding to local structures
+         !        ! If current proc is PMAIN, then local number is in IREM
+         !        ! i.e. no search necessary
+                  
+         !       ELSE
+                   NB_TOT = NB_TOT + 1 
+                   DO J =1,RSIZ(NI25)
+                     XREM(J,NB_TOT) = RBUFR(P,NI25)%P((I-1)*RSIZ(NI25)+J)
+                   ENDDO
+                   DO J =1,ISIZ(NI25)
+                     IREM(J,NB_TOT) = IBUFR(P,NI25)%P((I-1)*ISIZ(NI25)+J)
+                   ENDDO
+         !       ENDIF
+               ENDDO
+            ENDDO
+C================================================================================ 
+             
+           
+           I_STOK_GLO = INTBUF_TAB(NIN)%I_STOK(2)
+
+           IF(NSPMD > 1) THEN
+C : we do not change nsnr in iPari since SPMD_I25_Slide_gat, so nsnr is no longer the size
+C of fi structures
+C
+             CALL SPMD_I25_SLIDE_GAT(NSN  ,NIN, NI25,
+     2                               IGAP  ,NSNR   ,INTTH   ,ILEV, INTBUF_TAB(NIN), 
+     3                               FR_NOR,IAD_FRNOR, SIZBUFS, ITAB, H3D_DATA    ,
+     4                               INTFRIC,FLAGREMN,LREMNORMAX,NRTM,IVIS2       ,
+     5                               ISTIF_MSDT,IFSUB_CAREA,NODADT_THERM)
+        ! Passer intbuftab(nin)
+C nodes that slide from p0 to p1 and are local to p1 are found when
+C even in the boundary structure *fi(nin)%p at the position of proc p1
+C either - fill the local structures instead of the *fi structures directly in spmd_i25_slide_gat
+C - fill the local structures in a routine from *fi(nin)%p([p0 ; p1 ; p2 ... ... ])
+C - remove these ns from xrem and irem when copying from [ir]bufr to [ix]rem
+
+              IPARI(24,NIN) = NSNR
+           ENDIF
+
+
+
+          END IF
+C
+C         add new candidates wrt sliding to CAND_OPT_N, CAND_OPT_E 
+ 50       CONTINUE
+
+          SIZOPT     = INTBUF_TAB(NIN)%S_CAND_OPT_N
+          I_OPT_STOK = INTBUF_TAB(NIN)%I_STOK(2)
+          CALL I25PREP_SLID_2(
+     1   INTBUF_TAB(NIN)%CAND_OPT_N,INTBUF_TAB(NIN)%CAND_OPT_E,NIN ,NI25 ,NSN ,
+     2   NSNR   ,NRTM ,SIZOPT ,K_STOK ,INTBUF_TAB(NIN)%MSEGLO,
+     3   INTBUF_TAB(NIN)%MSEGTYP24,I_OPT_STOK  ,ITAB ,INTBUF_TAB(NIN)%IRECTM,NADMSR ,
+     4   INTBUF_TAB(NIN)%ADMSR,INTBUF_TAB(NIN)%ISLIDE,INTBUF_TAB(NIN)%NSV,
+     .      INTBUF_TAB(NIN)%KNOR2MSR,INTBUF_TAB(NIN)%NOR2MSR,
+     5   INTBUF_TAB(NIN)%IRTLM,INTBUF_TAB(NIN)%STFM,FLAGREMN,INTBUF_TAB(NIN)%KREMNOR,
+     .      INTBUF_TAB(NIN)%REMNOR) 
+C
+C         Merge NSNFI, etc 
+C
+C         Upgrade SIZE of CAND_OPT_N, CAND_OPT_E, ...
+C         Warning : Arrays are reallocated in UPGRADE_CAND_OPT routine !!!!
+          IF(INTBUF_TAB(NIN)%I_STOK(2)+K_STOK > SIZOPT)THEN
+            CALL UPGRADE_CAND_OPT(NIN,K_STOK,INTBUF_TAB(NIN))
+            GOTO 50
+          END IF
+C
+          INTBUF_TAB(NIN)%I_STOK(2)=I_OPT_STOK ! == INTBUF_TAB(NIN)%I_STOK(2)+K_STOK
+          IF (DEBUG(3)>=1) THEN
+              NB_DST1(JTASK)  = NB_DST1(JTASK)  + K_STOK
+              NB_DST2(JTASK)  = NB_DST2(JTASK)  - K_STOK
+          ENDIF
+          
+!         !deallocate reception buffer
+          IF(NSPMD > 1) THEN
+            CALL SPMD_I25_SLIDE_EXCH(IBUFR    ,RBUFR    ,ISIZ(NI25) ,RSIZ(NI25) 
+     .                      ,SIZBUFR_GLOB     ,COMM_INT ,COMM_REAL,COMM_SIZ
+     .                      ,4                ,NI25     ,COMM_PATTERN)
+          END IF
+C
+        ENDDO !Loop on NI
+C-----------------------------------------------------------------------
+        IF(NSPMD > 1) THEN
+          DO NI25=1,NINTER25
+          NIN = INTLIST25(NI25)
+C
+          ! Wait and deallocate Send buffers
+          CALL SPMD_I25_SLIDE_EXCH(IBUFS    ,RBUFS      ,ISIZ(NI25)     ,RSIZ(NI25) 
+     .                    ,SIZBUFS_GLOB       ,COMM_INT,COMM_REAL,COMM_SIZ
+     .                    ,5                  ,NI25, COMM_PATTERN)
+
+          ENDDO
+        ENDIF
+!       DEALLOCATE(BUFR)
+        call my_dealloc(NADD)
+        call my_dealloc(KADD)
+
+C
+C-----------------------------------------------------------------------
+      CALL DEALLOCATE_COMM_STRUCT(COMM_INT,NSPMD,NINTER25) 
+      CALL DEALLOCATE_COMM_STRUCT(COMM_REAL,NSPMD,NINTER25) 
+      CALL DEALLOCATE_COMM_STRUCT(COMM_SIZ,NSPMD,NINTER25) 
+
+
+!$OMP END SINGLE
+
+
+C-----------------------------------------------------------------------
+      RETURN
+      END
+C

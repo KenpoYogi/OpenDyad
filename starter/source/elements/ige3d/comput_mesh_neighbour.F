@@ -1,0 +1,182 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    comput_mesh_neighbour   ../starter/source/elements/ige3d/comput_mesh_neighbour.F
+!||--- called by ------------------------------------------------------
+!||    prerafig3d              ../starter/source/elements/ige3d/prerafig3d.F
+!||====================================================================
+      SUBROUTINE COMPUT_MESH_NEIGHBOUR(DIR,DIR2,IPID,IPID2,ID_MESHSURF,
+     .                                 TAB_COINKNOT,L_TAB_COINKNOT,
+     .                                 TAB_COINKNOT_TEST,L_TAB_COINKNOT_TEST,
+     .                                 KNOT_INSERE,KNOT_INSERE2,
+     .                                 TAB_MESHSURFCUT,L_TAB_MESHSURFCUT,
+     .                                 TAB_MESHSURFCUT2,L_TAB_MESHSURFCUT2,FLAG)
+C----------------------------------------------------------
+C     routine that will test and count the meshsurfs that
+C     intersect with the meshsurfsurf being processed
+C     NB : MESHSURF = SURFACE DE COUPE D'ELEMENTS DEFINISSANT
+C          one refinement in one direction
+C----------------------------------------------------------
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER TAB_MESHSURFCUT(*),TAB_MESHSURFCUT2(*)
+      INTEGER DIR,DIR2,IPID,IPID2,L_TAB_MESHSURFCUT,L_TAB_MESHSURFCUT2,
+     .        L_TAB_COINKNOT,L_TAB_COINKNOT_TEST,ID_MESHSURF,FLAG
+      my_real TAB_COINKNOT(2,L_TAB_COINKNOT),
+     .        TAB_COINKNOT_TEST(2,L_TAB_COINKNOT_TEST),
+     .        KNOT_INSERE,KNOT_INSERE2
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER DIRTANG1, DIRTANG2
+      my_real COINENGLOB(2,2), COINENGLOB_TEST(2,2)
+C=======================================================================
+C
+C     in the parametric space
+C
+C     RAFFINEMENT X :      RAFFINEMENT Y :      RAFFINEMENT Z :   
+C
+C          Z                    X                    Y         
+C          |                    |                    |
+C          |_ _ Y               |_ _ Z               |_ _ X
+C         /                    /                    /
+C        X                    Y                    Z
+C
+C=======================================================================
+C                                    |    
+C    C1 ___________c2_ _ _ _ _p1 |               
+C      |            |           /    |                 
+C      |            |                |  C1 ___________C2
+C      |            |         /      |    |            |_ _ _  _P1 _ _ _ _ P2   
+C      |____________|_ _ _ _ _ _ P2  |    |            |      /           /
+C     C4           C3      /         |    |            |
+C                         C2    /    |    |____________|    /           /
+C                        /|          |  C4             C3   
+C                       / |   /      |                    /           /
+C                      /  |          |                         
+C                     /   | /        |                  /           /
+C                  C1/    |C3        |                C2__________ C3
+C                    |   /           |                /           /
+C                    |  /            |               /           /
+C                    | /  <= TESTEE  |              /           / <= TESTEE
+C                    |/              |             /___________/
+C                   C4               |           C1           C4
+C                                    |
+C=======================================================================
+C----------------------------------------------------------------------
+C   TRAITEMENT SIMPLE QUI PERMET D'ECARTER LES MESHSURF D'AUTRES PATCHS
+C   or the parallel meshsurf
+C----------------------------------------------------------------------
+c
+      IF(IPID2/=IPID) RETURN ! not the same patches
+      IF(DIR2==DIR) RETURN ! Parallel Messiturf
+c
+C----------------------------------------------------------------------
+C   construction of bounding boxes for the meshsurfs
+C   PERMET DE SAVOIR SI IL Y A POTENTIELLEMENT INTERSECTION
+C   (IL Y A ONE TEST SUR LES FONCTIONS EN AVAL, 
+C   LA CERTITUDE D'INTERSECTION N'EST PAS NECESSAIRE)
+C----------------------------------------------------------------------
+c
+      IF(DIR==1) THEN
+        DIRTANG1 = 2
+        DIRTANG2 = 3
+      ELSEIF(DIR==2) THEN
+        DIRTANG1 = 3
+        DIRTANG2 = 1
+      ELSEIF(DIR==3) THEN
+        DIRTANG1 = 1
+        DIRTANG2 = 2
+      ENDIF
+c
+      COINENGLOB(1,1) = MINVAL(TAB_COINKNOT(1,1:(L_TAB_COINKNOT)))
+      COINENGLOB(2,1) = MINVAL(TAB_COINKNOT(2,1:(L_TAB_COINKNOT)))
+      COINENGLOB(1,2) = MAXVAL(TAB_COINKNOT(1,1:(L_TAB_COINKNOT)))
+      COINENGLOB(2,2) = MAXVAL(TAB_COINKNOT(2,1:(L_TAB_COINKNOT)))
+c
+      COINENGLOB_TEST(1,1) = MINVAL(TAB_COINKNOT_TEST(1,1:(L_TAB_COINKNOT_TEST)))
+      COINENGLOB_TEST(2,1) = MINVAL(TAB_COINKNOT_TEST(2,1:(L_TAB_COINKNOT_TEST)))
+      COINENGLOB_TEST(1,2) = MAXVAL(TAB_COINKNOT_TEST(1,1:(L_TAB_COINKNOT_TEST)))
+      COINENGLOB_TEST(2,2) = MAXVAL(TAB_COINKNOT_TEST(2,1:(L_TAB_COINKNOT_TEST))) 
+c
+C----------------------------------------------------------------------
+C   comparison of the intervals of the bounding boxes and the inserted knots,
+C   PUIS VERIFICATION SUR LA TROISIEME DIRECTION COMPLEMENTAIRE AUX TWO DIRECTIONS
+C   of the inserted knots from the superposition of the meshsurfs
+C   TEST QUI EXCLUE : PLUS SIMPLE
+C----------------------------------------------------------------------
+c
+      IF(DIR2==DIRTANG1) THEN
+        IF(KNOT_INSERE2<COINENGLOB(1,1).OR.KNOT_INSERE2>COINENGLOB(1,2)) RETURN
+        IF(KNOT_INSERE<COINENGLOB_TEST(2,1).OR.KNOT_INSERE>COINENGLOB_TEST(2,2)) RETURN
+        IF(COINENGLOB_TEST(1,2)<COINENGLOB(2,1)) RETURN
+        IF(COINENGLOB_TEST(1,1)>COINENGLOB(2,2)) RETURN
+      ELSEIF(DIR2==DIRTANG2) THEN
+        IF(KNOT_INSERE2<COINENGLOB(2,1).OR.KNOT_INSERE2>COINENGLOB(2,2)) RETURN
+        IF(KNOT_INSERE<COINENGLOB_TEST(1,1).OR.KNOT_INSERE>COINENGLOB_TEST(1,2)) RETURN
+        IF(COINENGLOB_TEST(2,2)<COINENGLOB(1,1)) RETURN
+        IF(COINENGLOB_TEST(2,1)>COINENGLOB(1,2)) RETURN
+      ENDIF
+c
+C----------------------------------------------------------------------
+C   SI ON ARRIVE LA, IL Y A ONE CROISEMENT PROBABLE
+C----------------------------------------------------------------------
+c
+      L_TAB_MESHSURFCUT = L_TAB_MESHSURFCUT + 1
+      IF(FLAG==1) THEN
+        TAB_MESHSURFCUT(L_TAB_MESHSURFCUT) = ID_MESHSURF
+      ENDIF
+c
+C----------------------------------------------------------------------
+C   we can take this meshsurf and all the meshsurfs it intersects
+C   (TESTONS SANS POUR L'INSTANT CAR ON TESTE TOUTES LES MESHSURFS 
+C   anyway, with respect to the meshsurf we are on
+C----------------------------------------------------------------------
+c
+c      DO I=1,L_TAB_MESHSURFCUT2
+c        IF(FLAG==0) THEN
+c        L_TAB_MESHSURFCUT = L_TAB_MESHSURFCUT + 1
+c        ENDIF
+c        IF(FLAG==1) THEN
+c          IOUT=0
+c          DO J=1,L_TAB_MESHSURFCUT
+c            IF(TAB_MESHSURFCUT(J)==TAB_MESHSURFCUT2(I)) IOUT=1
+c          ENDDO
+c          IF(IOUT==0) THEN
+c            L_TAB_MESHSURFCUT = L_TAB_MESHSURFCUT + 1
+c            TAB_MESHSURFCUT(L_TAB_MESHSURFCUT) = TAB_MESHSURFCUT2(I)
+c          ENDIF
+c        ENDIF
+c      ENDDO
+c
+C----------------------------------------------------------------------
+c
+      RETURN
+      END
+c

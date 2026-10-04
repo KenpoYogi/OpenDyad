@@ -1,0 +1,109 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    clskew3    ../starter/source/elements/shell/coque/clskew.F
+!||--- called by ------------------------------------------------------
+!||    cdkevec3   ../starter/source/elements/sh3n/coquedk/cdkevec3.F
+!||    cneveci    ../starter/source/elements/shell/coqueba/cneveci.F
+!||    spcoor3    ../starter/source/elements/solid/sconnect/spcoor3.F
+!||    xyzloc3n   ../starter/source/elements/xfem/lslocal.F
+!||====================================================================
+      SUBROUTINE CLSKEW3(JFT,JLT,IREP,
+     .           RX, RY, RZ,SX, SY, SZ, 
+     .           E1X, E2X, E3X, E1Y, E2Y, E3Y, E1Z, E2Z, E3Z, DET)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER JFT,JLT,IREP
+      my_real
+     .   RX(MVSIZ) , RY(MVSIZ) , RZ(MVSIZ), 
+     .   SX(MVSIZ) , SY(MVSIZ) , SZ(MVSIZ),
+     .   E1X(MVSIZ), E1Y(MVSIZ), E1Z(MVSIZ),
+     .   E2X(MVSIZ), E2Y(MVSIZ), E2Z(MVSIZ),
+     .   E3X(MVSIZ), E3Y(MVSIZ), E3Z(MVSIZ), DET(MVSIZ)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I
+      MY_REAL C1,C2,CC
+C=======================================================================
+C IREP=0 ->QEPH IREP=1 ->Q4, IREP=2-> E1=R(ISHFRAM=1)
+C~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      DO I=JFT,JLT
+C---------E3------------
+       E3X(I) = RY(I) * SZ(I) - RZ(I) * SY(I) 
+       E3Y(I) = RZ(I) * SX(I) - RX(I) * SZ(I) 
+       E3Z(I) = RX(I) * SY(I) - RY(I) * SX(I) 
+       DET(I) = SQRT(E3X(I)*E3X(I) + E3Y(I)*E3Y(I) + E3Z(I)*E3Z(I))
+       DET(I) = MAX(EM20,DET(I))
+       CC = ONE / DET(I)
+       E3X(I) = E3X(I) * CC 
+       E3Y(I) = E3Y(I) * CC 
+       E3Z(I) = E3Z(I) * CC 
+      ENDDO 
+C~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      IF (IREP==2) THEN
+       DO I=JFT,JLT
+        E1X(I) = RX(I)
+        E1Y(I) = RY(I)
+        E1Z(I) = RZ(I)
+       ENDDO 
+      ELSEIF (IREP==1) THEN
+       DO I=JFT,JLT
+        C2 = SQRT(SX(I)*SX(I) + SY(I)*SY(I) + SZ(I)*SZ(I))
+        E1X(I) = RX(I)*C2+(SY(I)*E3Z(I)-SZ(I)*E3Y(I))
+        E1Y(I) = RY(I)*C2+(SZ(I)*E3X(I)-SX(I)*E3Z(I))
+        E1Z(I) = RZ(I)*C2+(SX(I)*E3Y(I)-SY(I)*E3X(I))
+       ENDDO 
+      ELSE
+       DO I=JFT,JLT
+        C1 = SQRT(RX(I)*RX(I) + RY(I)*RY(I) + RZ(I)*RZ(I))
+        C2 = SQRT(SX(I)*SX(I) + SY(I)*SY(I) + SZ(I)*SZ(I))
+        E1X(I) = RX(I)*C2+(SY(I)*E3Z(I)-SZ(I)*E3Y(I))*C1
+        E1Y(I) = RY(I)*C2+(SZ(I)*E3X(I)-SX(I)*E3Z(I))*C1
+        E1Z(I) = RZ(I)*C2+(SX(I)*E3Y(I)-SY(I)*E3X(I))*C1
+       ENDDO 
+      ENDIF 
+C~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+       DO I=JFT,JLT
+        C1 = SQRT(E1X(I)*E1X(I) + E1Y(I)*E1Y(I) + E1Z(I)*E1Z(I))
+        IF (C1/=ZERO) C1 = ONE / C1
+        E1X(I) = E1X(I)*C1
+        E1Y(I) = E1Y(I)*C1
+        E1Z(I) = E1Z(I)*C1
+        E2X(I) = E3Y(I) * E1Z(I) - E3Z(I) * E1Y(I)
+        E2Y(I) = E3Z(I) * E1X(I) - E3X(I) * E1Z(I)
+        E2Z(I) = E3X(I) * E1Y(I) - E3Y(I) * E1X(I)
+       ENDDO 
+c-----------
+      RETURN
+      END

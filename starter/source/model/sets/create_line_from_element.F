@@ -1,0 +1,139 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_line_from_element   ../starter/source/model/sets/create_line_from_element.F
+!||--- called by ------------------------------------------------------
+!||    create_box_clause          ../starter/source/model/sets/create_box_clause.F
+!||    hm_set                     ../starter/source/model/sets/hm_set.F
+!||    insert_clause_in_set       ../starter/source/model/sets/insert_clause_in_set.F
+!||--- calls      -----------------------------------------------------
+!||    line_buffer                ../starter/source/model/sets/line_buffer.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod                ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_LINE_FROM_ELEMENT(IXT     ,IXP  ,IXR  ,CLAUSE ,DELBUF,
+     .                                    GO_IN_ARRAY)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE SETDEF_MOD
+      USE MESSAGE_MOD
+      USE SET_SCRATCH_MOD
+      use element_mod , only : nixt,nixp,nixr
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: IXT(NIXT,*),IXP(NIXP,*),IXR(NIXR,*)
+!
+      TYPE (SET_) :: CLAUSE
+      TYPE (SET_SCRATCH) ::  DELBUF
+      LOGICAL GO_IN_ARRAY
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, NIX, SZELMAX, IAD_LINE, NSEG, LINE_NENTITY
+      INTEGER IWORK(70000)
+!
+      INTEGER, ALLOCATABLE, DIMENSION(:,:) :: ITRI
+      INTEGER, ALLOCATABLE, DIMENSION(:) :: INDEX, BUFTMPLINE
+C=======================================================================
+      DELBUF%SZ_LINE = 0
+!
+!!      SZELMAX = MAX(CLAUSE%NB_TRUSS,CLAUSE%NB_BEAM,CLAUSE%NB_SPRING)
+      SZELMAX = CLAUSE%NB_TRUSS + CLAUSE%NB_BEAM + CLAUSE%NB_SPRING
+      IF (SZELMAX == 0) RETURN
+!
+      LINE_NENTITY = 4 ! NOD1, NOD2, ELTYP, ELEM
+      call my_alloc(BUFTMPLINE, SZELMAX*LINE_NENTITY, "BUFTMPLINE")
+      call my_alloc(ITRI, 3, SZELMAX, "ITRI")
+      call my_alloc(INDEX, 2*SZELMAX, "INDEX")
+!
+      IAD_LINE = 1
+!------------------
+!----
+!     ! temporary line segments got from elements
+      NSEG = 0
+      CALL LINE_BUFFER(
+     .             IXT      ,IXP    ,IXR  ,BUFTMPLINE ,  NSEG,
+     .             IAD_LINE ,CLAUSE )
+!----
+!
+      NIX = LINE_NENTITY
+!
+      DO  I=1,NSEG
+        INDEX(I)=I
+        ITRI(1,I) = BUFTMPLINE((I-1)*NIX+1)
+        ITRI(2,I) = BUFTMPLINE((I-1)*NIX+2)
+        ITRI(3,I) = BUFTMPLINE((I-1)*NIX+4)
+      ENDDO
+      IWORK(1:70000) = 0
+      CALL MY_ORDERS(0,IWORK,ITRI,INDEX,NSEG,3)
+!---
+!     clause surf allocation
+!---
+!------------------
+!
+! Decide whether the result is stored in an array or in the clause.
+! In certain cases it is useful to store in ARRAY.
+! Example : Clause with delete clause. Lines must be recreated & merged...
+! ----------------------------------------------------------------------------
+      IF (GO_IN_ARRAY .EQV. .TRUE.) THEN
+        DELBUF%SZ_LINE = NSEG
+        call my_alloc(DELBUF%LINE, NSEG, 4, "DELBUF%LINE")
+        DO I=1,NSEG
+          DELBUF%LINE(I,1) = BUFTMPLINE((INDEX(I)-1)*NIX+1)
+          DELBUF%LINE(I,2) = BUFTMPLINE((INDEX(I)-1)*NIX+2)
+          DELBUF%LINE(I,3) = BUFTMPLINE((INDEX(I)-1)*NIX+3)
+          DELBUF%LINE(I,4) = BUFTMPLINE((INDEX(I)-1)*NIX+4)
+        ENDDO
+      ELSE
+        IF(ALLOCATED( CLAUSE%LINE_NODES )) CALL MY_DEALLOC(CLAUSE%LINE_NODES)
+        IF(ALLOCATED( CLAUSE%LINE_ELTYP )) CALL MY_DEALLOC(CLAUSE%LINE_ELTYP)
+        IF(ALLOCATED( CLAUSE%LINE_ELEM ))  CALL MY_DEALLOC(CLAUSE%LINE_ELEM)
+!
+        CLAUSE%NB_LINE_SEG = NSEG
+        CALL MY_ALLOC(CLAUSE%LINE_NODES,NSEG,2,"CLAUSE%LINE_NODES")
+        CALL MY_ALLOC(CLAUSE%LINE_ELTYP,NSEG,"CLAUSE%LINE_ELTYP")
+        CALL MY_ALLOC(CLAUSE%LINE_ELEM,NSEG,"CLAUSE%LINE_ELEM")
+!
+        DO I=1,NSEG
+          CLAUSE%LINE_NODES(I,1) = BUFTMPLINE((INDEX(I)-1)*NIX+1)
+          CLAUSE%LINE_NODES(I,2) = BUFTMPLINE((INDEX(I)-1)*NIX+2)
+          CLAUSE%LINE_ELTYP(I)   = BUFTMPLINE((INDEX(I)-1)*NIX+3)
+          CLAUSE%LINE_ELEM(I)    = BUFTMPLINE((INDEX(I)-1)*NIX+4)
+        ENDDO
+      ENDIF ! IF (GO_IN_ARRAY .EQV. .TRUE.)
+!------------------
+      IF(ALLOCATED(ITRI))       CALL MY_DEALLOC(ITRI)
+      IF(ALLOCATED(INDEX))      CALL MY_DEALLOC(INDEX)
+      IF(ALLOCATED(BUFTMPLINE)) CALL MY_DEALLOC(BUFTMPLINE)
+!------------------
+!-----------
+      RETURN
+      END

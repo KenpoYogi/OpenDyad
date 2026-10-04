@@ -1,0 +1,158 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spsym_alloc      ../engine/source/elements/sph/spsym_alloc.F
+!||--- called by ------------------------------------------------------
+!||    sphprep          ../engine/source/elements/sph/sphprep.F
+!||--- calls      -----------------------------------------------------
+!||    my_barrier       ../engine/source/system/machine.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod      ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    sphbox           ../engine/share/modules/sphbox.F
+!||====================================================================
+      SUBROUTINE SPSYM_ALLOC(
+     1    X, ISPCOND ,ISPSYM  ,XFRAME  ,XSPSYM   ,
+     2    VSPSYM  ,WSP2SORT,DMAX,ITASK   ,WSMCOMP,
+     3    MYSPATRUE,SPBUF,KXSP)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SPHBOX
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "sphcom.inc"
+#include      "param_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER KXSP(NISP,*),ISPSYM(NSPCOND,*),WSP2SORT(*), ITASK,
+     .   ISPCOND(NISPCOND,*)
+      my_real
+     .   X(3,*) ,XFRAME(NXFRAME,*) ,DMAX,MYSPATRUE,SPBUF(NSPBUF,*)
+      TYPE (SPSYM_STRUCT) :: XSPSYM,VSPSYM,WSMCOMP
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER N,IS,IC,NC,NS,INOD,NSPHSYM_L,IERROR
+      my_real
+     .       XI,YI,ZI,DI,
+     .       OX,OY,OZ,NX,NY,NZ,
+     .       DD,DM,SPALINR
+C-----------------------------------------------
+C new construction of ghost particles is necessary.
+       SPALINR=SQRT(ONE + MYSPATRUE)
+
+C      NSPHSYM = 0 Initialized in SPHPREP
+       NSPHSYMR=0
+C
+C Counting symmetric particles for array allocation
+C
+      DO NC=1,NSPCOND
+        IS=ISPCOND(3,NC)
+        IC=ISPCOND(2,NC)
+        OX=XFRAME(10,IS)
+        OY=XFRAME(11,IS)
+        OZ=XFRAME(12,IS)
+        NX=XFRAME(3*(IC-1)+1,IS)
+        NY=XFRAME(3*(IC-1)+2,IS)
+        NZ=XFRAME(3*(IC-1)+3,IS)
+C
+        DO NS=1+ITASK,NSP2SORT,NTHREAD
+         N=WSP2SORT(NS)
+         INOD  =KXSP(3,N)
+         XI =X(1,INOD)
+         YI =X(2,INOD)
+         ZI =X(3,INOD)
+         DI  =SPBUF(1,N)
+C DMAX : max diameter over the domain
+         DM=DI+DMAX
+C------
+C        Check if condition active in X.
+         DD=(XI-OX)*NX+(YI-OY)*NY+(ZI-OZ)*NZ
+         IF (DD<=SPALINR*DM) THEN
+#include "lockon.inc"
+           NSPHSYM=NSPHSYM+1
+           NSPHSYM_L = NSPHSYM
+           ISPSYM(NC,N)= NSPHSYM_L
+#include "lockoff.inc"
+         ELSE
+C          not symetrized at this time.
+           ISPSYM(NC,N)=-1
+         ENDIF
+        ENDDO
+C
+C Symmetrical particles of remote particles
+C
+        DO NS = ITASK+1,NSPHR,NTHREAD
+         XI =XSPHR(3,NS)
+         YI =XSPHR(4,NS)
+         ZI =XSPHR(5,NS)
+         DI =XSPHR(2,NS)
+C DMAX : max diameter over the domain
+         DM=DI+DMAX
+C------
+C        Check if condition active in X.
+         DD=(XI-OX)*NX+(YI-OY)*NY+(ZI-OZ)*NZ
+         IF (DD<=SPALINR*DM) THEN
+#include "lockon.inc"
+           NSPHSYM=NSPHSYM+1
+           NSPHSYMR=NSPHSYMR+1
+           NSPHSYM_L = NSPHSYM
+#include "lockoff.inc"
+           ISPSYMR(NC,NS)= NSPHSYM_L
+         ELSE
+C          not symetrized at this time.
+           ISPSYMR(NC,NS)=-1
+         END IF
+        END DO
+      END DO
+C
+      CALL MY_BARRIER
+C
+      IF (ITASK==0) THEN  
+        IF(ALLOCATED(XSPSYM%BUF)) call my_dealloc(XSPSYM%BUF)
+        call my_alloc(XSPSYM%BUF, 3*NSPHSYM, "XSPSYM%BUF", stat=IERROR)
+        IF(IERROR==0) XSPSYM%BUF = 0
+        IF(ALLOCATED(VSPSYM%BUF)) call my_dealloc(VSPSYM%BUF)
+        call my_alloc(VSPSYM%BUF, 3*NSPHSYM, "VSPSYM%BUF", stat=IERROR)
+        IF(IERROR==0) VSPSYM%BUF = 0
+        IF(ALLOCATED(WSMCOMP%BUF)) call my_dealloc(WSMCOMP%BUF)
+        call my_alloc(WSMCOMP%BUF, 6*NSPHSYM, "WSMCOMP%BUF", stat=IERROR)
+        IF(IERROR==0) WSMCOMP%BUF = 0     
+      ENDIF
+C-------------------------------------------
+      RETURN
+      END

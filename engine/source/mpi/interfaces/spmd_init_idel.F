@@ -1,0 +1,96 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    spmd_init_idel   ../engine/source/mpi/interfaces/spmd_init_idel.F
+!||--- called by ------------------------------------------------------
+!||    chkload          ../engine/source/interfaces/chkload.F
+!||    chkstfn3n        ../engine/source/interfaces/interf/chkstfn3.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod         ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE SPMD_INIT_IDEL(NINDEX,IRSIZE, IRECV,IAD_ELEM)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NINDEX, IRSIZE, IRECV(*)
+      INTEGER, DIMENSION(2,NSPMD+1), INTENT(in) :: IAD_ELEM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER MSGOFF, MSGTYP, LOC_PROC,IERROR,I,
+     .        REQ_S(NSPMD),STATUS(MPI_STATUS_SIZE)
+      INTEGER :: SIZ
+      DATA MSGOFF/106/
+C-----------------------------------------------
+      LOC_PROC = ISPMD+1
+      DO I = 1, NSPMD
+        SIZ = (IAD_ELEM(1,I+1)-IAD_ELEM(1,I))
+        IF(I.NE.LOC_PROC.AND.SIZ>0) THEN
+          MSGTYP = MSGOFF
+          CALL SPMD_ISEND(
+     C      NINDEX,1,IT_SPMD(I),MSGTYP,REQ_S(I))
+        ENDIF
+      ENDDO
+      IRSIZE = 0
+      DO I = 1, NSPMD
+        SIZ = (IAD_ELEM(1,I+1)-IAD_ELEM(1,I))
+        IF(I.NE.LOC_PROC.AND.SIZ>0) THEN
+          MSGTYP = MSGOFF
+          CALL SPMD_RECV(
+     .     IRECV(I),1,IT_SPMD(I),MSGTYP,STATUS)
+          IRSIZE = IRSIZE + IRECV(I)
+        ELSE
+          IRECV(I) = 0
+        ENDIF
+      ENDDO
+C
+C Nindex shipping test
+C
+      DO I = 1, NSPMD
+        SIZ = (IAD_ELEM(1,I+1)-IAD_ELEM(1,I))
+        IF(I.NE.LOC_PROC.AND.SIZ>0) THEN
+          CALL SPMD_WAIT(REQ_S(I),STATUS)
+        ENDIF
+      ENDDO
+C
+#endif
+      RETURN
+      END

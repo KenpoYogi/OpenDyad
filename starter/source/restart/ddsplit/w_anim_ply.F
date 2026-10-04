@@ -1,0 +1,164 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    w_anim_ply       ../starter/source/restart/ddsplit/w_anim_ply.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit          ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    get_ply_nod      ../starter/source/spmd/spmd_anim_ply_init.F
+!||--- uses       -----------------------------------------------------
+!||    plyxfem_mod      ../starter/share/modules1/plyxfem_mod.F
+!||====================================================================
+      SUBROUTINE W_ANIM_PLY(IXC,NUMELC_L,NODLOCAL,
+     *                      NUMNOD_L,CEL,CEP,PROC)
+      USE PLYXFEM_MOD
+      use element_mod , only : nixc
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IXC(NIXC,*),NUMELC_L, NODLOCAL(*),
+     *        NUMNOD_L,CEL(*),CEP(*),PROC
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, K, ELEM, ND, NDSZ_L, ELSZ_L, ELPL, NCOUNT, EMPL
+      INTEGER, DIMENSION(:), ALLOCATABLE :: ELNUM,ELEMIPT,ELEMXFEMID,
+     *                                      NODNUM,NODEXTN,
+     .                                      NODTAG,ELEMTAG,PLYSIZNG
+      INTEGER GET_PLY_NOD
+      EXTERNAL GET_PLY_NOD
+C-----------------------------------------------
+!     1d array
+      call my_alloc(NODTAG, NUMNOD_L, "NODTAG")
+      call my_alloc(ELEMTAG, NUMELC_L, "ELEMTAG")
+      call my_alloc(PLYSIZNG, NPLYMAX, "PLYSIZNG")
+! ----------------------------------
+
+      CALL WRITE_I_C(NPLYPART,1)
+      CALL WRITE_I_C(INDX_PLY,NPLYPART)
+
+      DO K=1,NPLYMAX
+        NODTAG=0
+        ELEMTAG=0
+
+        PLYSIZNG(K)=PLYNOD(K)%PLYNUMNODS
+C First part, on 1 fold we tag the elements and
+C the nodes of the proc
+        DO I=1,PLYSHELL(K)%PLYNUMSHELL
+           ELEM = PLYSHELL(K)%SHID(I)
+           IF (CEP(ELEM)==PROC)THEN
+             ELEMTAG(CEL(ELEM))=I
+             ND = IXC(2,ELEM)
+             NODTAG(NODLOCAL(ND))=ND
+             ND = IXC(3,ELEM)
+             NODTAG(NODLOCAL(ND))=ND
+             ND = IXC(4,ELEM)
+             NODTAG(NODLOCAL(ND))=ND
+             ND = IXC(5,ELEM)
+             NODTAG(NODLOCAL(ND))=ND
+           ENDIF
+        ENDDO
+C They are counted to prepare the tables to be sent to
+C L engine
+        ELSZ_L=0
+        NDSZ_L =0
+        DO I=1,NUMELC_L
+          IF (ELEMTAG(I)  > 0) ELSZ_L=ELSZ_L+1
+        ENDDO
+        DO I=1,NUMNOD_L
+          IF (NODTAG(I) > 0) NDSZ_L=NDSZ_L+1
+        ENDDO
+
+C we prepare the tables to send
+        ELPL = 0
+        call my_alloc(ELNUM, ELSZ_L, "ELNUM")
+        call my_alloc(ELEMIPT, ELSZ_L, "ELEMIPT")
+        call my_alloc(ELEMXFEMID, ELSZ_L, "ELEMXFEMID")
+
+C Local tables elements
+        DO I=1,NUMELC_L
+          IF (ELEMTAG(I)  > 0) THEN
+             ELPL=ELPL+1
+             ND = ELEMTAG(I)
+C
+             ELNUM(ELPL)      = I
+             ELEMIPT(ELPL)    = PLYSHELL(K)%SHELLIPT(ND)
+             ELEMXFEMID(ELPL) = PLYSHELL(K)%SHELLID(ND)
+          ENDIF
+        ENDDO
+C XFEM local node paintings
+        NCOUNT = 0
+        call my_alloc(NODNUM, NDSZ_L, "NODNUM")
+        call my_alloc(NODEXTN, NDSZ_L, "NODEXTN")
+        DO I=1,NUMNOD_L
+          IF (NODTAG(I) > 0) THEN
+            NCOUNT = NCOUNT + 1
+            ND=NODTAG(I)
+C
+            EMPL = GET_PLY_NOD(K,ND)
+            NODNUM(NCOUNT) = I
+            NODEXTN(NCOUNT) = PLYNOD(K)%PLYNODID(EMPL)
+          ENDIF
+        ENDDO
+C Writing by fold of the tables
+C Ply shells
+        CALL WRITE_I_C(ELSZ_L    , 1     )
+        CALL WRITE_I_C(ELNUM     , ELSZ_L)
+        CALL WRITE_I_C(ELEMIPT   , ELSZ_L)
+        CALL WRITE_I_C(ELEMXFEMID, ELSZ_L)
+C ply nodes
+        CALL WRITE_I_C(NDSZ_L    , 1     )
+        CALL WRITE_I_C(NODNUM    , NDSZ_L)
+        CALL WRITE_I_C(NODEXTN   , NDSZ_L)
+
+C
+        CALL MY_DEALLOC(NODEXTN)
+        CALL MY_DEALLOC(NODNUM)
+        CALL MY_DEALLOC(ELNUM)
+        CALL MY_DEALLOC(ELEMIPT)
+        CALL MY_DEALLOC(ELEMXFEMID)
+      ENDDO
+
+        CALL WRITE_I_C(PLYSIZNG,NPLYMAX)
+C id ply pid     
+        CALL WRITE_I_C(IDPID_PLY,NPLYPART)    
+! ----------------------------------    
+!     1d array
+      CALL MY_DEALLOC(NODTAG)
+      CALL MY_DEALLOC(ELEMTAG)
+      call my_dealloc(PLYSIZNG)
+! ----------------------------------   
+      RETURN
+      END

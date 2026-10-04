@@ -1,0 +1,2422 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    rbe3t1               ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    resol                ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    asp2_rbe3            ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    ass_rbe3             ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    dmi_rbe3             ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    prerbe3              ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    prerbe3p             ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3f                ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3pen_init         ../engine/source/constraints/general/rbe3/rbe3pen_init.F90
+!||    rbe3poff             ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    spmd_exch_rbe3       ../engine/source/mpi/kinematic_conditions/spmd_exch_rbe3.F
+!||    spmd_exch_rbe3_pon   ../engine/source/mpi/kinematic_conditions/spmd_exch_rbe3_pon.F
+!||    zero1                ../engine/source/system/zero.F
+!||--- uses       -----------------------------------------------------
+!||    h3d_mod              ../engine/share/modules/h3d_mod.F
+!||    nodal_arrays_mod     ../common_source/modules/nodal_arrays.F90
+!||    rbe3_mod             ../common_source/modules/constraints/rbe3_mod.F90
+!||    rbe3pen_init_mod     ../engine/source/constraints/general/rbe3/rbe3pen_init.F90
+!||====================================================================
+      SUBROUTINE RBE3T1(RBE3  ,NODES    ,SKEW  ,
+     *                  DMAST ,ADM      ,DINERT,
+     *                  ADI   ,H3D_DATA , DT1  ,
+     *                  TT    ,IMPL_S   )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE H3D_MOD
+      USE rbe3_mod
+      use nodal_arrays_mod
+      use rbe3pen_init_mod, only: RBE3PEN_INIT
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "tabsiz_c.inc"
+#include      "parit_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+C     REAL
+      my_real SKEW(*)   !< Skew Array
+      my_real DMAST,DT1,TT
+      my_real ADM(*)
+      my_real DINERT
+      my_real ADI(*)    !< Animation buffer
+      INTEGER, INTENT(IN) :: IMPL_S
+      TYPE (RBE3_),INTENT(INOUT) :: RBE3
+      TYPE (H3D_DATABASE) :: H3D_DATA
+      TYPE(NODAL_ARRAYS_), INTENT(INOUT) :: NODES
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  J, N, MAX_M,JT(3,NRBE3),JR(3,NRBE3),NMT,
+     .        IADA,IADMS,IADFN,IADAR,IADIN,IADFR,IADM0,IADI0,IADL,
+     .        IPA,IPMS,IPFN,IPAR,IPIN,IPFR,NMP,IADLP,NS,ICOM,
+     .        NMT0,IADMP(SLRBE3/2),IML(SLRBE3/2),IPEN,IPARITF
+      INTEGER IROTG_LOC   !< Local Max of IROT Flags keep for compatibility
+C======================================================================|
+      I7KGLO = 1
+      NMT0 = SLRBE3/2
+      CALL PRERBE3(RBE3%IRBE3 ,MAX_M , IROTG_LOC,JT  ,JR   )
+      !
+      ICOM = RBE3%mpi%IAD_RBE3(NSPMD+1)-RBE3%mpi%IAD_RBE3(1)   !< Flag for SPMD communication
+      
+      IF (NMT0>0) THEN
+       IF (NCYCLE==0) CALL RBE3PEN_INIT(NODES%X,NODES%MS,NODES%IN,NODES%STIFN ,NODES%STIFR,NUMNOD,RBE3,TT,IMPL_S)
+       CALL PRERBE3P(RBE3%IRBE3 ,RBE3%LRBE3 ,IADMP ,IML   , NMT   )
+       IPARITF = 1 ! fix to P/ON anyway after issue of P/OFF w/ mass increasing
+       IADA=1
+       IADMS=IADA+3*NMT
+       IADFN=IADMS+NMT
+       IF (RBE3%IROTG>0) THEN
+        IADAR=IADFN+NMT
+        IADIN=IADAR+3*NMT
+        IADFR=IADIN+NMT
+       ELSE
+        IADAR=IADFN
+        IADIN=IADAR
+        IADFR=IADIN
+       ENDIF
+       IADL=IADFR+NMT
+C       ALLOCATE(RSUM(IADL),STAT=IERR)
+       CALL ZERO1(RBE3%RRBE3,IADL)
+! P/ON part       
+        NMP = 6*NMT
+        IPA=1
+        IPMS=IPA+3*NMP
+        IPFN=IPMS+NMP
+        IF (RBE3%IROTG>0) THEN
+         IPAR=IPFN+NMP
+         IPIN=IPAR+3*NMP
+         IPFR=IPIN+NMP
+        ELSE
+         IPAR=IPFN
+         IPIN=IPAR
+         IPFR=IPIN
+        ENDIF
+        IADLP=IPFR+NMP
+        RBE3%RRBE3_PON = ZERO
+       CALL RBE3F(RBE3%IRBE3 ,RBE3%LRBE3 ,NODES%X    ,NODES%A     ,NODES%AR    ,
+     1           NODES%MS    ,NODES%IN    ,RBE3%FRBE3,SKEW  ,NODES%WEIGHT,
+     2           NODES%STIFN ,NODES%STIFR ,JT   ,JR    ,RBE3%IROTG ,
+     3           MAX_M ,RBE3%RRBE3(IADA),RBE3%RRBE3(IADAR) ,RBE3%RRBE3(IADMS),
+     4           RBE3%RRBE3(IADIN),RBE3%RRBE3(IADFN),RBE3%RRBE3(IADFR),NMT0  ,
+     5           IADMP ,RBE3%pen,NODES%V,NODES%VR,NMT ,DT1 ,IRODDL ,
+     6           RBE3%RRBE3_PON(IPA),RBE3%RRBE3_PON(IPAR),RBE3%RRBE3_PON(IPMS),
+     7           RBE3%RRBE3_PON(IPIN),RBE3%RRBE3_PON(IPFN),RBE3%RRBE3_PON(IPFR),
+     8           IPARITF)
+C
+       IF (NSPMD>1.AND.IPARITF==0) THEN
+            CALL RBE3POFF(RBE3%IRBE3 ,RBE3%LRBE3 ,NODES%A ,NODES%MS ,NODES%WEIGHT,
+     1                    NODES%AR    ,NODES%IN    ,NODES%STIFN,NODES%STIFR )
+       END IF
+       IF (IPARITF>0) THEN
+        IF (ICOM>0) THEN
+            CALL SPMD_EXCH_RBE3_PON(
+     .       RBE3%RRBE3_PON(IPA),RBE3%RRBE3_PON(IPAR),RBE3%RRBE3_PON(IPMS),RBE3%RRBE3_PON(IPIN),
+     .       RBE3%RRBE3_PON(IPFN),RBE3%RRBE3_PON(IPFR),RBE3%mpi%FR_RBE3MP,RBE3%mpi%IAD_RBE3  ,
+     .       RBE3%mpi%IAD_RBE3(NSPMD+1),rbe3%irotg_sz,RBE3%IROTG)
+        ENDIF
+C
+C Routine assemblage parith/ON
+C
+        CALL ASP2_RBE3(RBE3%IRBE3 ,RBE3%LRBE3 ,NODES%A  ,NODES%AR   ,NODES%MS  ,
+     1                NODES%IN,NODES%WEIGHT,NODES%STIFN ,NODES%STIFR ,RBE3%RRBE3_PON(IPA),
+     2                RBE3%RRBE3_PON(IPAR),RBE3%RRBE3_PON(IPMS),RBE3%RRBE3_PON(IPIN),
+     3                RBE3%RRBE3_PON(IPFN),RBE3%RRBE3_PON(IPFR),NMT  ,IML  ,RBE3%IROTG)
+       ELSE
+C-----------------A-=A*W+DA-----
+        CALL ASS_RBE3(RBE3%IRBE3 ,RBE3%LRBE3 ,NODES%A  ,NODES%AR ,NODES%MS    ,
+     1                NODES%IN ,NODES%WEIGHT,NODES%STIFN ,NODES%STIFR ,RBE3%RRBE3(IADA),
+     2                RBE3%RRBE3(IADAR) ,RBE3%RRBE3(IADMS), RBE3%RRBE3(IADIN),
+     3                RBE3%RRBE3(IADFN) ,RBE3%RRBE3(IADFR),NMT   ,IML  ,RBE3%IROTG)
+        IF (IPARITF==0.AND.ICOM>0) THEN
+            CALL SPMD_EXCH_RBE3(
+     .       NODES%A    ,NODES%AR   ,NODES%MS      ,NODES%IN     ,NODES%STIFN,
+     .       NODES%STIFR,rbe3%mpi%FR_RBE3 ,RBE3%mpi%IAD_RBE3   ,RBE3%mpi%IAD_RBE3(NSPMD+1),rbe3%irotg_sz,
+     .       RBE3%IROTG)
+        ENDIF
+       END IF
+C
+c--------------calcul dms,diner---
+       IADM0=  NMT0*6 + 1
+       IADI0=  IADM0 + NMT0
+       CALL DMI_RBE3(NMT   ,RBE3%LRBE3 ,RBE3%FRBE3(IADM0),RBE3%FRBE3(IADI0),
+     1               RBE3%RRBE3(IADMS)  ,RBE3%RRBE3(IADIN) ,DMAST ,ADM  ,
+     2               DINERT,ADI   ,RBE3%IROTG   ,RBE3%IRBE3  ,NODES%MS      ,
+     3               NODES%IN    ,NODES%WEIGHT,IADMP   ,H3D_DATA)
+C       DEALLOCATE(RSUM)
+      END IF ! IF (NMT>0)
+C
+C---  reset of secnd nodes forces is necessary w/AMS
+      DO N=1,NRBE3
+        NS  = RBE3%IRBE3(3,N)
+        IPEN= RBE3%IRBE3(9,N)
+        IF(NS/=0.AND.IPEN<=0) THEN
+          IF (NODES%WEIGHT(NS)/=0) THEN
+            DO J = 1,3
+              IF(JT(J,N)/=0)NODES%A(J,NS)=ZERO
+            END DO
+          ENDIF
+        END IF
+      END DO
+C---
+      RETURN
+      END
+!||====================================================================
+!||    rbe3poff   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3t1     ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+      SUBROUTINE RBE3POFF(IRBE3 ,LRBE3 ,A    ,MS    ,WEIGHT,
+     1                    AR    ,IN    ,STIFN,STIFR )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),WEIGHT(*)
+C     REAL
+      my_real
+     .   A(3,*),AR(3,*),MS(*), IN(*),STIFN(*),STIFR(*)
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, N, NML, IAD,IROT,M,NS
+C-----------------------------------------------
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NML = IRBE3(5,N)
+        NS  = IRBE3(3,N)
+          IROT =IRBE3(6,N)
+#include    "vectorize.inc"
+        DO I=IAD+1,IAD+NML
+         M = LRBE3(I)
+           A(1,M) = A(1,M)*WEIGHT(M)
+           A(2,M) = A(2,M)*WEIGHT(M)
+           A(3,M) = A(3,M)*WEIGHT(M)
+           MS(M)  = MS(M)*WEIGHT(M)
+           STIFN(M)= STIFN(M)*WEIGHT(M)
+        ENDDO
+        IF (IROT>0) THEN
+#include    "vectorize.inc"
+         DO I=IAD+1,IAD+NML
+          M = LRBE3(I)
+            AR(1,M) = AR(1,M)*WEIGHT(M)
+            AR(2,M) = AR(2,M)*WEIGHT(M)
+            AR(3,M) = AR(3,M)*WEIGHT(M)
+            IN(M) =  IN(M)*WEIGHT(M)
+            STIFR(M) = STIFR(M)*WEIGHT(M)
+         ENDDO
+        ENDIF
+      ENDDO
+C-----------
+      RETURN
+      END
+
+!||====================================================================
+!||    rbe3f             ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3t1            ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- calls      -----------------------------------------------------
+!||    foat_to_6_float   ../engine/source/system/parit.F
+!||    mfac_rbe3         ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3cl            ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3f_pen         ../engine/source/constraints/general/rbe3/rbe3f_pen.F90
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod      ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod    ../common_source/tools/memory/my_dealloc.F90
+!||    rbe3_mod          ../common_source/modules/constraints/rbe3_mod.F90
+!||    rbe3f_pen_mod     ../engine/source/constraints/general/rbe3/rbe3f_pen.F90
+!||====================================================================
+      SUBROUTINE RBE3F(IRBE3 ,LRBE3 ,X    ,A     ,AR    ,
+     1                 MS    ,IN    ,FRBE3,SKEW  ,WEIGHT,
+     2                 STIFN ,STIFR ,JT   ,JR    ,IROTG ,
+     3                 MAX_M ,AM    ,ARM  ,MSM   ,INM   ,
+     4                 STIFNM,STIFRM,NMT0 ,IADMP ,PEN   ,
+     5                 V     ,VR    ,NMT  ,DT1   ,IRODDL,
+     6                 AM_P  ,ARM_P ,MSM_P,INM_P ,STIFNM_P,
+     7                STIFRM_P,IPARIT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE rbe3_mod
+      USE rbe3f_pen_mod, only : RBE3F_PEN
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),WEIGHT(*)
+      INTEGER MAX_M,IROTG,JT(3,*),JR(3,*),NMT0,IADMP(*)
+      INTEGER, INTENT(IN) :: NMT ! dimension of AM,STIFNM...
+      INTEGER, INTENT(IN) :: IRODDL,IPARIT
+C     REAL
+      my_real
+     .   X(3,*), A(3,*), AR(3,*), MS(*), IN(*), FRBE3(*),SKEW(*),
+     .   STIFN(*) ,STIFR(*), AM(3,*), ARM(3,*), MSM(*), INM(*),
+     .   STIFNM(*) ,STIFRM(*), V(3,*), VR(3,*)
+      my_real, INTENT(IN) :: DT1
+      TYPE (RBE3_pen), INTENT(INOUT) :: PEN
+      DOUBLE PRECISION
+     .        AM_P(6,3,NMT), ARM_P(6,3,NMT), MSM_P(6,NMT), INM_P(6,NMT),
+     .        STIFNM_P(6,NMT), STIFRM_P(6,NMT)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, N, NS ,NML, IAD,IROT,IADS,NN,K,IMOD,IADF,
+     .        IPEN,N_P,ICOLINE
+C     REAL
+      my_real
+     .     FNS(3),MNS(3),MSS(3),INS(3),STN(3),STR(3),FSUM,MSUM,
+     .     FMAX,SMAX,MMAX,SFD,SMD,F2MAX
+      my_real,
+     .         DIMENSION(:,:,:),ALLOCATABLE :: FDSTNB ,MDSTNB
+      my_real, DIMENSION(:,:), ALLOCATABLE :: AMP ,ARMP
+      my_real, DIMENSION(:), ALLOCATABLE   :: MSMP ,INMP,STIFNMP,STIFRMP
+      DOUBLE PRECISION, DIMENSION(:,:), ALLOCATABLE     :: R1_6, R2_6
+      DOUBLE PRECISION, DIMENSION(:,:,:), ALLOCATABLE   :: RR_6
+
+C======================================================================|
+      IADS = NMT0
+      IF (MAX_M>0) THEN
+        call my_alloc(FDSTNB, 3, 6, MAX_M, "FDSTNB")
+        IF (IROTG>0) ALLOCATE(MDSTNB(3,6,MAX_M))
+      END IF
+      call my_alloc(AMP, 3, MAX_M, "AMP")
+      call my_alloc(MSMP, MAX_M, "MSMP")
+      call my_alloc(STIFNMP, MAX_M, "STIFNMP")
+      IF (IROTG>0) THEN
+        call my_alloc(ARMP, 3, MAX_M, "ARMP")
+        call my_alloc(INMP, MAX_M, "INMP")
+        call my_alloc(STIFRMP, MAX_M, "STIFRMP")
+      END IF
+      IF (IPARIT>0) THEN
+        IF (MAX_M>0) THEN
+          call my_alloc(RR_6, 6, 3, MAX_M, "RR_6")
+          call my_alloc(R1_6, 6, MAX_M, "R1_6")
+          call my_alloc(R2_6, 6, MAX_M, "R2_6")
+        END IF 
+        DO N=1,NRBE3
+          IAD = IRBE3(1,N)
+          NS  = IRBE3(3,N)
+          NML = IRBE3(5,N)
+          IROT =IRBE3(6,N)
+          IMOD =IRBE3(8,N)
+          IPEN =IRBE3(9,N)
+         IF (NS==0.OR.IPEN>0) CYCLE
+         IF (WEIGHT(NS)==1) THEN
+          CALL RBE3CL(LRBE3(IAD+1),LRBE3(IADS+IAD+1),NS     ,X      ,
+     .                FRBE3(6*IAD+1),SKEW    ,NML     ,IROT   ,FDSTNB ,
+     .                MDSTNB  ,IRBE3(2,N))
+            DO J = 1,3
+             NN = JT(J,N)*WEIGHT(NS)
+             FNS(J) = A(J,NS)*NN
+             MSS(J) = MS(NS)*NN/3
+             STN(J) = STIFN(NS)*NN
+            END DO
+           AMP = ZERO
+           MSMP = ZERO
+           STIFNMP = ZERO
+C---not to add supplementary mass globally
+           IF (IMOD <=3) THEN
+             CALL MFAC_RBE3(FDSTNB,MDSTNB,NML  ,IROTG,SFD ,SMD)
+             DO I=1,NML
+               DO J = 1,3
+                FSUM = FDSTNB(J,1,I)+FDSTNB(J,2,I)+FDSTNB(J,3,I)
+                MSMP(I) = MSMP(I) + ABS(FSUM)*MSS(J)*SFD
+              END DO
+             END DO
+           ELSEIF (IMOD ==4) THEN
+             DO I=1,NML
+               IADF =6*(IAD+I-1)
+               DO J = 1,3
+                MSMP(I) = MSMP(I)+FRBE3(IADF+J)*MSS(J)
+               END DO
+             END DO
+           END IF
+          DO I=1,NML
+            DO J = 1,3
+              AMP(1:3,I) = AMP(1:3,I)+FDSTNB(1:3,J,I)*FNS(J)
+            END DO
+C-----IMOD=4  STIFNM might be over_estimated but safe         
+             SMAX = ZERO
+            DO J = 1,3
+             FMAX=ABS(FDSTNB(J,1,I))+ABS(FDSTNB(J,2,I))+ABS(FDSTNB(J,3,I))
+             F2MAX=FDSTNB(J,1,I)*FDSTNB(J,1,I)+FDSTNB(J,2,I)*FDSTNB(J,2,I)+
+     .             FDSTNB(J,3,I)*FDSTNB(J,3,I)
+             SMAX = MAX(SMAX,MAX(FMAX,F2MAX)*STN(J))
+            END DO
+             STIFNMP(I) = SMAX
+          ENDDO
+          IF ((JR(1,N)+JR(2,N)+JR(3,N))>0) THEN
+             DO J = 1,3
+                 NN = JR(J,N)*WEIGHT(NS)
+                 MNS(J) = AR(J,NS)*NN
+                 INS(J) = IN(NS)*NN/3
+                 STR(J) = STIFR(NS)*NN
+             END DO
+             DO I=1,NML
+               DO J = 1,3
+                  AMP(1:3,I) = AMP(1:3,I)+FDSTNB(1:3,J+3,I)*MNS(J)
+               END DO
+               SMAX = ZERO
+               DO J = 1,3
+!       FSUM = FDSTNB(J,J+3,I)
+                 FSUM = FDSTNB(J,4,I)+FDSTNB(J,5,I)+FDSTNB(J,6,I)
+                 MSMP(I) =MSMP(I)+ABS(FSUM)*INS(J)
+                 FMAX=ABS(FDSTNB(J,4,I))+ABS(FDSTNB(J,5,I))+ABS(FDSTNB(J,6,I))
+                 F2MAX=FDSTNB(J,4,I)*FDSTNB(J,4,I)+FDSTNB(J,5,I)*FDSTNB(J,5,I)+
+     .              FDSTNB(J,6,I)*FDSTNB(J,6,I)
+                 SMAX = MAX(SMAX,MAX(FMAX,F2MAX)*STR(J))
+               END DO
+               STIFNMP(I) = STIFNM(I)+SMAX
+             END DO
+          ENDIF
+          CALL FOAT_TO_6_FLOAT(1  ,NML*3  ,AMP    ,RR_6 )
+          CALL FOAT_TO_6_FLOAT(1  ,NML    ,MSMP   ,R1_6 )
+          CALL FOAT_TO_6_FLOAT(1  ,NML    ,STIFNMP,R2_6 )
+          DO I=1,NML
+             K = IADMP(IAD+I)
+             DO J = 1,6
+               AM_P(J,1:3,K) = AM_P(J,1:3,K)+RR_6(J,1:3,I) 
+               MSM_P(J,K) = MSM_P(J,K)+R1_6(J,I) 
+               STIFNM_P(J,K) = STIFNM_P(J,K)+R2_6(J,I) 
+             END DO
+          END DO
+          IF (IROT>0) THEN
+            ARMP = ZERO
+            INMP = ZERO
+            STIFRMP = ZERO
+            DO I=1,NML
+              DO J = 1,3
+                ARMP(1:3,I) = ARMP(1:3,I)+MDSTNB(1:3,J,I)*FNS(J)
+              END DO
+              SMAX = ZERO
+              DO J = 1,3
+                MSUM = MDSTNB(J,1,I)+MDSTNB(J,2,I)+MDSTNB(J,3,I)
+                IF (IMOD /=4) INMP(I) = INMP(I)+ABS(MSUM)*MSS(J)
+                MMAX=ABS(MDSTNB(J,1,I))+ABS(MDSTNB(J,2,I))+ABS(MDSTNB(J,3,I))
+                SMAX = MAX(SMAX,MMAX*STN(J))
+              END DO
+              STIFRMP(I) = STIFRMP(I)+SMAX
+            END DO
+           IF ((JR(1,N)+JR(2,N)+JR(3,N))>0) THEN
+             IF (IMOD <=3) THEN
+               DO I=1,NML
+                 DO J = 1,3
+                  MSUM = MDSTNB(J,4,I)+MDSTNB(J,5,I)+MDSTNB(J,6,I)
+                  INMP(I) = INMP(I)+ABS(MSUM)*INS(J)*SMD
+                 END DO
+               ENDDO
+             ELSEIF (IMOD ==4) THEN
+               DO I=1,NML
+                 IADF =6*(IAD+I-1)
+                 DO J = 1,3
+                  INMP(I) = INMP(I)+FRBE3(IADF+J+3)*INS(J)
+                 END DO
+               END DO
+             END IF
+             DO I=1,NML
+               DO J = 1,3
+                  ARMP(1:3,I) =ARMP(1:3,I)+MDSTNB(1:3,J+3,I)*MNS(J)
+               END DO
+              SMAX = ZERO
+              DO J = 1,3
+                MMAX=ABS(MDSTNB(J,4,I))+ABS(MDSTNB(J,5,I))+ABS(MDSTNB(J,6,I))
+                SMAX = MAX(SMAX,MMAX*STR(J))
+              END DO
+              STIFRMP(I) = STIFRMP(I)+SMAX
+             END DO
+           END IF ! (JR(1,N)
+           CALL FOAT_TO_6_FLOAT(1  ,NML*3  ,ARMP   ,RR_6 )
+           CALL FOAT_TO_6_FLOAT(1  ,NML    ,INMP   ,R1_6 )
+           CALL FOAT_TO_6_FLOAT(1  ,NML    ,STIFRMP,R2_6 )
+           DO I=1,NML
+              K = IADMP(IAD+I)
+              DO J = 1,6
+                ARM_P(J,1:3,K) = ARM_P(J,1:3,K)+RR_6(J,1:3,I) 
+                INM_P(J,K) = INM_P(J,K)+R1_6(J,I) 
+                STIFRM_P(J,K) = STIFRM_P(J,K)+R2_6(J,I) 
+              END DO
+           END DO
+          END IF !(IROT>0) THEN
+! 
+          STIFN(NS) = EM20
+          IF ((JR(1,N)+JR(2,N)+JR(3,N))>0) STIFR(NS) = EM20
+         END IF !(WEIGHT(NS)==1) THEN
+        END DO
+!     penalty formulation
+        N_P = 0
+        DO N=1,NRBE3
+          IAD = IRBE3(1,N)
+          NS  = IRBE3(3,N)
+          NML = IRBE3(5,N)
+          IROT =IRBE3(6,N)
+          IMOD =IRBE3(8,N)
+          IPEN =IRBE3(9,N)
+          IF (NS==0.OR.IPEN<=0) CYCLE
+            N_P = N_P +1 
+            AMP = ZERO
+            STIFNMP = ZERO
+            IF (IROT>0) THEN
+              ARMP = ZERO
+              STIFRMP = ZERO
+            END IF 
+            CALL RBE3F_PEN(                                       
+     .            NS      ,NUMNOD      ,DT1           ,IRODDL    ,         
+     .            NML     ,LRBE3(IAD+1),LRBE3(IADS+IAD+1),IN     ,        
+     .            A       ,AR          ,AMP         ,ARMP        ,         
+     .            STIFN   ,STIFR       ,STIFNMP     ,STIFRMP     ,         
+     .            V       ,VR          ,FRBE3(6*IAD+1),X         ,         
+     .           LSKEW    ,NUMSKW      ,SKEW          ,
+     .           PEN%RRBE3PEN_F(1,N_P) ,PEN%RRBE3PEN_STF(1,N_P) ,         
+     .           PEN%RRBE3PEN_FAC(N_P) ,PEN%RRBE3PEN_VI(N_P)    ,
+     .           PEN%RRBE3PEN_M(1,N_P) ,ICOLINE )
+          IF (WEIGHT(NS)==1) THEN ! moved to here for a(,ns) compute  w/ WEIGHT(NS)=0
+            CALL FOAT_TO_6_FLOAT(1  ,NML*3  ,AMP    ,RR_6 )
+            CALL FOAT_TO_6_FLOAT(1  ,NML    ,STIFNMP,R2_6 )
+            DO I=1,NML
+               K = IADMP(IAD+I)
+               DO J = 1,6
+                 AM_P(J,1:3,K) = AM_P(J,1:3,K)+RR_6(J,1:3,I) 
+                 STIFNM_P(J,K) = STIFNM_P(J,K)+R2_6(J,I) 
+               END DO
+            END DO
+            IF (ICOLINE>0) THEN
+              CALL FOAT_TO_6_FLOAT(1  ,NML*3  ,ARMP   ,RR_6 )
+              CALL FOAT_TO_6_FLOAT(1  ,NML    ,STIFRMP,R2_6 )
+              DO I=1,NML
+                 K = IADMP(IAD+I)
+                 DO J = 1,6
+                   ARM_P(J,1:3,K) = ARM_P(J,1:3,K)+RR_6(J,1:3,I) 
+                   STIFRM_P(J,K) = STIFRM_P(J,K)+R2_6(J,I) 
+                 END DO
+              END DO
+            END IF 
+          END IF ! (WEIGHT(NS)==1) T
+        END DO
+        call my_dealloc(RR_6)
+        call my_dealloc(R1_6)
+        call my_dealloc(R2_6)
+      ELSE !P/OFF as before
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        IROT =IRBE3(6,N)
+        IMOD =IRBE3(8,N)
+        IPEN =IRBE3(9,N)
+       IF (NS==0.OR.IPEN>0) CYCLE
+       IF (WEIGHT(NS)==1) THEN
+        CALL RBE3CL(LRBE3(IAD+1),LRBE3(IADS+IAD+1),NS     ,X      ,
+     .              FRBE3(6*IAD+1),SKEW    ,NML     ,IROT   ,FDSTNB ,
+     .              MDSTNB  ,IRBE3(2,N))
+          DO J = 1,3
+           NN = JT(J,N)*WEIGHT(NS)
+           FNS(J) = A(J,NS)*NN
+           MSS(J) = MS(NS)*NN/3
+           STN(J) = STIFN(NS)*NN
+          ENDDO
+C---not to add supplementary mass globally
+         IF (IMOD <=3) THEN
+           CALL MFAC_RBE3(FDSTNB,MDSTNB,NML  ,IROTG,SFD ,SMD)
+           DO I=1,NML
+             K = IADMP(IAD+I)
+             DO J = 1,3
+              FSUM = FDSTNB(J,1,I)+FDSTNB(J,2,I)+FDSTNB(J,3,I)
+              MSM(K) = MSM(K)+ABS(FSUM)*MSS(J)*SFD
+            ENDDO
+           ENDDO
+         ELSEIF (IMOD ==4) THEN
+           DO I=1,NML
+             K = IADMP(IAD+I)
+             IADF =6*(IAD+I-1)
+             DO J = 1,3
+              MSM(K) = MSM(K)+FRBE3(IADF+J)*MSS(J)
+             ENDDO
+           ENDDO
+         END IF
+        DO I=1,NML
+          K = IADMP(IAD+I)
+          DO J = 1,3
+            AM(1,K) = AM(1,K)+FDSTNB(1,J,I)*FNS(J)
+            AM(2,K) = AM(2,K)+FDSTNB(2,J,I)*FNS(J)
+            AM(3,K) = AM(3,K)+FDSTNB(3,J,I)*FNS(J)
+          ENDDO
+C-----IMOD=4  STIFNM might be over_estimated but safe         
+           SMAX = ZERO
+          DO J = 1,3
+           FMAX=ABS(FDSTNB(J,1,I))+ABS(FDSTNB(J,2,I))+ABS(FDSTNB(J,3,I))
+           F2MAX=FDSTNB(J,1,I)*FDSTNB(J,1,I)+FDSTNB(J,2,I)*FDSTNB(J,2,I)+
+     .           FDSTNB(J,3,I)*FDSTNB(J,3,I)
+           SMAX = MAX(SMAX,MAX(FMAX,F2MAX)*STN(J))
+          ENDDO
+           STIFNM(K) = STIFNM(K)+SMAX
+        ENDDO
+        IF ((JR(1,N)+JR(2,N)+JR(3,N))>0) THEN
+         DO J = 1,3
+               NN = JR(J,N)*WEIGHT(NS)
+               MNS(J) = AR(J,NS)*NN
+               INS(J) = IN(NS)*NN/3
+               STR(J) = STIFR(NS)*NN
+         ENDDO
+         DO I=1,NML
+                K = IADMP(IAD+I)
+          DO J = 1,3
+                AM(1,K) = AM(1,K)+FDSTNB(1,J+3,I)*MNS(J)
+                AM(2,K) = AM(2,K)+FDSTNB(2,J+3,I)*MNS(J)
+                AM(3,K) = AM(3,K)+FDSTNB(3,J+3,I)*MNS(J)
+          ENDDO
+           SMAX = ZERO
+          DO J = 1,3
+C     FSUM = FDSTNB(J,J+3,I)
+            FSUM = FDSTNB(J,4,I)+FDSTNB(J,5,I)+FDSTNB(J,6,I)
+            MSM(K) =MSM(K)+ABS(FSUM)*INS(J)
+            FMAX=ABS(FDSTNB(J,4,I))+ABS(FDSTNB(J,5,I))+ABS(FDSTNB(J,6,I))
+            F2MAX=FDSTNB(J,4,I)*FDSTNB(J,4,I)+FDSTNB(J,5,I)*FDSTNB(J,5,I)+
+     .            FDSTNB(J,6,I)*FDSTNB(J,6,I)
+            SMAX = MAX(SMAX,MAX(FMAX,F2MAX)*STR(J))
+          ENDDO
+                STIFNM(K) = STIFNM(K)+SMAX
+         ENDDO
+        ENDIF
+        IF (IROT>0) THEN
+         DO I=1,NML
+          K = IADMP(IAD+I)
+          DO J = 1,3
+                 ARM(1,K) = ARM(1,K)+MDSTNB(1,J,I)*FNS(J)
+                 ARM(2,K) = ARM(2,K)+MDSTNB(2,J,I)*FNS(J)
+                 ARM(3,K) = ARM(3,K)+MDSTNB(3,J,I)*FNS(J)
+          ENDDO
+          SMAX = ZERO
+          DO J = 1,3
+C     MSUM = MDSTNB(J,J,I)
+                MSUM = MDSTNB(J,1,I)+MDSTNB(J,2,I)+MDSTNB(J,3,I)
+                IF (IMOD /=4) INM(K) = INM(K)+ABS(MSUM)*MSS(J)
+                MMAX=ABS(MDSTNB(J,1,I))+ABS(MDSTNB(J,2,I))+ABS(MDSTNB(J,3,I))
+              SMAX = MAX(SMAX,MMAX*STN(J))
+          ENDDO
+                STIFRM(K) = STIFRM(K)+SMAX
+         ENDDO
+         IF ((JR(1,N)+JR(2,N)+JR(3,N))>0) THEN
+          IF (IMOD <=3) THEN
+            DO I=1,NML
+              K = IADMP(IAD+I)
+              DO J = 1,3
+               MSUM = MDSTNB(J,4,I)+MDSTNB(J,5,I)+MDSTNB(J,6,I)
+               INM(K) = INM(K)+ABS(MSUM)*INS(J)*SMD
+             ENDDO
+            ENDDO
+          ELSEIF (IMOD ==4) THEN
+            DO I=1,NML
+              K = IADMP(IAD+I)
+              IADF =6*(IAD+I-1)
+              DO J = 1,3
+               INM(K) = INM(K)+FRBE3(IADF+J+3)*INS(J)
+              ENDDO
+            ENDDO
+          END IF
+          DO I=1,NML
+           K = IADMP(IAD+I)
+           DO J = 1,3
+                 ARM(1,K) = ARM(1,K)+MDSTNB(1,J+3,I)*MNS(J)
+                 ARM(2,K) = ARM(2,K)+MDSTNB(2,J+3,I)*MNS(J)
+                 ARM(3,K) = ARM(3,K)+MDSTNB(3,J+3,I)*MNS(J)
+           ENDDO
+           SMAX = ZERO
+           DO J = 1,3
+                MMAX=ABS(MDSTNB(J,4,I))+ABS(MDSTNB(J,5,I))+ABS(MDSTNB(J,6,I))
+              SMAX = MAX(SMAX,MMAX*STR(J))
+           ENDDO
+                STIFRM(K) = STIFRM(K)+SMAX
+          ENDDO
+         ENDIF
+        ENDIF
+C  MS(NS) = ZERO
+          STIFN(NS) = EM20
+        IF ((JR(1,N)+JR(2,N)+JR(3,N))>0) STIFR(NS) = EM20
+       ENDIF
+!       END IF ! IF (NS>0) THEN
+      ENDDO
+!     penalty formulation
+      N_P = 0
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        IROT =IRBE3(6,N)
+        IMOD =IRBE3(8,N)
+        IPEN =IRBE3(9,N)
+        IF (NS==0.OR.IPEN<=0) CYCLE
+            N_P = N_P +1 
+            AMP = ZERO
+            STIFNMP = ZERO
+            IF (IROT>0) THEN
+              ARMP = ZERO
+              STIFRMP = ZERO
+            END IF 
+            CALL RBE3F_PEN(                                       
+     .            NS      ,NUMNOD      ,DT1           ,IRODDL    ,         
+     .            NML     ,LRBE3(IAD+1),LRBE3(IADS+IAD+1),IN     ,        
+     .            A       ,AR          ,AMP         ,ARMP        ,         
+     .            STIFN   ,STIFR       ,STIFNMP     ,STIFRMP     ,         
+     .            V       ,VR          ,FRBE3(6*IAD+1),X         ,         
+     .           LSKEW    ,NUMSKW      ,SKEW          ,
+     .           PEN%RRBE3PEN_F(1,N_P) ,PEN%RRBE3PEN_STF(1,N_P) ,         
+     .           PEN%RRBE3PEN_FAC(N_P) ,PEN%RRBE3PEN_VI(N_P)    ,
+     .           PEN%RRBE3PEN_M(1,N_P) ,ICOLINE )
+        IF (WEIGHT(NS)==1) THEN !moved here as case p/on
+            DO I=1,NML
+               K = IADMP(IAD+I)
+               AM(1:3,K) = AM(1:3,K)+AMP(1:3,I) 
+               STIFNM(K) = STIFNM(K)+STIFNMP(I) 
+            END DO
+            IF (ICOLINE>0) THEN
+              DO I=1,NML
+                 K = IADMP(IAD+I)
+                 ARM(1:3,K) = ARM(1:3,K)+ARMP(1:3,I) 
+                 STIFRM(K) = STIFRM(K)+STIFRMP(I) 
+              END DO
+            END IF 
+        ENDIF
+      ENDDO
+      END IF !(IPARIT>0) THEN
+C
+      call my_dealloc(FDSTNB)
+      IF (IROTG>0) call my_dealloc(MDSTNB)
+      call my_dealloc(AMP)
+      call my_dealloc(MSMP)
+      call my_dealloc(STIFNMP)
+      IF (IROTG>0) THEN
+        call my_dealloc(ARMP)
+        call my_dealloc(INMP)
+        call my_dealloc(STIFRMP)
+      END IF
+C---
+      RETURN
+      END
+!||====================================================================
+!||    ass_rbe3   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3t1     ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+      SUBROUTINE ASS_RBE3(IRBE3 ,LRBE3 ,A     ,AR    ,MS    ,
+     1                    IN    ,WEIGHT,STIFN ,STIFR ,DA    ,
+     2                    DAR   ,DMS   ,DIN   ,DSTIFN,DSTIFR,
+     3                    NMT   ,IML   ,IROTG)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),WEIGHT(*),NMT ,IML(*),IROTG
+C     REAL
+      my_real
+     .   A(3,*), AR(3,*), MS(*), IN(*),
+     .   STIFN(*) ,STIFR(*), DA(3,*), DAR(3,*), DMS(*), DIN(*),
+     .   DSTIFN(*) ,DSTIFR(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, N, NS ,NML, IAD,IROT,M,IPEN
+C     REAL
+C======================================================================|
+#include    "vectorize.inc"
+      DO I=1,NMT
+         M = IML(I)
+           A(1,M) = A(1,M) + DA(1,I)
+           A(2,M) = A(2,M) + DA(2,I)
+           A(3,M) = A(3,M) + DA(3,I)
+           MS(M)  = MS(M)  + DMS(I)
+           STIFN(M)= STIFN(M) + DSTIFN(I)
+      ENDDO
+      IF (IROTG>0) THEN
+       DO I=1,NMT
+          M = IML(I)
+            AR(1,M) = AR(1,M) + DAR(1,I)
+            AR(2,M) = AR(2,M) + DAR(2,I)
+            AR(3,M) = AR(3,M) + DAR(3,I)
+            IN(M) =  IN(M)  +  DIN(I)
+            STIFR(M) = STIFR(M) + DSTIFR(I)
+       ENDDO
+      ENDIF
+      RETURN
+C
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        IROT= IRBE3(6,N)
+        IPEN= IRBE3(9,N)
+        IF (NS==0.OR.WEIGHT(NS)==0.OR.IPEN>0) CYCLE
+        DO I=IAD+1,IAD+NML
+         M = LRBE3(I)
+           A(1,M) = A(1,M) + DA(1,I)
+           A(2,M) = A(2,M) + DA(2,I)
+           A(3,M) = A(3,M) + DA(3,I)
+           MS(M)  = MS(M)  + DMS(I)
+           STIFN(M)= STIFN(M) + DSTIFN(I)
+        ENDDO
+        IF (IROT>0) THEN
+         DO I=IAD+1,IAD+NML
+          M = LRBE3(I)
+            AR(1,M) = AR(1,M) + DAR(1,I)
+            AR(2,M) = AR(2,M) + DAR(2,I)
+            AR(3,M) = AR(3,M) + DAR(3,I)
+            IN(M) =  IN(M)  +  DIN(I)
+            STIFR(M) = STIFR(M) + DSTIFR(I)
+         ENDDO
+        ENDIF
+      ENDDO
+C---
+      RETURN
+      END
+!||====================================================================
+!||    asp0_rbe3   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+      SUBROUTINE ASP0_RBE3(IRBE3 ,LRBE3 ,A     ,AR    ,MS    ,
+     1                     IN    ,WEIGHT,STIFN ,STIFR ,DA    ,
+     2                     DAR   ,DMS   ,DIN   ,DSTIFN,DSTIFR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),WEIGHT(*)
+C     REAL
+      my_real
+     .   A(3,*), AR(3,*), MS(*), IN(*),
+     .   STIFN(*) ,STIFR(*), DA(3,*), DAR(3,*), DMS(*), DIN(*),
+     .   DSTIFN(*) ,DSTIFR(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, N, NS ,NML, IAD,IROT,M,ITAG(NUMNOD)
+C     REAL
+C======================================================================|
+      DO N =1,NUMNOD
+       ITAG(N) = 0
+      END DO
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+          IROT =IRBE3(6,N)
+#include    "vectorize.inc"
+        DO I=IAD+1,IAD+NML
+         M = LRBE3(I)
+           IF (ITAG(M)==0) THEN
+            WEIGHT(I) = 1
+           ELSE
+            WEIGHT(I) = 0
+           END IF
+           ITAG(M)=1
+        ENDDO
+      ENDDO
+C
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+          IROT =IRBE3(6,N)
+#include    "vectorize.inc"
+        DO I=IAD+1,IAD+NML
+         M = LRBE3(I)
+           DA(1,I) = A(1,M)*WEIGHT(I) + DA(1,I)
+           DA(2,I) = A(2,M)*WEIGHT(I) + DA(2,I)
+           DA(3,I) = A(3,M)*WEIGHT(I) + DA(3,I)
+           DMS(I) = MS(M)*WEIGHT(I)+DMS(I)
+           DSTIFN(I) = STIFN(M)*WEIGHT(I)+DSTIFN(I)
+        ENDDO
+        IF (IROT>0) THEN
+#include    "vectorize.inc"
+         DO I=IAD+1,IAD+NML
+          M = LRBE3(I)
+            DAR(1,I) = AR(1,M)*WEIGHT(I) + DAR(1,I)
+            DAR(2,I) = AR(2,M)*WEIGHT(I) + DAR(2,I)
+            DAR(3,I) = AR(3,M)*WEIGHT(I) + DAR(3,I)
+            DIN(I) = IN(M)*WEIGHT(I)+DIN(I)
+            DSTIFR(I) = STIFR(M)*WEIGHT(I)+DSTIFR(I)
+         ENDDO
+        ENDIF
+      ENDDO
+C---
+      RETURN
+      END
+!||====================================================================
+!||    asp1_rbe3   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+      SUBROUTINE ASP1_RBE3(IRBE3 ,LRBE3 ,A     ,AR    ,MS    ,
+     1                     IN    ,WEIGHT,STIFN ,STIFR ,DA    ,
+     2                     DAR   ,DMS   ,DIN   ,DSTIFN,DSTIFR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),WEIGHT(*)
+C     REAL
+      my_real
+     .   A(3,*), AR(3,*), MS(*), IN(*),STIFN(*) ,STIFR(*)
+      DOUBLE PRECISION
+     .   DA(6,3,*), DAR(6,3,*), DMS(6,*),
+     .   DIN(6,*),DSTIFN(6,*) ,DSTIFR(6,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, N, NS ,NML, IAD,IROT,M
+C     REAL
+C======================================================================|
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+          IROT =IRBE3(6,N)
+#include    "vectorize.inc"
+        DO I=IAD+1,IAD+NML
+         M = LRBE3(I)
+            A(1,M) = ZERO
+            A(2,M) = ZERO
+            A(3,M) = ZERO
+            MS(M) =  ZERO
+            STIFN(M) = ZERO
+        ENDDO
+        IF (IROT>0) THEN
+#include    "vectorize.inc"
+         DO I=IAD+1,IAD+NML
+          M = LRBE3(I)
+             AR(1,M) = ZERO
+             AR(2,M) = ZERO
+             AR(3,M) = ZERO
+             IN(M) =  ZERO
+             STIFR(M) = ZERO
+         ENDDO
+        ENDIF
+      ENDDO
+C
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+          IROT =IRBE3(6,N)
+#include    "vectorize.inc"
+        DO I=IAD+1,IAD+NML
+         M = LRBE3(I)
+         DO J=1,6
+            A(1,M) = A(1,M)+ DA(J,1,I)
+            A(2,M) = A(2,M)+ DA(J,2,I)
+            A(3,M) = A(3,M)+ DA(J,3,I)
+            MS(M) =  MS(M)+DMS(J,I)
+            STIFN(M) = STIFN(M)+DSTIFN(J,I)
+         ENDDO
+        ENDDO
+        IF (IROT>0) THEN
+#include    "vectorize.inc"
+         DO I=IAD+1,IAD+NML
+          M = LRBE3(I)
+          DO J=1,6
+             AR(1,M) = AR(1,M)+ DAR(J,1,I)
+             AR(2,M) = AR(2,M)+ DAR(J,2,I)
+             AR(3,M) = AR(3,M)+ DAR(J,3,I)
+             IN(M) =  IN(M)+DIN(J,I)
+             STIFR(M) = STIFR(M)+DSTIFR(J,I)
+          ENDDO
+         ENDDO
+        ENDIF
+      ENDDO
+C---
+      RETURN
+      END
+!||====================================================================
+!||    asp2_rbe3   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3t1      ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+      SUBROUTINE ASP2_RBE3(IRBE3 ,LRBE3 ,A     ,AR    ,MS    ,
+     1                     IN    ,WEIGHT,STIFN ,STIFR ,DA    ,
+     2                     DAR   ,DMS   ,DIN   ,DSTIFN,DSTIFR,
+     3                     NMT   ,IML   ,IROTG )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),WEIGHT(*),IML(*) ,NMT ,IROTG
+C     REAL
+      my_real
+     .   A(3,*), AR(3,*), MS(*), IN(*),STIFN(*) ,STIFR(*)
+      DOUBLE PRECISION
+     .   DA(6,3,*), DAR(6,3,*), DMS(6,*),
+     .   DIN(6,*),DSTIFN(6,*) ,DSTIFR(6,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J ,M
+C     REAL
+      my_real
+     .   AX,AY,AZ
+C======================================================================|
+#include    "vectorize.inc"
+       DO I=1,NMT
+         M = IML(I)
+           AX = ZERO
+           AY = ZERO
+           AZ = ZERO
+         DO J=1,6
+            AX = AX + DA(J,1,I)
+            AY = AY + DA(J,2,I)
+            AZ = AZ + DA(J,3,I)
+            MS(M) =  MS(M)+DMS(J,I)
+C    MS1 = MS1 + DMS(J,I)
+            STIFN(M) = STIFN(M)+DSTIFN(J,I)
+         ENDDO
+            A(1,M) = A(1,M)+ AX
+            A(2,M) = A(2,M)+ AY
+            A(3,M) = A(3,M)+ AZ
+       ENDDO
+      IF (IROTG>0) THEN
+       DO I=1,NMT
+         M = IML(I)
+           AX = ZERO
+           AY = ZERO
+           AZ = ZERO
+          DO J=1,6
+             AX = AX + DAR(J,1,I)
+             AY = AY + DAR(J,2,I)
+             AZ = AZ + DAR(J,3,I)
+             IN(M) =  IN(M)+DIN(J,I)
+             STIFR(M) = STIFR(M)+DSTIFR(J,I)
+          ENDDO
+            AR(1,M) = AR(1,M)+ AX
+            AR(2,M) = AR(2,M)+ AY
+            AR(3,M) = AR(3,M)+ AZ
+       ENDDO
+      ENDIF
+C---
+      RETURN
+      END
+!||====================================================================
+!||    dmi_rbe3   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3t1     ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- uses       -----------------------------------------------------
+!||    h3d_mod    ../engine/share/modules/h3d_mod.F
+!||====================================================================
+      SUBROUTINE DMI_RBE3(NMT   ,LRBE3 ,MS0   ,IN0   ,DMS   ,
+     1                    DIN   ,DMAST ,ADM   ,DINERT,ADI   ,
+     2                    IROTG ,IRBE3 ,MS    ,IN    ,WEIGHT,
+     3                    IADMP ,H3D_DATA )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE H3D_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "scr14_c.inc"
+#include      "scr16_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NMT,IRBE3(NRBE3L,*),LRBE3(*),IROTG,WEIGHT(*),IADMP(*)
+C     REAL
+      my_real
+     .   MS0(*), IN0(*),DMS(*), DIN(*),
+     .   DMAST ,ADM(*)   ,DINERT,ADI(*),MS(*),IN(*)
+      TYPE (H3D_DATABASE) :: H3D_DATA
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  J ,M,N,NS,NML,IAD,K,IROT,IPEN
+C     REAL
+      my_real
+     .   MNS,DMAS0
+C======================================================================|
+C----accumulated secnd masses---
+      MNS= ZERO
+#include    "vectorize.inc"
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        IPEN= IRBE3(9,N)
+        IF (NS>0.AND.IPEN<=0) THEN
+          IF (WEIGHT(NS)==1) THEN
+            IF (NML>0) MNS= MNS+MS(NS)*WEIGHT(NS)
+            MS(NS) = ZERO
+            IF (IRODDL/=0) IN(NS) = ZERO
+          ENDIF
+        ENDIF
+      ENDDO
+C
+       DMAS0 = -MNS
+       DO J=1,NMT
+        DMAS0 = DMAS0 + DMS(J)
+       ENDDO
+       DMAST = DMAST + MAX(ZERO,DMAS0)
+C       
+      IF(IROTG>0) THEN
+       DO J=1,NMT
+         DINERT = DINERT + DIN(J)
+       ENDDO
+      ENDIF
+C-------attention now for ANIM, ADM contains MS(NS), 
+C-------output only when real added mass happened: debug usage 
+      IF (DMAS0>EM10) THEN
+      IF(ANIM_N(2)+OUTP_N(2)+H3D_DATA%N_SCAL_DMAS >0) THEN
+#include    "vectorize.inc"
+       DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        IPEN= IRBE3(9,N)
+        IF (NS>0.AND.IPEN<=0) THEN
+          IF (WEIGHT(NS)==1) THEN
+             DO J = 1,NML
+               M = LRBE3(IAD+J)
+               K = IADMP(IAD+J)
+               ADM(M) = ADM(M)+DMS(K)/MAX(EM20,MS0(IAD+J))
+             ENDDO
+          ENDIF
+        ENDIF
+       ENDDO
+      ENDIF
+      IF(ANIM_N(12)+OUTP_N(3)>0+H3D_DATA%N_SCAL_DINER .AND.IROTG>0) THEN
+#include    "vectorize.inc"
+       DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        IROT= IRBE3(6,N)
+        IPEN= IRBE3(9,N)
+        IF (NS>0.AND.IROT>0.AND.WEIGHT(NS)==1.AND.IPEN<=0) THEN
+         DO J = 1,NML
+          M = LRBE3(IAD+J)
+          K = IADMP(IAD+J)
+          ADI(M) = ADI(M)+DIN(K)/MAX(EM20,IN0(IAD+J))
+         ENDDO
+        ENDIF
+       ENDDO
+      ENDIF
+      END IF !(DMAS0>EM10) THEN
+C---
+      RETURN
+      END
+!||====================================================================
+!||    prerbe3          ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3_imp0        ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_impd        ../engine/source/constraints/general/rbe3/rbe3v.F
+!||    rbe3_impi        ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_impr1       ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_impr2       ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3t1           ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3v            ../engine/source/constraints/general/rbe3/rbe3v.F
+!||    sms_rbe3_nodxi   ../engine/source/ams/sms_rbe3.F
+!||    sms_rbe3_prec    ../engine/source/ams/sms_rbe3.F
+!||    sms_rbe3t1       ../engine/source/ams/sms_rbe3.F
+!||    sms_rbe3t2       ../engine/source/ams/sms_rbe3.F
+!||====================================================================
+      SUBROUTINE PRERBE3(IRBE3 ,MAX_M , IROTG,JT  ,JR   )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),MAX_M , IROTG,JT(3,*)  ,JR(3,*)
+C     REAL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  J, N,NML,IC,ICT,ICR,IROT
+C======================================================================|
+      MAX_M=0
+      IROTG=0
+      DO N=1,NRBE3
+              NML = IRBE3(5,N)
+              IROT =IRBE3(6,N)
+        MAX_M=MAX(MAX_M,NML) ! add if (ipen==0)
+        IROTG=MAX(IROTG,IROT)
+              IC=IRBE3(4,N)
+        ICT=IC/512
+        ICR=(IC-512*(ICT))/64
+             DO J =1,3
+           JT(J,N)=0
+           JR(J,N)=0
+             ENDDO
+        SELECT CASE (ICT)
+          CASE(1)
+           JT(3,N)=1
+          CASE(2)
+           JT(2,N)=1
+          CASE(3)
+           JT(2,N)=1
+           JT(3,N)=1
+          CASE(4)
+           JT(1,N)=1
+          CASE(5)
+           JT(1,N)=1
+           JT(3,N)=1
+          CASE(6)
+           JT(1,N)=1
+           JT(2,N)=1
+          CASE(7)
+           JT(1,N)=1
+           JT(2,N)=1
+           JT(3,N)=1
+       END SELECT
+       SELECT CASE (ICR)
+          CASE(1)
+           JR(3,N)=1
+          CASE(2)
+           JR(2,N)=1
+          CASE(3)
+           JR(2,N)=1
+           JR(3,N)=1
+          CASE(4)
+           JR(1,N)=1
+          CASE(5)
+           JR(1,N)=1
+           JR(3,N)=1
+          CASE(6)
+           JR(1,N)=1
+           JR(2,N)=1
+          CASE(7)
+           JR(1,N)=1
+           JR(2,N)=1
+           JR(3,N)=1
+       END SELECT
+      ENDDO
+C---
+      RETURN
+      END
+!||====================================================================
+!||    prerbe3fr   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    diag_int    ../engine/source/mpi/implicit/imp_fri.F
+!||    fr_u2dd     ../engine/source/mpi/implicit/imp_fri.F
+!||    imp3_a2b    ../engine/source/airbag/monv_imp0.F
+!||    imp3_u2x    ../engine/source/airbag/monv_imp0.F
+!||    upd_fr      ../engine/source/mpi/implicit/imp_fri.F
+!||    upd_kml     ../engine/source/mpi/implicit/imp_fri.F
+!||    upd_ksl     ../engine/source/mpi/implicit/imp_fri.F
+!||    updk_mv     ../engine/source/airbag/monv_imp0.F
+!||====================================================================
+      SUBROUTINE PRERBE3FR(IRBE3 ,N    ,JT  ,JR   )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),JT(3)  ,JR(3),N
+C     REAL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER  J,IC,ICT,ICR
+C======================================================================|
+          IC=IRBE3(4,N)
+        ICT=IC/512
+        ICR=(IC-512*(ICT))/64
+              DO J =1,3
+           JT(J)=0
+           JR(J)=0
+              ENDDO
+        SELECT CASE (ICT)
+          CASE(1)
+           JT(3)=1
+          CASE(2)
+           JT(2)=1
+          CASE(3)
+           JT(2)=1
+           JT(3)=1
+          CASE(4)
+           JT(1)=1
+          CASE(5)
+           JT(1)=1
+           JT(3)=1
+          CASE(6)
+           JT(1)=1
+           JT(2)=1
+          CASE(7)
+           JT(1)=1
+           JT(2)=1
+           JT(3)=1
+       END SELECT
+       SELECT CASE (ICR)
+          CASE(1)
+           JR(3)=1
+          CASE(2)
+           JR(2)=1
+          CASE(3)
+           JR(2)=1
+           JR(3)=1
+          CASE(4)
+           JR(1)=1
+          CASE(5)
+           JR(1)=1
+           JR(3)=1
+          CASE(6)
+           JR(1)=1
+           JR(2)=1
+          CASE(7)
+           JR(1)=1
+           JR(2)=1
+           JR(3)=1
+       END SELECT
+C---
+      RETURN
+      END
+!||====================================================================
+!||    rbe3cl        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    id_mvini      ../engine/source/airbag/monv_imp0.F
+!||    iddl_int      ../engine/source/mpi/implicit/imp_fri.F
+!||    rbe3_fr0      ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_imp0     ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_impd     ../engine/source/constraints/general/rbe3/rbe3v.F
+!||    rbe3_impi     ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_impr1    ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_impr2    ../engine/source/constraints/general/rbe3/rbe3_imp0.F
+!||    rbe3_mint     ../engine/source/implicit/imp_int_k.F
+!||    rbe3f         ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3v         ../engine/source/constraints/general/rbe3/rbe3v.F
+!||    sms_rbe3_1    ../engine/source/ams/sms_rbe3.F
+!||    sms_rbe3t2    ../engine/source/ams/sms_rbe3.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg        ../engine/source/output/message/message.F
+!||    invert        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3uf        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    rbe3um        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    zero1         ../engine/source/system/zero.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod   ../engine/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE RBE3CL(INRBE3  ,ILRBE3  ,NS     ,XYZ    ,FRBE3   ,
+     .                  SKEW    ,NG      ,IROT   ,FDSTNB ,MDSTNB  ,ID )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "param_c.inc"
+#include      "scr07_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER INRBE3(*),ILRBE3(*),NG, NS,IROT,ID
+C     REAL
+      my_real
+     .   XYZ(3,*), FRBE3(6,*), SKEW(LSKEW,*),FDSTNB(3,6,*), MDSTNB(3,6,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J, K ,KG,NSNGLR,IELSUB,IERR
+C     REAL
+      my_real
+     *        TW(3,NG), RW(3,NG),
+     *        FUFXLC(3,NG), FUFYLC(3,NG), FUFZLC(3,NG),
+     *        FUMXLC(3,NG), FUMYLC(3,NG), FUMZLC(3,NG),
+     *        MXLC(3,NG), MYLC(3,NG), MZLC(3,NG),
+     *        FUFX(3,NG), FUFY(3,NG), FUFZ(3,NG),
+     *        MUFX(3,NG), MUFY(3,NG), MUFZ(3,NG),
+     *        FUMX(3,NG), FUMY(3,NG), FUMZ(3,NG),
+     *        MX(3,NG), MY(3,NG), MZ(3,NG),
+     *        MUMX(3,NG), MUMY(3,NG), MUMZ(3,NG),
+     *        EL(3,3,NG)
+      my_real
+     *                 DENFX, DENFY, DENFZ, DENMX, DENMY, DENMZ,
+     *                 REFPT(3), CGMX(3), CGMY(3), CGMZ(3), AVEREF,
+     *                 TFUFX(3), TFUFY(3), TFUFZ(3),
+     *                 TMUFX(3), TMUFY(3), TMUFZ(3),
+     *                 TFUMX(3), TFUMY(3), TFUMZ(3),
+     *                 TMUMX(3), TMUMY(3), TMUMZ(3),
+     *                 A(6,6), C(6,6)
+C
+C     INITIALIZATION
+C
+      IF (NG==0) RETURN
+      CALL ZERO1(FDSTNB,3*NG*6)
+      IF (IROT>0) CALL ZERO1(MDSTNB,3*NG*6)
+      CALL ZERO1(A,36)
+      CALL ZERO1(C,36)
+      CALL ZERO1(CGMX,3)
+      CALL ZERO1(CGMY,3)
+      CALL ZERO1(CGMZ,3)
+      IERR = 0
+C
+      REFPT(1) = XYZ(1,NS)
+      REFPT(2) = XYZ(2,NS)
+      REFPT(3) = XYZ(3,NS)
+      DO K = 1, NG
+            DO I = 1, 3
+               TW(I,K) = FRBE3(I,K)
+               RW(I,K) = FRBE3(I+3,K)
+            ENDDO
+      ENDDO
+C
+C     ERROR OUT IF RBE3 ELEMENT HAS TWO INDEPENDENT NODES WITH
+C     NO ROTATIONAL WEIGHTS SET (THIS MEANS THE ELEMENT CANNOT
+C     SUPPORT A MOMENT ALONG ITS AXIS)
+C
+      IF (NG == 2.AND.IROT==0) THEN
+            IERR = 322
+            GOTO 999
+      ENDIF
+C
+C     CALCULATE DIRECTION COSINES OF LOCAL COORDINATE SYSTEMS, IF ANY
+C
+        DO K = 1, NG
+            IELSUB = ILRBE3(K)
+            IF (IELSUB > 0) THEN
+               DO I = 1, 3
+                     EL(I,1,K) = SKEW(I,IELSUB)
+                     EL(I,2,K) = SKEW(I+3,IELSUB)
+                     EL(I,3,K) = SKEW(I+6,IELSUB)
+               ENDDO
+            ENDIF
+        ENDDO
+C
+C     DENOMINATORS FOR DISTRIBUTING FORCES (DENFX, DENFY AND DENFZ)
+C
+      DENFX = ZERO
+      DENFY = ZERO
+      DENFZ = ZERO
+      AVEREF = ZERO
+C
+      DO 70 K = 1, NG
+         KG = INRBE3(K)
+         IELSUB = ILRBE3(K)
+         IF (IELSUB > 0) THEN
+C
+C           IF GRID POINT HAS A LOCAL COORDINATE SYSTEM
+C
+            DO 60 I = 1, 3
+               DENFX = DENFX + TW(I,K)*EL(I,1,K)**2
+               DENFY = DENFY + TW(I,K)*EL(I,2,K)**2
+               DENFZ = DENFZ + TW(I,K)*EL(I,3,K)**2
+ 60         CONTINUE
+         ELSE
+            DENFX = DENFX + TW(1,K)
+            DENFY = DENFY + TW(2,K)
+            DENFZ = DENFZ + TW(3,K)
+         END IF
+C
+            AVEREF = AVEREF + SQRT( (XYZ(1,KG) - REFPT(1))**2 +
+     *                              (XYZ(2,KG) - REFPT(2))**2 +
+     *                              (XYZ(3,KG) - REFPT(3))**2 )
+ 70   CONTINUE
+C
+      IF (ABS(DENFX) <= EM20) THEN
+         IERR = 326
+      ENDIF
+C
+      IF (ABS(DENFY) <= EM20) THEN
+         IERR = 327
+      ENDIF
+C
+      IF (ABS(DENFZ) <= EM20) THEN
+         IERR = 328
+      ENDIF
+      IF (IERR /= 0) GOTO 999
+         AVEREF = AVEREF/NG
+         IF (AVEREF == ZERO) AVEREF = ONE
+C
+C     CALCULATE 3 CENTERS OF GRAVITY (CGMX, CGMY AND CGMZ) AND
+C     DENOMINATORS FOR DISTRIBUTING MOMENTS (DENMX, DENMY AND DENMZ)
+C
+      DO 40 K = 1, NG
+         KG = INRBE3(K)
+         IELSUB = ILRBE3(K)
+         IF (IELSUB > 0) THEN
+C
+C           IF THERE IS A LOCAL COORDINATE SYSTEM AT THE GRID POINT
+C
+            DO 10 I = 1, 3
+               CGMX(2) = CGMX(2) + TW(I,K)*EL(I,3,K)**2*XYZ(2,KG)
+               CGMX(3) = CGMX(3) + TW(I,K)*EL(I,2,K)**2*XYZ(3,KG)
+ 10         CONTINUE
+C
+            DO 20 I = 1, 3
+               CGMY(3) = CGMY(3) + TW(I,K)*EL(I,1,K)**2*XYZ(3,KG)
+               CGMY(1) = CGMY(1) + TW(I,K)*EL(I,3,K)**2*XYZ(1,KG)
+ 20         CONTINUE
+C
+            DO 30 I = 1, 3
+               CGMZ(1) = CGMZ(1) + TW(I,K)*EL(I,2,K)**2*XYZ(1,KG)
+               CGMZ(2) = CGMZ(2) + TW(I,K)*EL(I,1,K)**2*XYZ(2,KG)
+ 30         CONTINUE
+C
+         ELSE
+            CGMX(2) = CGMX(2) + TW(3,K)*XYZ(2,KG)
+            CGMX(3) = CGMX(3) + TW(2,K)*XYZ(3,KG)
+C
+            CGMY(3) = CGMY(3) + TW(1,K)*XYZ(3,KG)
+            CGMY(1) = CGMY(1) + TW(3,K)*XYZ(1,KG)
+C
+            CGMZ(1) = CGMZ(1) + TW(2,K)*XYZ(1,KG)
+            CGMZ(2) = CGMZ(2) + TW(1,K)*XYZ(2,KG)
+         END IF
+ 40   CONTINUE
+         CGMX(2) = CGMX(2)/DENFZ
+         CGMX(3) = CGMX(3)/DENFY
+C
+         CGMY(3) = CGMY(3)/DENFX
+         CGMY(1) = CGMY(1)/DENFZ
+C
+         CGMZ(1) = CGMZ(1)/DENFY
+         CGMZ(2) = CGMZ(2)/DENFX
+C
+      DENMX = ZERO
+      DENMY = ZERO
+      DENMZ = ZERO
+C
+      DO 90 K = 1, NG
+         KG = INRBE3(K)
+         IELSUB = ILRBE3(K)
+C
+C        NOTE: AS IMPLEMENTED IN NASTRAN 70.7, WE SCALE THE ROTATIONAL
+C              WEIGHTS WITH THE SQUARE OF THE AVERAGE DISTANCE OF THE
+C              INDEPENDENT GRID POINTS FROM THE REFERENCE POINT TO
+C              RENDER THE RBE3 CALCULATIONS UNIT INDEPENDENT
+C
+         IF (IELSUB > 0) THEN
+C
+C           IF GRID POINT HAS A LOCAL COORDINATE SYSTEM
+C
+            DO 80 I = 1, 3
+               DENMX = DENMX + RW(I,K)*EL(I,1,K)**2*AVEREF**2 +
+     *                 TW(I,K)*( EL(I,3,K)*(XYZ(2,KG) - CGMX(2)) -
+     *                           EL(I,2,K)*(XYZ(3,KG) - CGMX(3))
+     *                         ) **2
+               DENMY = DENMY + RW(I,K)*EL(I,2,K)**2*AVEREF**2 +
+     *                 TW(I,K)*( EL(I,1,K)*(XYZ(3,KG) - CGMY(3)) -
+     *                           EL(I,3,K)*(XYZ(1,KG) - CGMY(1))
+     *                         ) **2
+               DENMZ = DENMZ + RW(I,K)*EL(I,3,K)**2*AVEREF**2 +
+     *                 TW(I,K)*( EL(I,2,K)*(XYZ(1,KG) - CGMZ(1)) -
+     *                           EL(I,1,K)*(XYZ(2,KG) - CGMZ(2))
+     *                         ) **2
+ 80         CONTINUE
+         ELSE
+            DENMX = DENMX + RW(1,K)*AVEREF**2 +
+     *                      TW(2,K)*(XYZ(3,KG) - CGMX(3))**2 +
+     *                      TW(3,K)*(XYZ(2,KG) - CGMX(2))**2
+            DENMY = DENMY + RW(2,K)*AVEREF**2 +
+     *                      TW(1,K)*(XYZ(3,KG) - CGMY(3))**2 +
+     *                      TW(3,K)*(XYZ(1,KG) - CGMY(1))**2
+            DENMZ = DENMZ + RW(3,K)*AVEREF**2 +
+     *                      TW(2,K)*(XYZ(1,KG) - CGMZ(1))**2 +
+     *                      TW(1,K)*(XYZ(2,KG) - CGMZ(2))**2
+         END IF
+ 90   CONTINUE
+C
+C     PERFORM SOME CHECKS ON WEIGHTS, TO MAKE SURE THAT THE RBE3
+C     ELEMENT HAS NO UNCONSTRAINED DEGREES OF FREEDOM
+C
+C
+      IF (ABS(DENMX) <= EM20) THEN
+         IERR = 329
+      ENDIF
+C
+      IF (ABS(DENMY) <= EM20) THEN
+         IERR = 330
+      ENDIF
+C
+      IF (ABS(DENMZ) <= EM20) THEN
+         IERR = 331
+      ENDIF
+C
+      IF (IERR /= 0) GOTO 999
+C
+C     CALCULATE 3 FORCE DISTRIBUTIONS THAT CREATE NET X, Y AND Z FORCES
+C     OF 1 (BESIDES OTHER NONZERO FORCES/MOMENTS IN ALL THE DIRECTIONS)
+C
+      CALL RBE3UF(INRBE3,ILRBE3,EL,TW,XYZ,REFPT,
+     *            FUFXLC,FUFYLC,FUFZLC,FUFX,FUFY,FUFZ,MUFX,MUFY,MUFZ,
+     *            TFUFX,TFUFY,TFUFZ,TMUFX,TMUFY,TMUFZ,
+     *            DENFX,DENFY,DENFZ,NG)
+C
+C     CALCULATE 3 MOMENT/FORCE DISTRIBUTIONS THAT CREATE NET X, Y AND Z
+C     MOMENTS OF 1 (BESIDES OTHER NONZERO FORCES/MOMENTS IN ALL THE
+C     DIRECTIONS) AT CGMX, CGMY AND CGMZ RESPECTIVELY
+C
+      CALL RBE3UM(INRBE3,ILRBE3,EL,TW,RW,XYZ,REFPT,CGMX,CGMY,CGMZ,
+     *            FUMXLC,FUMYLC,FUMZLC,MXLC,MYLC,MZLC,
+     *            FUMX,FUMY,FUMZ,MX,MY,MZ,MUMX,MUMY,MUMZ,
+     *            TFUMX,TFUMY,TFUMZ,TMUMX,TMUMY,TMUMZ,
+     *            AVEREF,DENMX,DENMY,DENMZ,NG,IROT )
+C
+C     DETERMINE COMBINATORY COEFFICIENTS FOR THESE 6 DISTRIBUTIONS
+C     (6 COEFFICIENTS FOR EACH OF 6 CASES)
+C
+C     CASE 1 - RESULTANT OF THE LINEAR COMBINATION OF THESE FORCE/MOMENT
+C              DISTRIBUTIONS IS A UNIT X-FORCE AT REFERENCE POINT
+C     CASE 2 - RESULTANT OF THE LINEAR COMBINATION OF THESE FORCE/MOMENT
+C              DISTRIBUTIONS IS A UNIT Y-FORCE AT REFERENCE POINT
+C     CASE 3 - RESULTANT OF THE LINEAR COMBINATION OF THESE FORCE/MOMENT
+C              DISTRIBUTIONS IS A UNIT Z-FORCE AT REFERENCE POINT
+C     CASE 4 - RESULTANT OF THE LINEAR COMBINATION OF THESE FORCE/MOMENT
+C              DISTRIBUTIONS IS A UNIT X-MOMENT AT REFERENCE POINT
+C     CASE 5 - RESULTANT OF THE LINEAR COMBINATION OF THESE FORCE/MOMENT
+C              DISTRIBUTIONS IS A UNIT Y-MOMENT AT REFERENCE POINT
+C     CASE 6 - RESULTANT OF THE LINEAR COMBINATION OF THESE FORCE/MOMENT
+C              DISTRIBUTIONS IS A UNIT Z-MOMENT AT REFERENCE POINT
+C
+C     IN ORDER TO DETERMINE THESE COEFFICIENTS, FIRST SET UP A 6X6
+C     MATRIX.  THE 6 COLUMNS OF THE INVERSE OF THIS MATRIX ARE THE
+C     DESIRED 6 SETS OF COEFFICIENTS.
+C
+      DO 120 I = 1, 3
+         K = I + 3
+         A(I,1) = TFUFX(I)
+         A(K,1) = TMUFX(I)
+         A(I,2) = TFUFY(I)
+         A(K,2) = TMUFY(I)
+         A(I,3) = TFUFZ(I)
+         A(K,3) = TMUFZ(I)
+         A(I,4) = TFUMX(I)
+         A(K,4) = TMUMX(I)
+         A(I,5) = TFUMY(I)
+         A(K,5) = TMUMY(I)
+         A(I,6) = TFUMZ(I)
+         A(K,6) = TMUMZ(I)
+ 120  CONTINUE
+C
+C     INVERT THE 6X6 MATRIX
+C
+      NSNGLR  = 0
+      CALL INVERT(A,C,6,NSNGLR)
+      IF (NSNGLR /= 0) THEN
+        IERR = 332
+         GOTO 999
+      ENDIF
+C
+      DO I = 1, 3
+       DO J = 1, 6
+         DO K = 1, NG
+               FDSTNB(I,J,K) = C(1,J)*FUFX(I,K) + C(2,J)*FUFY(I,K) +
+     *                         C(3,J)*FUFZ(I,K) + C(4,J)*FUMX(I,K) +
+     *                         C(5,J)*FUMY(I,K) + C(6,J)*FUMZ(I,K)
+         ENDDO
+       ENDDO
+      ENDDO
+      IF (IROT>0) THEN
+       DO I = 1, 3
+        DO J = 1, 6
+         DO K = 1, NG
+               MDSTNB(I,J,K) = C(4,J)*MX(I,K) + C(5,J)*MY(I,K) +
+     *                         C(6,J)*MZ(I,K)
+         ENDDO
+        ENDDO
+       ENDDO
+      END IF
+C
+ 999  CONTINUE
+      IF (IERR>0) THEN
+           IF(ISPMD==0)THEN
+             CALL ANCMSG(MSGID=108,ANMODE=ANINFO,
+     .            I1=ID)
+           ENDIF
+           MSTOP = 1
+      ENDIF
+C
+C     DIAGNOSTIC INFORMATION
+C
+      RETURN
+      END
+C----------------------------
+!||====================================================================
+!||    wrrinf   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+      SUBROUTINE WRRINF(TITLE,R,N)
+#include      "implicit_f.inc"
+c  !DECLARATIONS
+      INTEGER N
+      my_real
+     .        R(N)
+      CHARACTER TITLE*(*)
+C----------------------------
+      INTEGER I
+      print *, TITLE,(R(I),I=1,N)
+      RETURN
+      END
+!||====================================================================
+!||    rbe3uf   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3cl   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- calls      -----------------------------------------------------
+!||    zero1    ../engine/source/system/zero.F
+!||====================================================================
+      SUBROUTINE RBE3UF(INRBE3,ILRBE3,EL,TW,XYZ,REFPT,
+     *                  FUFXLC,FUFYLC,FUFZLC,
+     *                  FUFX,FUFY,FUFZ,MUFX,MUFY,MUFZ,
+     *                  TFUFX,TFUFY,TFUFZ,TMUFX,TMUFY,TMUFZ,
+     *                  DENFX,DENFY,DENFZ,NG)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+      INTEGER NG
+      INTEGER INRBE3(NG), ILRBE3(NG)
+      my_real
+     *                 EL(3,3,*),TW(3,NG), XYZ(3,*), REFPT(3),
+     *                 FUFXLC(3,NG), FUFYLC(3,NG), FUFZLC(3,NG),
+     *                 FUFX(3,NG), FUFY(3,NG), FUFZ(3,NG),
+     *                 MUFX(3,NG), MUFY(3,NG), MUFZ(3,NG),
+     *                 TFUFX(3), TFUFY(3), TFUFZ(3),
+     *                 TMUFX(3), TMUFY(3), TMUFZ(3)
+      my_real
+     *    DENFX, DENFY, DENFZ,XARM, YARM, ZARM
+      INTEGER I, J, K, KG, IELSUB
+C
+C     INITIALIZE FORCE AND MOMENT DISTRIBUTIONS TO ZERO
+C
+      CALL ZERO1(FUFX,3*NG)
+      CALL ZERO1(FUFY,3*NG)
+      CALL ZERO1(FUFZ,3*NG)
+      CALL ZERO1(TFUFX,3)
+      CALL ZERO1(TFUFY,3)
+      CALL ZERO1(TFUFZ,3)
+      CALL ZERO1(TMUFX,3)
+      CALL ZERO1(TMUFY,3)
+      CALL ZERO1(TMUFZ,3)
+C
+C     FORCE DISTRIBUTIONS AT RBE3 GRID POINTS CORRESPONDING TO UNIT
+C     APPLIED FORCES AT RBE3 REFERENCE POINT ALONG (BASIC COORDINATE)
+C     X, Y AND Z DIRECTIONS
+C
+      DO 50 K = 1, NG
+         KG = INRBE3(K)
+         IELSUB = ILRBE3(K)
+         IF (IELSUB > 0) THEN
+C
+C           FORCES AT GRID POINT ALONG GRID POINT'S LOCAL (OUTPUT)
+C           COORDINATE AXES
+C
+            DO 10 I = 1, 3
+               FUFXLC(I,K) = TW(I,K)*EL(I,1,K)/DENFX
+               FUFYLC(I,K) = TW(I,K)*EL(I,2,K)/DENFY
+               FUFZLC(I,K) = TW(I,K)*EL(I,3,K)/DENFZ
+ 10         CONTINUE
+C
+C           FORCES AT GRID POINT ALONG BASIC COORDINATE AXES
+C
+            DO 30 I = 1, 3
+               DO 20 J = 1, 3
+                  FUFX(J,K) = FUFX(J,K) + FUFXLC(I,K)*EL(I,J,K)
+                  FUFY(J,K) = FUFY(J,K) + FUFYLC(I,K)*EL(I,J,K)
+                  FUFZ(J,K) = FUFZ(J,K) + FUFZLC(I,K)*EL(I,J,K)
+ 20            CONTINUE
+ 30         CONTINUE
+C
+         ELSE
+            FUFXLC(1,K) = TW(1,K)/DENFX
+            FUFYLC(2,K) = TW(2,K)/DENFY
+            FUFZLC(3,K) = TW(3,K)/DENFZ
+            FUFX(1,K) = FUFXLC(1,K)
+            FUFY(2,K) = FUFYLC(2,K)
+            FUFZ(3,K) = FUFZLC(3,K)
+         ENDIF
+C
+C        MOMENTS AT REFERENCE POINT DUE TO THESE FORCE DISTRIBUTIONS
+C
+         XARM = XYZ(1,KG) - REFPT(1)
+         YARM = XYZ(2,KG) - REFPT(2)
+         ZARM = XYZ(3,KG) - REFPT(3)
+C
+C        MOMENTS AT REFERENCE POINT DUE TO FUFX
+C
+         MUFX(1,K) = YARM*FUFX(3,K) - ZARM*FUFX(2,K)
+         MUFX(2,K) = ZARM*FUFX(1,K) - XARM*FUFX(3,K)
+         MUFX(3,K) = XARM*FUFX(2,K) - YARM*FUFX(1,K)
+C
+C        MOMENTS AT REFERENCE POINT DUE TO FUFY
+C
+         MUFY(1,K) = YARM*FUFY(3,K) - ZARM*FUFY(2,K)
+         MUFY(2,K) = ZARM*FUFY(1,K) - XARM*FUFY(3,K)
+         MUFY(3,K) = XARM*FUFY(2,K) - YARM*FUFY(1,K)
+C
+C        MOMENTS AT REFERENCE POINT DUE TO FUFZ
+C
+         MUFZ(1,K) = YARM*FUFZ(3,K) - ZARM*FUFZ(2,K)
+         MUFZ(2,K) = ZARM*FUFZ(1,K) - XARM*FUFZ(3,K)
+         MUFZ(3,K) = XARM*FUFZ(2,K) - YARM*FUFZ(1,K)
+C
+C        TOTAL FORCES AND MOMENTS
+C
+         DO 40 J = 1, 3
+            TFUFX(J) = TFUFX(J) + FUFX(J,K)
+            TFUFY(J) = TFUFY(J) + FUFY(J,K)
+            TFUFZ(J) = TFUFZ(J) + FUFZ(J,K)
+            TMUFX(J) = TMUFX(J) + MUFX(J,K)
+            TMUFY(J) = TMUFY(J) + MUFY(J,K)
+            TMUFZ(J) = TMUFZ(J) + MUFZ(J,K)
+ 40      CONTINUE
+C
+ 50   CONTINUE
+C
+      RETURN
+      END
+C
+!||====================================================================
+!||    rbe3um   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3cl   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- calls      -----------------------------------------------------
+!||    zero1    ../engine/source/system/zero.F
+!||====================================================================
+      SUBROUTINE RBE3UM(INRBE3,ILRBE3,EL,TW,RW,XYZ,REFPT,CGMX,CGMY,CGMZ,
+     *                  FUMXLC,FUMYLC,FUMZLC,MXLC,MYLC,MZLC,
+     *                  FUMX,FUMY,FUMZ,MX,MY,MZ,MUMX,MUMY,MUMZ,
+     *                  TFUMX,TFUMY,TFUMZ,TMUMX,TMUMY,TMUMZ,
+     *                  AVEREF,DENMX,DENMY,DENMZ,NG ,IROT)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+      INTEGER NG,IROT
+      INTEGER INRBE3(NG), ILRBE3(NG)
+      my_real
+     *                 EL(3,3,*),TW(3,NG), RW(3,NG), XYZ(3,*),
+     *                 REFPT(3), CGMX(3), CGMY(3), CGMZ(3),
+     *                 FUMXLC(3,NG), FUMYLC(3,NG), FUMZLC(3,NG),
+     *                 MXLC(3,NG), MYLC(3,NG), MZLC(3,NG),
+     *                 FUMX(3,NG), FUMY(3,NG), FUMZ(3,NG),
+     *                 MX(3,NG), MY(3,NG), MZ(3,NG),
+     *                 MUMX(3,NG), MUMY(3,NG), MUMZ(3,NG),
+     *                 TFUMX(3), TFUMY(3), TFUMZ(3),
+     *                 TMUMX(3), TMUMY(3), TMUMZ(3)
+      my_real
+     *         AVEREF, DENMX, DENMY, DENMZ,XARM, YARM, ZARM
+      INTEGER I, J, K, KG, IELSUB
+C
+C     INITIALIZE FORCE AND MOMENT DISTRIBUTIONS TO ZERO
+C
+      CALL ZERO1(FUMX,3*NG)
+      CALL ZERO1(FUMY,3*NG)
+      CALL ZERO1(FUMZ,3*NG)
+      CALL ZERO1(MX,3*NG)
+      CALL ZERO1(MY,3*NG)
+      CALL ZERO1(MZ,3*NG)
+      CALL ZERO1(TFUMX,3)
+      CALL ZERO1(TFUMY,3)
+      CALL ZERO1(TFUMZ,3)
+      CALL ZERO1(TMUMX,3)
+      CALL ZERO1(TMUMY,3)
+      CALL ZERO1(TMUMZ,3)
+C
+C     FORCE AND MOMENT DISTRIBUTIONS AT RBE3 GRID POINTS CORRESPONDING
+C     TO UNIT APPLIED MOMENTS AT RBE3 REFERENCE POINT ALONG (BASIC
+C     COORDINATE) X, Y AND Z DIRECTIONS
+C
+      DO 50 K = 1, NG
+         KG = INRBE3(K)
+         IELSUB = ILRBE3(K)
+         IF (IELSUB > 0) THEN
+C
+C           FORCES  AT GRID POINT ALONG GRID POINT'S LOCAL
+C           (OUTPUT) COORDINATE AXES
+C
+            DO 10 I = 1, 3
+               FUMXLC(I,K) = TW(I,K)*
+     *                       ( EL(I,3,K)*(XYZ(2,KG) - CGMX(2)) -
+     *                         EL(I,2,K)*(XYZ(3,KG) - CGMX(3))
+     *                       )/DENMX
+               FUMYLC(I,K) = TW(I,K)*
+     *                       ( EL(I,1,K)*(XYZ(3,KG) - CGMY(3)) -
+     *                         EL(I,3,K)*(XYZ(1,KG) - CGMY(1))
+     *                       )/DENMY
+               FUMZLC(I,K) = TW(I,K)*
+     *                       ( EL(I,2,K)*(XYZ(1,KG) - CGMZ(1)) -
+     *                         EL(I,1,K)*(XYZ(2,KG) - CGMZ(2))
+     *                       )/DENMZ
+ 10         CONTINUE
+C
+C           FORCES AND MOMENTS AT GRID POINT ALONG BASIC COORDINATE AXES
+C
+            DO 30 I = 1, 3
+               DO 20 J = 1, 3
+                  FUMX(J,K) = FUMX(J,K) + FUMXLC(I,K)*EL(I,J,K)
+                  FUMY(J,K) = FUMY(J,K) + FUMYLC(I,K)*EL(I,J,K)
+                  FUMZ(J,K) = FUMZ(J,K) + FUMZLC(I,K)*EL(I,J,K)
+ 20            CONTINUE
+ 30         CONTINUE
+C
+         ELSE
+            FUMXLC(2,K) = -TW(2,K)*(XYZ(3,KG) - CGMX(3))/DENMX
+            FUMXLC(3,K) = TW(3,K)*(XYZ(2,KG) - CGMX(2))/DENMX
+            FUMYLC(1,K) = TW(1,K)*(XYZ(3,KG) - CGMY(3))/DENMY
+            FUMYLC(3,K) = -TW(3,K)*(XYZ(1,KG) - CGMY(1))/DENMY
+            FUMZLC(1,K) = -TW(1,K)*(XYZ(2,KG) - CGMZ(2))/DENMZ
+            FUMZLC(2,K) = TW(2,K)*(XYZ(1,KG) - CGMZ(1))/DENMZ
+C
+            FUMX(2,K) = FUMXLC(2,K)
+            FUMX(3,K) = FUMXLC(3,K)
+            FUMY(1,K) = FUMYLC(1,K)
+            FUMY(3,K) = FUMYLC(3,K)
+            FUMZ(1,K) = FUMZLC(1,K)
+            FUMZ(2,K) = FUMZLC(2,K)
+         ENDIF
+C
+C        MOMENTS AT REFERENCE POINT DUE TO FUMX
+C
+         XARM = XYZ(1,KG) - REFPT(1)
+         YARM = XYZ(2,KG) - REFPT(2)
+         ZARM = XYZ(3,KG) - REFPT(3)
+C
+         MUMX(1,K) = YARM*FUMX(3,K) - ZARM*FUMX(2,K)
+         MUMX(2,K) = ZARM*FUMX(1,K) - XARM*FUMX(3,K)
+         MUMX(3,K) = XARM*FUMX(2,K) - YARM*FUMX(1,K)
+C
+C        MOMENTS AT REFERENCE POINT DUE TO FUMY
+C
+         MUMY(1,K) = YARM*FUMY(3,K) - ZARM*FUMY(2,K)
+         MUMY(2,K) = ZARM*FUMY(1,K) - XARM*FUMY(3,K)
+         MUMY(3,K) = XARM*FUMY(2,K) - YARM*FUMY(1,K)
+C
+C        MOMENTS AT REFERENCE POINT DUE TO FUMZ
+C
+         MUMZ(1,K) = YARM*FUMZ(3,K) - ZARM*FUMZ(2,K)
+         MUMZ(2,K) = ZARM*FUMZ(1,K) - XARM*FUMZ(3,K)
+         MUMZ(3,K) = XARM*FUMZ(2,K) - YARM*FUMZ(1,K)
+C
+ 50   CONTINUE
+C
+      IF (IROT>0) THEN
+       DO K = 1, NG
+         KG = INRBE3(K)
+         IELSUB = ILRBE3(K)
+         IF (IELSUB > 0) THEN
+C
+C           MOMENTS AT GRID POINT ALONG GRID POINT'S LOCAL
+C           (OUTPUT) COORDINATE AXES
+C
+            DO I = 1, 3
+               MXLC(I,K) = AVEREF**2*RW(I,K)*EL(I,1,K)/DENMX
+               MYLC(I,K) = AVEREF**2*RW(I,K)*EL(I,2,K)/DENMY
+               MZLC(I,K) = AVEREF**2*RW(I,K)*EL(I,3,K)/DENMZ
+            END DO
+C
+C           MOMENTS AT GRID POINT ALONG BASIC COORDINATE AXES
+C
+            DO I = 1, 3
+               DO J = 1, 3
+                  MX(J,K) = MX(J,K) + MXLC(I,K)*EL(I,J,K)
+                  MY(J,K) = MY(J,K) + MYLC(I,K)*EL(I,J,K)
+                  MZ(J,K) = MZ(J,K) + MZLC(I,K)*EL(I,J,K)
+               END DO
+            END DO
+C
+         ELSE
+            MXLC(1,K) = AVEREF**2*RW(1,K)/DENMX
+            MYLC(2,K) = AVEREF**2*RW(2,K)/DENMY
+            MZLC(3,K) = AVEREF**2*RW(3,K)/DENMZ
+C
+            MX(1,K) = MXLC(1,K)
+            MY(2,K) = MYLC(2,K)
+            MZ(3,K) = MZLC(3,K)
+         ENDIF
+C
+         DO J = 1, 3
+          MUMX(J,K) = MUMX(J,K) + MX(J,K)
+          MUMY(J,K) = MUMY(J,K) + MY(J,K)
+          MUMZ(J,K) = MUMZ(J,K) + MZ(J,K)
+         END DO
+       END DO
+      END IF
+C
+C
+C        TOTAL FORCES AND MOMENTS
+C
+C
+      DO K = 1, NG
+         DO J = 1, 3
+            TFUMX(J) = TFUMX(J) + FUMX(J,K)
+            TFUMY(J) = TFUMY(J) + FUMY(J,K)
+            TFUMZ(J) = TFUMZ(J) + FUMZ(J,K)
+            TMUMX(J) = TMUMX(J) + MUMX(J,K)
+            TMUMY(J) = TMUMY(J) + MUMY(J,K)
+            TMUMZ(J) = TMUMZ(J) + MUMZ(J,K)
+         END DO
+      END DO
+C
+      RETURN
+      END
+!||====================================================================
+!||    invert   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3cl   ../engine/source/constraints/general/rbe3/rbe3f.F
+!||====================================================================
+       SUBROUTINE INVERT(MATRIX, INVERSE, N, ERRORFLAG)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+c  !DECLARATIONS
+          INTEGER, INTENT(IN) :: N
+          INTEGER, INTENT(OUT) :: ERRORFLAG  !RETURN ERROR STATUS. -1 FOR ERROR, 0 FOR NORMAL
+      my_real
+     *     , INTENT(IN), DIMENSION(N,N) :: MATRIX  !INPUT MATRIX
+      my_real
+     *     , INTENT(OUT), DIMENSION(N,N) :: INVERSE !INVERTED MATRIX
+
+          LOGICAL :: FLAG = .TRUE.
+          INTEGER :: I, J, K
+      my_real
+     *     :: M
+      my_real
+     *       , DIMENSION(N,2*N) :: AUGMATRIX !AUGMENTED MATRIX
+
+c  !AUGMENT INPUT MATRIX WITH AN IDENTITY MATRIX
+          DO I = 1, N
+          DO J = 1, 2*N
+          IF (J <= N ) THEN
+          AUGMATRIX(I,J) = MATRIX(I,J)
+          ELSE IF ((I+N) == J) THEN
+          AUGMATRIX(I,J) = ONE
+          ELSE
+          AUGMATRIX(I,J) = ZERO
+          ENDIF
+          END DO
+          END DO
+
+c  !REDUCE AUGMENTED MATRIX TO UPPER TRIANGULAR FORM
+          DO K =1, N-1
+          IF (AUGMATRIX(K,K) == 0) THEN
+           FLAG = .FALSE.
+           DO I = K+1, N
+            IF (AUGMATRIX(I,K) /= 0) THEN
+              DO J = 1,2*N
+          AUGMATRIX(K,J) = AUGMATRIX(K,J)+AUGMATRIX(I,J)
+              END DO
+              FLAG = .TRUE.
+              EXIT
+            ENDIF
+            IF (FLAG .EQV. .FALSE.) THEN
+          INVERSE = 0
+          ERRORFLAG = -1
+          RETURN
+            ENDIF
+           END DO
+          ENDIF
+          DO J = K+1, N
+           M = AUGMATRIX(J,K)/AUGMATRIX(K,K)
+           DO I = K, 2*N
+            AUGMATRIX(J,I) = AUGMATRIX(J,I) - M*AUGMATRIX(K,I)
+           END DO
+          END DO
+          END DO
+
+c  !TEST FOR INVERTIBILITY
+          DO I = 1, N
+          IF (AUGMATRIX(I,I) == 0) THEN
+c      PRINT*, "MATRIX IS NON - INVERTIBLE"
+          INVERSE = 0
+          ERRORFLAG = -1
+          RETURN
+          ENDIF
+          END DO
+
+c  !MAKE DIAGONAL ELEMENTS AS 1
+          DO I = 1 , N
+          M = AUGMATRIX(I,I)
+          DO J = I , (2 * N)
+          AUGMATRIX(I,J) = (AUGMATRIX(I,J) / M)
+          END DO
+          END DO
+
+c  !REDUCED RIGHT SIDE HALF OF AUGMENTED MATRIX TO IDENTITY MATRIX
+          DO K = N-1, 1, -1
+          DO I =1, K
+          M = AUGMATRIX(I,K+1)
+           DO J = K, (2*N)
+            AUGMATRIX(I,J) = AUGMATRIX(I,J) -AUGMATRIX(K+1,J) * M
+           END DO
+          END DO
+          END DO
+
+c  !STORE ANSWER
+          DO I =1, N
+          DO J = 1, N
+          INVERSE(I,J) = AUGMATRIX(I,J+N)
+          END DO
+          END DO
+          ERRORFLAG = 0
+        RETURN
+        END SUBROUTINE INVERT
+!||====================================================================
+!||    rbe3frf    ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    imp3_a2b   ../engine/source/airbag/monv_imp0.F
+!||    upd_fr     ../engine/source/mpi/implicit/imp_fri.F
+!||====================================================================
+      SUBROUTINE RBE3FRF(NML   ,IML   ,NS    ,A     ,AR    ,
+     *                   FDSTNB,MDSTNB,JT    ,JR    ,IROT  )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NML   ,IML(*)   ,NS,JT(*),JR(*),IROT
+C     REAL
+      my_real
+     .   A(3,*), AR(3,*), FDSTNB(3,6,*) ,MDSTNB(3,6,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, J,M
+C     REAL
+      my_real
+     .        FNS(3),MNS(3)
+C======================================================================|
+        DO J = 1,3
+           FNS(J) = A(J,NS)*JT(J)
+          ENDDO
+        DO I=1,NML
+           M = IML(I)
+         DO J = 1,3
+            A(1,M) = A(1,M)+FDSTNB(1,J,I)*FNS(J)
+            A(2,M) = A(2,M)+FDSTNB(2,J,I)*FNS(J)
+            A(3,M) = A(3,M)+FDSTNB(3,J,I)*FNS(J)
+           ENDDO
+        ENDDO
+        IF ((JR(1)+JR(2)+JR(3))>0) THEN
+         DO J = 1,3
+            MNS(J) = AR(J,NS)*JR(J)
+           ENDDO
+         DO I=1,NML
+            M = IML(I)
+          DO J = 1,3
+             A(1,M) = A(1,M)+FDSTNB(1,J+3,I)*MNS(J)
+             A(2,M) = A(2,M)+FDSTNB(2,J+3,I)*MNS(J)
+             A(3,M) = A(3,M)+FDSTNB(3,J+3,I)*MNS(J)
+            ENDDO
+         ENDDO
+        ENDIF
+        IF (IROT>0) THEN
+         DO I=1,NML
+            M = IML(I)
+          DO J = 1,3
+             AR(1,M) = AR(1,M)+MDSTNB(1,J,I)*FNS(J)
+             AR(2,M) = AR(2,M)+MDSTNB(2,J,I)*FNS(J)
+             AR(3,M) = AR(3,M)+MDSTNB(3,J,I)*FNS(J)
+            ENDDO
+         ENDDO
+         IF ((JR(1)+JR(2)+JR(3))>0) THEN
+          DO I=1,NML
+             M = IML(I)
+           DO J = 1,3
+              AR(1,M) = AR(1,M)+MDSTNB(1,J+3,I)*MNS(J)
+              AR(2,M) = AR(2,M)+MDSTNB(2,J+3,I)*MNS(J)
+              AR(3,M) = AR(3,M)+MDSTNB(3,J+3,I)*MNS(J)
+             ENDDO
+          ENDDO
+         ENDIF
+        ENDIF
+C---
+      RETURN
+      END
+!||====================================================================
+!||    prerbe3p        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3t1          ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    sms_rbe3_prec   ../engine/source/ams/sms_rbe3.F
+!||    sms_rbe3t1      ../engine/source/ams/sms_rbe3.F
+!||    sms_rbe3t2      ../engine/source/ams/sms_rbe3.F
+!||====================================================================
+      SUBROUTINE PRERBE3P(IRBE3 ,LRBE3 ,AD_M , IML  ,NMT   )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IRBE3(NRBE3L,*),LRBE3(*),AD_M(*) ,IML(*) , NMT
+C     REAL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, N,M,IAD,NS,NML,ITAG(NUMNOD)
+C NMT: number (no doublon) of main nodes,AD(M): index from NMT0->NMT
+C======================================================================|
+      DO N =1,NUMNOD
+       ITAG(N) = 0
+      END DO
+      NMT = 0
+      DO N=1,NRBE3
+        IAD = IRBE3(1,N)
+        NS  = IRBE3(3,N)
+        NML = IRBE3(5,N)
+        DO I=1,NML
+         M = LRBE3(IAD+I)
+         IF (ITAG(M)==0) THEN
+          NMT = NMT + 1
+          AD_M(IAD+I) = NMT
+          ITAG(M) = NMT
+          IML(NMT) = M
+         ELSE
+          AD_M(IAD+I) = ITAG(M)
+         ENDIF
+        ENDDO
+      ENDDO
+C---
+      RETURN
+      END
+!||====================================================================
+!||    prerbe3p0        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    resol            ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||    rbe3_mod         ../common_source/modules/constraints/rbe3_mod.F90
+!||====================================================================
+      SUBROUTINE PRERBE3P0(RBE3)
+      use rbe3_mod
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      type(rbe3_),intent(inout) :: RBE3
+C     REAL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, N,M,IAD,NS,NML,NMP
+      INTEGER,DIMENSION(:),ALLOCATABLE :: ITAG
+C NMT: number (no doublon) of main nodes,AD(M): index from NMT0->NMT
+C======================================================================|
+      call my_alloc(ITAG, NUMNOD, "ITAG")
+      DO N =1,NUMNOD
+       ITAG(N) = 0
+      END DO
+      RBE3%NMT = 0
+      DO N=1,NRBE3
+        IAD = RBE3%IRBE3(1,N)
+        NS  = RBE3%IRBE3(3,N)
+        NML = RBE3%IRBE3(5,N)
+        DO I=1,NML
+         M = RBE3%LRBE3(IAD+I)
+         IF (ITAG(M)==0) THEN
+          RBE3%NMT = RBE3%NMT + 1
+          ITAG(M) = RBE3%NMT
+         ENDIF
+        ENDDO
+      ENDDO
+C---
+      ! Size of RBE3%RRBE3 / ALLOCATION
+      RBE3%RRBE3_SZ=5*RBE3%NMT+1
+      IF (RBE3%irotg > 0)then
+            RBE3%RRBE3_SZ=RBE3%RRBE3_SZ+5*RBE3%NMT
+      endif
+      call my_alloc(RBE3%RRBE3, RBE3%RRBE3_SZ, "RBE3%RRBE3")
+      RBE3%RRBE3 = ZERO
+
+      ! Size of RBE3%RRBE3_PON / ALLOCATION
+      NMP = RBE3%NMT*6
+      RBE3%RRBE3_PON_SZ = 5*NMP+1
+      IF (RBE3%irotg > 0)then
+            RBE3%RRBE3_PON_SZ=RBE3%RRBE3_PON_SZ+5*NMP
+      endif
+      call my_alloc(RBE3%RRBE3_PON, RBE3%RRBE3_PON_SZ, "RBE3%RRBE3_PON")
+      RBE3%RRBE3_PON=ZERO
+
+      call my_dealloc(ITAG)
+      RETURN
+      END
+!||====================================================================
+!||    mfac_rbe3    ../engine/source/constraints/general/rbe3/rbe3f.F
+!||--- called by ------------------------------------------------------
+!||    rbe3f        ../engine/source/constraints/general/rbe3/rbe3f.F
+!||    sms_rbe3_1   ../engine/source/ams/sms_rbe3.F
+!||====================================================================
+      SUBROUTINE MFAC_RBE3(FDSTNB,MDSTNB,NML ,IROT,SF,SM)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NML,IROT
+      my_real
+     .   FDSTNB(3,6,*) ,MDSTNB(3,6,*),SF,SM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,IFD,IMD
+      my_real
+     .   FSUM,MSUM,SUM
+C======================================================================|
+          IFD=0
+          SF=ONE
+          SM=ONE
+        DO I=1,NML
+         DO J = 1,3
+          IF (IFD==0) THEN
+           FSUM = FDSTNB(J,1,I)+FDSTNB(J,2,I)+FDSTNB(J,3,I)
+           IF (FSUM <0) IFD=1
+          END IF
+         ENDDO
+        ENDDO
+C--renormalizing to avoid mass adding
+        IF (IFD >0) THEN         
+         SUM =ZERO
+         DO I=1,NML
+          DO J = 1,3
+           FSUM = FDSTNB(J,1,I)+FDSTNB(J,2,I)+FDSTNB(J,3,I)
+           SUM = SUM +ABS(FSUM)
+          ENDDO
+         ENDDO
+         SF = THREE/SUM
+        END IF
+C 
+       IF (IROT==0) RETURN
+C       
+        IMD=0
+        DO I=1,NML
+         DO J = 1,3
+          IF (IMD==0) THEN
+           MSUM = MDSTNB(J,1,I)+MDSTNB(J,2,I)+MDSTNB(J,3,I)
+           IF (MSUM <0) IMD=1
+          END IF
+         ENDDO
+        ENDDO
+        IF (IMD >0) THEN         
+         SUM =ZERO
+         DO I=1,NML
+          DO J = 1,3
+           MSUM = MDSTNB(J,1,I)+MDSTNB(J,2,I)+MDSTNB(J,3,I)
+           SUM = SUM +ABS(MSUM)
+          ENDDO
+         ENDDO
+         SM = THREE/SUM
+        END IF
+C---
+      RETURN
+      END

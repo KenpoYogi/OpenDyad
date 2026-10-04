@@ -1,0 +1,74 @@
+//Copyright>        OpenRadioss
+//Copyright>        Copyright (C) 2026 Siemens
+//Copyright>
+//Copyright>        This program is free software: you can redistribute it and/or modify
+//Copyright>        it under the terms of the GNU Affero General Public License as published by
+//Copyright>        the Free Software Foundation, either version 3 of the License, or
+//Copyright>        (at your option) any later version.
+//Copyright>
+//Copyright>        This program is distributed in the hope that it will be useful,
+//Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+//Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//Copyright>        GNU Affero General Public License for more details.
+//Copyright>
+//Copyright>        You should have received a copy of the GNU Affero General Public License
+//Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//Copyright>
+//Copyright>
+//Copyright>        Commercial Alternative: Simcenter Radioss Software
+//Copyright>
+//Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+//Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+//Copyright>        commercial version may interest you: 
+//Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+#include "GlobalModelSDI.h"
+
+#include <dll_settings.h>
+
+#include <typedef.h>
+#include <sdiModelView.h>
+using namespace sdi;
+using namespace std;
+
+
+extern "C" 
+{
+
+
+CDECL void cpp_node_count_(int *nbNodes)
+{
+    SelectionNodeRead nodes(g_pModelViewSDI, "/NODE");
+    *nbNodes = nodes.Count();
+}
+CDECL void CPP_NODE_COUNT(int *nbNodes)
+{cpp_node_count_ (nbNodes);}
+
+CDECL void cpp_node_count__ (int *nbNodes)
+{cpp_node_count_ (nbNodes);}
+
+CDECL void CPP_node_count (int *nbNodes)
+{cpp_node_count_ (nbNodes);}
+
+
+
+CDECL void cpp_nodes_count_(int *nbNodes, int *nbCnodes)
+{
+    sdiValue search_value_val;
+    SelectionNodeRead nodes(g_pModelViewSDI, "/NODE");
+    SelectionNodeRead cnodes(g_pModelViewSDI, "/CNODE");
+    *nbNodes = nodes.Count();
+    *nbCnodes = cnodes.Count();
+}
+CDECL void CPP_NODES_COUNT(int *nbNodes, int *nbCnodes)
+{cpp_nodes_count_ (nbNodes,nbCnodes);}
+
+CDECL void cpp_nodes_count__ (int *nbNodes, int *nbCnodes)
+{cpp_nodes_count_ (nbNodes,nbCnodes);}
+
+CDECL void cpp_nodes_count (int *nbNodes, int *nbCnodes)
+{cpp_nodes_count_ (nbNodes,nbCnodes);}
+
+
+
+}

@@ -1,0 +1,53 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_arrays_mod              ../common_source/modules/interfaces/spmd_arrays_mod.F
+!||--- called by ------------------------------------------------------
+!||    get_neighbour_surface        ../engine/source/interfaces/interf/get_neighbour_surface.F90
+!||    interfaces_mod               ../common_source/modules/interfaces/interfaces_mod.F90
+!||    spmd_update_frontier_int25   ../engine/source/mpi/interfaces/spmd_update_frontier_int25.F90
+!||====================================================================
+      MODULE SPMD_ARRAYS_MOD
+C-----------------------------------------------
+C   m y _ r e a l
+C-----------------------------------------------
+#include      "my_real.inc"
+        implicit none
+!   -----------------------------------------------
+!   D e r i v e d   T y p e   D e f i n i t i o n s
+!   -----------------------------------------------
+
+!   -------------------------
+
+C----------------------------------------------
+C   Global SPMD_ARRAYS activated by Contact
+C---------------------------------------------
+
+        TYPE SPMD_ARRAYS_
+          INTEGER , DIMENSION(:), ALLOCATABLE :: FR_EDG      ! List of frontier edges of main segments of int25 contacts
+          INTEGER , DIMENSION(:), ALLOCATABLE :: IAD_FREDG   ! Address of frontier edges of main segments of int25 contacts per proc spmd
+        END TYPE SPMD_ARRAYS_
+
+C
+      END MODULE SPMD_ARRAYS_MOD

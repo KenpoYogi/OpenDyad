@@ -1,0 +1,196 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    root_finding_algo_mod   ../common_source/modules/root_finding_algo_mod.F90
+!||--- called by ------------------------------------------------------
+!||    mixture_equilibrium     ../engine/source/materials/mat/mat041/sigeps41.F
+!||    sigeps41                ../engine/source/materials/mat/mat041/sigeps41.F
+!||====================================================================
+      module root_finding_algo_mod
+      implicit none
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!! \brief root finding algo based on Brent's algo
+!! \details
+!||====================================================================
+!||    brent_algo      ../common_source/modules/root_finding_algo_mod.F90
+!||--- uses       -----------------------------------------------------
+!||    constant_mod    ../common_source/modules/constant_mod.F
+!||    precision_mod   ../common_source/modules/precision_mod.F90
+!||====================================================================
+        function brent_algo( a,b,tolerance,funct,funct_parameter_size,funct_parameter)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use precision_mod, only : WP
+          use constant_mod, only : zero,half,one,two,three
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          real(kind=WP), intent(in) :: a !< lower bound of the interval
+          real(kind=WP), intent(in) :: b !< upper bound of the interval
+          real(kind=WP), intent(in) :: tolerance !< tolerance
+          real(kind=WP), external :: funct !< function
+          integer, intent(in) :: funct_parameter_size !< size of funct_parameter array
+          real(kind=WP), dimension(funct_parameter_size), intent(inout) :: funct_parameter !< parameter of the function funct
+          real(kind=WP) :: brent_algo !< root value
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          logical :: condition
+          real(kind=WP) :: save_a,save_b,c,delta,d,s,length
+          real(kind=WP) :: f_a,f_b,f_c
+          real(kind=WP) :: r1,r2,r3
+          real(kind=WP) :: new_tol
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   External functions
+! ----------------------------------------------------------------------------------------------------------------------
+!
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+!   -----------------------------------------------
+
+          ! -----------------
+          ! save a and f(a)
+          save_a = a
+          f_a = funct(save_a,funct_parameter)
+          ! -----------------
+
+          ! -----------------
+          ! save b and f(b)
+          save_b = b
+          f_b = funct(save_b,funct_parameter)
+          ! -----------------
+
+          condition = .true.
+          ! -----------------
+          ! check if the signs of f(a) & f(b) : if there is no sign change, f(x)=0 does not exist in the [a,b] interval
+          if(sign(one, f_a) == sign(one, f_b)) then
+            condition = .false.
+            stop
+          end if
+          ! -----------------
+
+          c = save_a
+          f_c = f_a
+          delta = save_b - save_a
+          d = delta
+
+          do while(condition)
+            ! -----------------
+            ! check the value of f(c) & f(b)
+            ! change the 2 bounds if f(b)>f(c)
+            if(abs(f_c)<abs(f_b)) then
+              save_a = save_b
+              save_b = c
+              c = save_a
+              f_a = f_b
+              f_b = f_c
+              f_c = f_a
+            end if
+            ! compute the tolerance
+            new_tol = two * epsilon (save_b) * abs(save_b) + tolerance
+            length = half * ( c - save_b )
+
+            if((new_tol<abs(length)).and.f_b/=zero) then
+
+              if( (abs( delta )>=new_tol).and.(abs(f_a)>abs(f_b)) ) then
+                ! -----------------
+                ! interpolation algo
+                s = f_b / f_a
+                if( save_a /= c ) then
+                  ! inverse quadratic interpolation
+                  r1 = f_a / f_c
+                  r2 = f_b / f_c
+                  r3 = s * ( two * length * r1 * ( r1 - r2 ) - ( save_b - save_a ) * ( r2 - one ) )
+                  r1 = ( r1 - one ) * ( r2 - one ) * ( s - one )
+                else
+                  ! linear interpolation secant
+                  ! p = 2 * 1/2 * (c-b) * f(b)/f(a)
+                  ! q = 1 - f(b)/f(a)
+                  r3 = two * length * s
+                  r1 = one - s
+                end if
+
+                if (r3<=zero) then
+                  r3 = - r3
+                else
+                  r1 = -r1
+                end if
+
+                s = delta
+                delta = d
+                ! check if interpolation is good enough
+                if ( (two*r3>=(three*length*r1-abs(new_tol*r1)) ).or.( r3>=abs(half*s*r1) ) ) then
+                  delta = length
+                  d = delta
+                else
+                  d = r3 / r1
+                end if
+              else
+                ! -----------------
+                ! bisection algo
+                delta = length
+                d = delta
+              end if
+
+              save_a = save_b
+              f_a = f_b
+              ! next point
+              if ( new_tol<abs(d) ) then
+                save_b = save_b + d
+              else if ( zero<length ) then
+                save_b = save_b + new_tol
+              else
+                save_b = save_b - new_tol
+              end if
+
+              f_b = funct(save_b,funct_parameter)
+
+              if ( ( zero < f_b .and. zero < f_c ) .or. ( f_b <= zero .and. f_c <= zero ) ) then
+                c = save_a
+                f_c = f_a
+                delta = save_b - save_a
+                d = delta
+              end if
+            else
+              condition=.false.
+            end if
+          end do
+
+
+          brent_algo = save_b
+
+          return
+        end function brent_algo
+! ----------------------------------------------------------------------------------------------------------------------
+      end module root_finding_algo_mod

@@ -1,0 +1,375 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    c_seatbelts    ../starter/source/restart/ddsplit/c_seatbelts.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit        ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    nlocal         ../starter/source/spmd/node/ddtools.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE C_SEATBELTS(N_SLIPRING_L,N_RETRACTOR_L,P,NODLOCAL,ELBUF_TAB,
+     .                       IPARG,N_ANCHOR_REMOTE_L,N_ANCHOR_REMOTE_SEND_L,ANCHOR_REMOTE_L,ANCHOR_REMOTE_SEND_L,
+     .                       N_SEATBELT_L,N_SEATBELT_2D_L,CEP,OFF,N_GUIDED_CABLE_L)     
+C---------------------------------------------     
+      USE SEATBELT_MOD
+      USE ELBUFDEF_MOD     
+      use my_alloc_mod
+C---------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "param_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER N_SLIPRING_L,N_RETRACTOR_L,P,IPARG(NPARG,*),NODLOCAL(*),N_ANCHOR_REMOTE_L,
+     .        N_ANCHOR_REMOTE_SEND_L,N_SEATBELT_L,N_SEATBELT_2D_L,CEP(*),OFF,
+     .        N_GUIDED_CABLE_L
+      TYPE(ELBUF_STRUCT_), TARGET, DIMENSION(NGROUP)  :: ELBUF_TAB
+      TYPE(SEATBELT_REMOTE_NODES_STRUCT) ANCHOR_REMOTE_L,ANCHOR_REMOTE_SEND_L
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------
+      INTEGER  NLOCAL
+      EXTERNAL NLOCAL
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,K,L,NN,PROC,ITY,MTN,NEL,NG,LOCAL_SLIP(NSLIPRING),LOCAL_RETR(NRETRACTOR),
+     .        PP,N_REC_PROC(NSPMD),N_SEND_PROC(NSPMD),COMPT,TAG_PROC(2,NSPMD),
+     .        ISEATBELT,FLAG_REMOTE
+      TYPE(G_BUFEL_)     , POINTER :: GBUF
+C-----------------------------------------------
+C
+      LOCAL_SLIP = 0
+      LOCAL_RETR = 0
+      N_REC_PROC = 0
+      N_SEND_PROC = 0
+C
+C---  Pass 1 counting ----------------------------------------------------------
+C
+      DO I = 1, N_SEATBELT
+        IF (SEATBELT_TAB(I)%NSPRING > 0) THEN
+          IF (CEP(OFF + SEATBELT_TAB(I)%SPRING(1)) == P - 1) THEN
+            N_SEATBELT_L = N_SEATBELT_L + 1
+            IF (SEATBELT_TAB(I)%NFRAM > 1) N_SEATBELT_2D_L = N_SEATBELT_2D_L + 1
+          ENDIF
+        ENDIF
+      ENDDO
+C
+      DO I = 1, NSLIPRING   
+        SLIPRING(I)%IDG = I
+C
+        IF (SLIPRING(I)%PROC==P) THEN
+C--       Proc main of slipring
+          N_SLIPRING_L = N_SLIPRING_L + 1
+          LOCAL_SLIP(I) = N_SLIPRING_L
+        ENDIF 
+C
+        DO J=1,SLIPRING(I)%NFRAM           
+          IF (SLIPRING(I)%PROC==P) THEN
+            DO PP=1,NSPMD 
+              IF ((PP /= P).AND.(NLOCAL(SLIPRING(I)%FRAM(J)%ANCHOR_NODE,PP)==1)) THEN
+C--             Count of remote anchor node (send)
+                N_ANCHOR_REMOTE_SEND_L = N_ANCHOR_REMOTE_SEND_L + 1
+                SLIPRING(I)%FRAM(J)%N_REMOTE_PROC = SLIPRING(I)%FRAM(J)%N_REMOTE_PROC + 1
+                N_SEND_PROC(PP) = N_SEND_PROC(PP) + 1
+              ENDIF
+            ENDDO         
+          ELSEIF (NLOCAL(SLIPRING(I)%FRAM(J)%ANCHOR_NODE,P)==1) THEN
+C--         Count of remote anchor node (receive)
+            N_ANCHOR_REMOTE_L = N_ANCHOR_REMOTE_L + 1
+            COMPT = 0
+            DO PP=1,NSPMD 
+              IF ((PP /= P).AND.(SLIPRING(I)%PROC==PP)) THEN
+C--             Count of remote anchor node per main proc
+                N_REC_PROC(PP) = N_REC_PROC(PP) + 1
+              ENDIF
+            ENDDO
+          ENDIF
+        ENDDO
+C
+      ENDDO
+C
+      DO I = 1, NRETRACTOR
+        RETRACTOR(I)%IDG = I 
+        IF (RETRACTOR(I)%PROC==P) THEN
+C--       Proc main of retractor
+          N_RETRACTOR_L = N_RETRACTOR_L + 1
+          LOCAL_RETR(I) = N_RETRACTOR_L
+          DO PP=1,NSPMD 
+            IF ((PP /= P).AND.(NLOCAL(RETRACTOR(I)%ANCHOR_NODE,PP)==1)) THEN
+C--           remote anchor node (send)
+              N_ANCHOR_REMOTE_SEND_L = N_ANCHOR_REMOTE_SEND_L + 1
+              RETRACTOR(I)%N_REMOTE_PROC = RETRACTOR(I)%N_REMOTE_PROC + 1
+              N_SEND_PROC(PP) = N_SEND_PROC(PP) + 1
+            ENDIF
+          ENDDO
+        ELSEIF (NLOCAL(RETRACTOR(I)%ANCHOR_NODE,P)==1) THEN
+C--       Remote anchor node
+          N_ANCHOR_REMOTE_L = N_ANCHOR_REMOTE_L + 1
+          DO PP=1,NSPMD 
+            IF ((PP /= P).AND.(RETRACTOR(I)%PROC==PP)) THEN
+C--           Count of remote anchor node per main proc
+              N_REC_PROC(PP) = N_REC_PROC(PP) + 1
+            ENDIF
+          ENDDO
+        ENDIF
+      ENDDO
+C
+      DO I = 1, NGUIDED_CABLE   
+C
+        IF (P == GUIDE(I)%PROC) THEN
+C--       Proc main of guide
+          N_GUIDED_CABLE_L = N_GUIDED_CABLE_L + 1   
+C         Loop on nodes (anchor + cable nodes)    
+          DO J=1,GUIDE(I)%NB_NODES
+            DO PP=1,NSPMD 
+              IF ((PP /= P).AND.(NLOCAL(GUIDE(I)%NODES(J),PP)==1)) THEN
+C--             Count of remote anchor node on cable(send)
+                N_ANCHOR_REMOTE_SEND_L = N_ANCHOR_REMOTE_SEND_L + 1
+                GUIDE(I)%N_REMOTE_PROC = GUIDE(I)%N_REMOTE_PROC + 1
+                N_SEND_PROC(PP) = N_SEND_PROC(PP) + 1
+              ENDIF
+            ENDDO
+          ENDDO               
+        ELSE
+C         Loop on nodes (anchor + cable nodes)    
+          DO J=1,GUIDE(I)%NB_NODES            
+            IF (NLOCAL(GUIDE(I)%NODES(J),P)==1) THEN
+C--           Count of remote anchor node on cable (receive)
+              N_ANCHOR_REMOTE_L = N_ANCHOR_REMOTE_L + 1
+C--           Count of remote cable node per main proc
+              N_REC_PROC(GUIDE(I)%PROC) = N_REC_PROC(GUIDE(I)%PROC) + 1
+            ENDIF
+          ENDDO
+        ENDIF  
+C
+      ENDDO      
+C
+C---  Pass 2 : construction of arrays for remote anchor nodes-------------------------
+C
+      call my_alloc(ANCHOR_REMOTE_L%ADD_PROC, NSPMD+1, "ANCHOR_REMOTE_L%ADD_PROC")
+      call my_alloc(ANCHOR_REMOTE_L%NODE, N_ANCHOR_REMOTE_L, "ANCHOR_REMOTE_L%NODE")
+      COMPT = 0
+C
+      call my_alloc(ANCHOR_REMOTE_SEND_L%ADD_PROC, NSPMD+1, "ANCHOR_REMOTE_SEND_L%ADD_PROC")
+      call my_alloc(ANCHOR_REMOTE_SEND_L%BUF_INDEX, N_ANCHOR_REMOTE_SEND_L, "ANCHOR_REMOTE_SEND_L%BUF_INDEX")
+      call my_alloc(ANCHOR_REMOTE_SEND_L%NODE, N_ANCHOR_REMOTE_SEND_L, "ANCHOR_REMOTE_SEND_L%NODE")
+C
+      IF (N_ANCHOR_REMOTE_L > 0) THEN
+        ANCHOR_REMOTE_L%ADD_PROC(1) = 1
+        DO PP=1,NSPMD
+          ANCHOR_REMOTE_L%ADD_PROC(PP+1) = ANCHOR_REMOTE_L%ADD_PROC(PP) + N_REC_PROC(PP)
+        ENDDO
+        N_REC_PROC = 0
+      ENDIF
+C
+      IF (N_ANCHOR_REMOTE_SEND_L > 0) THEN
+        ANCHOR_REMOTE_SEND_L%ADD_PROC(1) = 1
+        DO PP=1,NSPMD
+          ANCHOR_REMOTE_SEND_L%ADD_PROC(PP+1) = ANCHOR_REMOTE_SEND_L%ADD_PROC(PP) + N_SEND_PROC(PP)
+        ENDDO
+        N_SEND_PROC = 0
+      ENDIF         
+C
+      NN = 0
+C
+      DO I = 1, NSLIPRING   
+        DO J=1,SLIPRING(I)%NFRAM           
+          IF (SLIPRING(I)%PROC==P) THEN
+            IF (SLIPRING(I)%FRAM(J)%N_REMOTE_PROC > 0) THEN
+C--           Proc main of slipring
+              NN = NN + 1        
+              DO PP=1,NSPMD 
+                IF ((PP /= P).AND.(NLOCAL(SLIPRING(I)%FRAM(J)%ANCHOR_NODE,PP)==1)) THEN
+C--               remote anchor node (send)
+                  ANCHOR_REMOTE_SEND_L%BUF_INDEX(ANCHOR_REMOTE_SEND_L%ADD_PROC(PP)+N_SEND_PROC(PP)) = NN
+                  ANCHOR_REMOTE_SEND_L%NODE(ANCHOR_REMOTE_SEND_L%ADD_PROC(PP)+N_SEND_PROC(PP)) =
+     .              NODLOCAL(SLIPRING(I)%FRAM(J)%ANCHOR_NODE)
+                  N_SEND_PROC(PP) = N_SEND_PROC(PP) + 1              
+                ENDIF
+              ENDDO
+            ENDIF
+          ELSEIF (NLOCAL(SLIPRING(I)%FRAM(J)%ANCHOR_NODE,P)==1) THEN
+C--         Proc remote of slipring
+            PP = SLIPRING(I)%PROC
+            ANCHOR_REMOTE_L%NODE(ANCHOR_REMOTE_L%ADD_PROC(PP)+N_REC_PROC(PP)) = NODLOCAL(SLIPRING(I)%FRAM(J)%ANCHOR_NODE)
+            N_REC_PROC(PP) = N_REC_PROC(PP) + 1
+          ENDIF
+        ENDDO
+      ENDDO 
+C
+      DO I = 1, NRETRACTOR                
+        IF (RETRACTOR(I)%PROC==P) THEN
+          IF (RETRACTOR(I)%N_REMOTE_PROC > 0) THEN
+C--         Proc main of retractor
+            NN = NN + 1        
+            DO PP=1,NSPMD 
+              IF ((PP /= P).AND.(NLOCAL(RETRACTOR(I)%ANCHOR_NODE,PP)==1)) THEN
+C--             remote anchor node (send)
+                ANCHOR_REMOTE_SEND_L%BUF_INDEX(ANCHOR_REMOTE_SEND_L%ADD_PROC(PP)+N_SEND_PROC(PP)) = NN
+                ANCHOR_REMOTE_SEND_L%NODE(ANCHOR_REMOTE_SEND_L%ADD_PROC(PP)+N_SEND_PROC(PP)) =
+     .            NODLOCAL(RETRACTOR(I)%ANCHOR_NODE)
+                N_SEND_PROC(PP) = N_SEND_PROC(PP) + 1            
+              ENDIF
+            ENDDO
+          ENDIF
+        ELSEIF (NLOCAL(RETRACTOR(I)%ANCHOR_NODE,P)==1) THEN
+C--       Proc remote of retractor
+          PP = RETRACTOR(I)%PROC
+          ANCHOR_REMOTE_L%NODE(ANCHOR_REMOTE_L%ADD_PROC(PP)+N_REC_PROC(PP)) = NODLOCAL(RETRACTOR(I)%ANCHOR_NODE)
+          N_REC_PROC(PP) = N_REC_PROC(PP) + 1
+        ENDIF
+      ENDDO
+
+      DO I = 1, NGUIDED_CABLE
+        IF (P == GUIDE(I)%PROC) THEN         
+C--       Proc main of guide          
+          IF (GUIDE(I)%N_REMOTE_PROC > 0) THEN
+C--         Loop on nodes (anchor + cable nodes)
+            DO J=1,GUIDE(I)%NB_NODES   
+              FLAG_REMOTE = 0   
+              DO PP=1,NSPMD 
+                IF ((PP /= P).AND.(NLOCAL(GUIDE(I)%NODES(J),PP)==1)) FLAG_REMOTE = 1
+              ENDDO    
+              IF (FLAG_REMOTE == 1) THEN
+                NN = NN + 1              
+                DO PP=1,NSPMD 
+                  IF ((PP /= P).AND.(NLOCAL(GUIDE(I)%NODES(J),PP)==1)) THEN
+C--                 remote anchor node (send)
+                    ANCHOR_REMOTE_SEND_L%BUF_INDEX(ANCHOR_REMOTE_SEND_L%ADD_PROC(PP)+N_SEND_PROC(PP)) = NN
+                    ANCHOR_REMOTE_SEND_L%NODE(ANCHOR_REMOTE_SEND_L%ADD_PROC(PP)+N_SEND_PROC(PP)) =
+     .                NODLOCAL(GUIDE(I)%NODES(J))
+                    N_SEND_PROC(PP) = N_SEND_PROC(PP) + 1    
+                  ENDIF
+                ENDDO
+C..             Store position of nodes 1,2,and 3 and anchor node in remote node array                
+                DO K=1,GUIDE(I)%NCONT
+                  DO L=1,3
+                    IF (GUIDE(I)%NODES(J) == GUIDE(I)%CONT(K)%NODE(L)) GUIDE(I)%CONT(K)%NODE_IREMOTE(L) = NN
+                  ENDDO
+                  IF (GUIDE(I)%NODES(J) == GUIDE(I)%CONT(K)%ANCHOR_NODE) GUIDE(I)%CONT(K)%NODE_IREMOTE(4) = NN
+                ENDDO             
+              ENDIF
+            ENDDO
+          ENDIF
+        ELSE
+C         Loop on nodes (anchor + cable nodes)          
+          DO J=1,GUIDE(I)%NB_NODES            
+            IF (NLOCAL(GUIDE(I)%NODES(J),P)==1) THEN
+              PP = GUIDE(I)%PROC
+              ANCHOR_REMOTE_L%NODE(ANCHOR_REMOTE_L%ADD_PROC(PP)+N_REC_PROC(PP)) = NODLOCAL(GUIDE(I)%NODES(J))
+              N_REC_PROC(PP) = N_REC_PROC(PP) + 1  
+            ENDIF
+          ENDDO
+        ENDIF
+      ENDDO
+C
+C---  COnstruction of arrays for spmd exchange of TH on proc 0
+      IF ((NSPMD > 1).AND.(P == 1)) THEN
+C
+        NSEATBELT_TH_PROC = 0
+        TAG_PROC = 0
+C
+        DO PP=1,NSPMD 
+          DO I=1,NSLIPRING
+            IF ((PP /= P).AND.(SLIPRING(I)%PROC==PP)) TAG_PROC(1,PP) = 1
+          ENDDO
+          DO I=1,NRETRACTOR
+            IF ((PP /= P).AND.(RETRACTOR(I)%PROC==PP)) TAG_PROC(2,PP) = 1
+          ENDDO
+          IF (TAG_PROC(1,PP) + TAG_PROC(2,PP) > 0) NSEATBELT_TH_PROC = NSEATBELT_TH_PROC + 1
+        ENDDO
+C
+        allocate(SEATBELT_TH_EXCH(NSEATBELT_TH_PROC+1))
+C
+        COMPT = 0
+        SEATBELT_TH_EXCH(1)%ADD_PROC = 1
+        DO PP=1,NSPMD 
+          IF (TAG_PROC(1,PP) + TAG_PROC(2,PP) > 0) THEN
+            COMPT = COMPT + 1
+C--         data must be received from this proc for TH
+            SEATBELT_TH_EXCH(COMPT)%ID_PROC = PP
+            SEATBELT_TH_EXCH(COMPT)%NSLIPRING = 0
+            SEATBELT_TH_EXCH(COMPT)%NRETRACTOR = 0
+            DO I=1,NSLIPRING
+              IF ((PP /= P).AND.(SLIPRING(I)%PROC==PP)) THEN
+                SEATBELT_TH_EXCH(COMPT)%NSLIPRING = SEATBELT_TH_EXCH(COMPT)%NSLIPRING + 1
+                SEATBELT_TH_EXCH(COMPT+1)%ADD_PROC = SEATBELT_TH_EXCH(COMPT)%ADD_PROC + 6
+              ENDIF
+            ENDDO
+            DO I=1,NRETRACTOR
+              IF ((PP /= P).AND.(RETRACTOR(I)%PROC==PP)) THEN
+                SEATBELT_TH_EXCH(COMPT)%NRETRACTOR = SEATBELT_TH_EXCH(COMPT)%NRETRACTOR + 1
+                SEATBELT_TH_EXCH(COMPT+1)%ADD_PROC = SEATBELT_TH_EXCH(COMPT)%ADD_PROC + 3
+              ENDIF
+            ENDDO
+          ENDIF
+        ENDDO
+C
+      ENDIF
+
+C
+C---  Update of add_node in buffer element ----------------------------------------------
+
+      IF (N_SLIPRING_L + N_RETRACTOR_L > 0) THEN
+C
+        DO NG=1,NGROUP
+C
+          PROC  = IPARG(32,NG)
+          ITY   = IPARG(5,NG)
+          MTN   = IPARG(1,NG)
+          NEL = IPARG(2,NG)
+          ISEATBELT = IPARG(91,NG)
+c----
+          IF ((P == PROC + 1).AND.(ITY==6).AND.(MTN==114)) THEN
+            GBUF => ELBUF_TAB(NG)%GBUF
+            DO I=1,NEL
+              IF (GBUF%ADD_NODE(I) > 0) GBUF%ADD_NODE(I) = NODLOCAL(GBUF%ADD_NODE(I))
+              IF (GBUF%ADD_NODE(NEL+I) > 0) GBUF%ADD_NODE(NEL+I) = NODLOCAL(GBUF%ADD_NODE(NEL+I))
+              IF (GBUF%SLIPRING_ID(I) > 0) GBUF%SLIPRING_ID(I) = LOCAL_SLIP(GBUF%SLIPRING_ID(I))
+              IF (GBUF%RETRACTOR_ID(I) > 0) GBUF%RETRACTOR_ID(I) = LOCAL_RETR(GBUF%RETRACTOR_ID(I))
+            ENDDO
+C
+          ELSEIF ((P == PROC + 1).AND.(ITY==3).AND.(ISEATBELT==1)) THEN
+            GBUF => ELBUF_TAB(NG)%GBUF
+            DO I=1,NEL
+              DO J=1,GBUF%G_ADD_NODE
+                K = NEL*(J-1)
+                IF (GBUF%ADD_NODE(K+I) > 0) GBUF%ADD_NODE(K+I) = NODLOCAL(GBUF%ADD_NODE(K+I))
+              ENDDO
+            ENDDO
+
+          ENDIF
+C
+        ENDDO
+C
+      ENDIF   
+C                
+! --------------------------------------
+      RETURN
+      END

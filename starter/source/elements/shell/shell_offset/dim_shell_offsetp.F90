@@ -1,0 +1,157 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    dim_shell_offsetp_mod   ../starter/source/elements/shell/shell_offset/dim_shell_offsetp.F90
+!||--- called by ------------------------------------------------------
+!||    shell_offsetp           ../starter/source/elements/shell/shell_offset/shell_offsetp.F90
+!||====================================================================
+      module dim_shell_offsetp_mod
+
+      implicit none
+
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!
+!=======================================================================================================================
+!!\brief This subroutine performs the dimensioning of shell offset projection
+!=======================================================================================================================
+!||====================================================================
+!||    dim_shell_offsetp   ../starter/source/elements/shell/shell_offset/dim_shell_offsetp.F90
+!||--- called by ------------------------------------------------------
+!||    shell_offsetp       ../starter/source/elements/shell/shell_offset/shell_offsetp.F90
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+        subroutine dim_shell_offsetp(                                          &
+          ngroup,    nparg,      iparg,        npropg,            &
+          numgeo,      geo,     numelc,          nixc,            &
+          ixc,  numeltg,      nixtg,          ixtg,            &
+          numnod,    intag,    nsh_oset   )
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use constant_mod, only : zero,half
+          use precision_mod, only : WP
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, intent (in   )                         :: ngroup           !< number of elem group
+          integer, intent (in   )                         :: nparg            !< first dimension of iparg
+          integer, intent (in   )                         :: npropg           !< first dimension of geo
+          integer, intent (in   )                         :: numgeo           !< number of prop
+          integer, intent (in   )                         :: numelc           !< number shell 4n element
+          integer, intent (in   )                         :: nixc             !< first dimension of ixc
+          integer, intent (in   )                         :: numeltg          !< number shell 3n element
+          integer, intent (in   )                         :: nixtg            !< first dimension of ixtg
+          integer, intent (in   )                         :: numnod           !< number node
+          integer, intent (in   ) ,dimension(nparg,ngroup):: iparg            !< elem group array
+          integer, intent (in   ) ,dimension(nixc,numelc) :: ixc              !< shell 4n connectivity
+          integer, intent (in   ),dimension(nixtg,numeltg):: ixtg             !< shell 3n connectivity
+          integer, intent (inout) ,dimension(numnod)      :: intag            !< itag working array
+          integer, intent (inout)                         :: nsh_oset         !< number offset shell for projection
+          real(kind=WP), intent (in   ),dimension(npropg,numgeo):: geo              !< property array
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,j,n,nel,nft,nn,ie,igtyp,ity,nnode,pid,nshel,ng
+          real(kind=WP) :: shelloff
+!
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+! First pass to fill intag
+          intag = 0
+          do  ng=1,ngroup
+            ity=iparg(5,ng)
+            igtyp  = iparg(38,ng)
+            if (igtyp == 0.or.(ity /= 3 .and. ity /= 7) ) cycle
+            nel=iparg(2,ng)
+            nft=iparg(3,ng)
+            pid =iparg(62,ng)
+            shelloff = zero
+            select case(igtyp)
+             case (1,9,10,11,16)
+              shelloff = geo(199,pid)
+             case (17,51,52)
+              shelloff = half+geo(199,pid)
+            end select
+            if (ity == 3)then
+              nnode =4
+              do i=1,nel
+                ie = nft + i
+                do j=1,nnode
+                  n = ixc(j+1,ie)
+                  if (shelloff/=zero) intag(n)=1
+                end do
+              end do
+            else if (ity == 7)then
+              nnode =3
+              do i=1,nel
+                ie = nft + i
+                do j=1,nnode
+                  n = ixtg(j+1,ie)
+                  if (shelloff/=zero) intag(n)=1
+                end do
+              end do
+            end if
+          end do
+! 2nd pass for dim with connected 0 offset shell
+          nshel=0
+          do  ng=1,ngroup
+            ity=iparg(5,ng)
+            igtyp  = iparg(38,ng)
+            if (igtyp == 0.or.(ity /= 3 .and. ity /= 7) ) cycle
+            nel=iparg(2,ng)
+            nft=iparg(3,ng)
+            if (ity == 3)then
+              nnode =4
+              do i=1,nel
+                ie = nft + i
+                nn=0
+                do j=1,nnode
+                  n = ixc(j+1,ie)
+                  nn = nn + intag(n)
+                end do
+                if (nn>0) nshel = nshel + 1
+              end do
+            else if (ity == 7)then
+              nnode =3
+              do i=1,nel
+                ie = nft + i
+                nn=0
+                do j=1,nnode
+                  n = ixtg(j+1,ie)
+                  nn = nn + intag(n)
+                end do
+                if (nn>0) nshel = nshel + 1
+              end do
+            end if
+          end do
+          nsh_oset = nshel
+!-----------
+        end subroutine dim_shell_offsetp
+      end module dim_shell_offsetp_mod

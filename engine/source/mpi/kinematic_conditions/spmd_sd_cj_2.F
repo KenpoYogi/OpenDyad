@@ -1,0 +1,139 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    spmd_sd_cj_2          ../engine/source/mpi/kinematic_conditions/spmd_sd_cj_2.F
+!||--- called by ------------------------------------------------------
+!||    sms_build_diag        ../engine/source/ams/sms_build_diag.F
+!||    sms_ini_kin_1         ../engine/source/ams/sms_init.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    spmd_comm_world_mod   ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+      SUBROUTINE SPMD_SD_CJ_2(NOD2ADD,LJOINT,FR_CJ,IADCJ,ICSIZE,
+     2                      TAG_LNK_SMS,NODNX_SMS,INDX1_SMS)
+C sending P0 to other A, AR, V, VR procs
+C After treatment of cylindrical joints
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+#include      "sms_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ICSIZE, NOD2ADD(*),LJOINT(*),FR_CJ(*),
+     .        IADCJ(NSPMD+1,*), TAG_LNK_SMS(*), NODNX_SMS(*),
+     .        INDX1_SMS(*)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER MSGTYP,MSGOFF,IERROR,LOC_PROC,NOD,L,I,J,N,
+     .        IDEB,SIZ,NBINDEX,
+     .        INDEXI(NSPMD),REQ_S(NSPMD),STATUS(MPI_STATUS_SIZE),
+     .        LEN(NSPMD),IBUF(ICSIZE)
+      DATA MSGOFF/104/
+C-----------------------------------------------
+C   S o u r c e  L i n e s
+C-----------------------------------------------
+      LOC_PROC = ISPMD + 1
+      IF (LOC_PROC==1) THEN
+        L = 0
+        IDEB = 1
+
+        DO I = 2, NSPMD
+          LEN(I)=0
+          DO N=1,NJOINT
+           IF(TAG_LNK_SMS(N)/=0)
+     .       LEN(I) = LEN(I)+IADCJ(I+1,N)-IADCJ(I,N)
+          END DO
+          IF(LEN(I)>0) THEN
+            L=L+1
+            INDEXI(L)=I
+            DO N=1,NJOINT
+              IF(TAG_LNK_SMS(N)==0)CYCLE
+              DO J = IADCJ(I,N), IADCJ(I+1,N)-1
+                NOD = FR_CJ(J)
+                IBUF(IDEB  )  = NOD2ADD(NOD)
+                IDEB = IDEB + 1
+              END DO
+            END DO
+          END IF
+        END DO
+        NBINDEX = L
+C
+        IDEB = 1
+
+        DO L=1,NBINDEX
+         I = INDEXI(L)
+         SIZ = LEN(I)
+         MSGTYP = MSGOFF
+         CALL MPI_ISEND(
+     S     IBUF(IDEB),SIZ,MPI_INTEGER,IT_SPMD(I),MSGTYP,
+     G     SPMD_COMM_WORLD,REQ_S(L),IERROR)
+         IDEB = IDEB + SIZ
+        END DO
+C
+        DO L=1,NBINDEX
+          CALL MPI_WAITANY(NBINDEX,REQ_S,I,STATUS,IERROR)
+        ENDDO
+      ELSEIF(ICSIZE>0) THEN
+C proc <> 0
+        IDEB = 1
+        SIZ = ICSIZE
+        MSGTYP = MSGOFF
+        CALL MPI_RECV(
+     S    IBUF,SIZ,MPI_INTEGER,IT_SPMD(1),MSGTYP,
+     G    SPMD_COMM_WORLD,STATUS,IERROR)
+        DO N = 1, NJOINT
+          IF(TAG_LNK_SMS(N)==0)CYCLE
+          DO J = IADCJ(1,N),IADCJ(NSPMD+1,N)-1
+            NOD = FR_CJ(J)
+            IF(NODNX_SMS(NOD)==0.AND.NOD2ADD(NOD)==0.AND.
+     .         IBUF(IDEB)/=0)THEN
+              NINDX1_SMS=NINDX1_SMS+1
+              INDX1_SMS(NINDX1_SMS)=NOD
+              NODNX_SMS(NOD)=NINDX1_SMS
+              NOD2ADD(NOD)=1
+            END IF
+            IDEB = IDEB + 1
+          END DO
+        END DO
+      END IF
+C
+#endif
+      RETURN
+      END

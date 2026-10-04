@@ -1,0 +1,1137 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    cgrtails               ../starter/source/elements/shell/coque/cgrtails.F
+!||--- called by ------------------------------------------------------
+!||    lectur                 ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                 ../starter/source/output/message/message.F
+!||    arret                  ../starter/source/system/arret.F
+!||    cpp_reorder_elements   ../starter/source/spmd/cpp_reorder_elements.cpp
+!||    fretitl2               ../starter/source/starter/freform.F
+!||    zeroin                 ../starter/source/system/zeroin.F
+!||--- uses       -----------------------------------------------------
+!||    drape_mod              ../starter/share/modules1/drape_mod.F
+!||    message_mod            ../starter/share/message_module/message_mod.F
+!||    r2r_mod                ../starter/share/modules1/r2r_mod.F
+!||    reorder_mod            ../starter/share/modules1/reorder_mod.F
+!||    stack_mod              ../starter/share/modules1/stack_mod.F
+!||====================================================================
+      SUBROUTINE CGRTAILS(
+     1       IXC    ,PM      ,IPARG     ,GEO     ,
+     2       EADD   ,ND      ,IPARTC  ,DD_IAD,
+     3       IDX    ,INUM      ,ITR1    ,
+     4       INDEX  ,CEP       ,THK     ,XNUM,
+     5       IGRSURF,IGRSH4N ,IGEO      ,IPM     ,
+     6       IPART  ,SH4TREE ,NOD2ELC   ,ISHEOFF ,
+     7       SH4TRIM ,TAGPRT_SMS,LGAUGE  ,IWORKSH ,
+     8       STACK   ,DRAPE    ,RNOISE  ,MAT_PARAM,
+     9       SH4ANG, IDDLEVEL , DRAPEG,PRINT_FLAG,PTSHEL,DAMP_RANGE_PART)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE MESSAGE_MOD
+      USE R2R_MOD 
+      USE STACK_MOD     
+      USE REORDER_MOD
+      USE GROUPDEF_MOD
+      USE MATPARAM_DEF_MOD
+      USE DRAPE_MOD
+      USE QA_OUT_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+      use element_mod , only : nixc
+C-----------------------------------------------
+C            A R G U M E N T S
+C-----------------------------------------------
+C     IXC(NIXC,NUMELC)   ARRAY MID(1)+CONECS(2-5)+PID(6)+           E
+C                        N GLOBAL(7)                               E
+C     PM(NPROPM,NUMMAT)  ARRAY MATERIAL CHARACTERISTICS             E
+C     IPARG(NPARG,NGROUP)ARRAY GROUP CHARACTERISTICS                E/S
+C     GEO(NPROPG,NUMGEO) ARRAY PID CHARACTERISTICS                  E
+C     EADD(NUMELC)       ARRAY ADDRESSES IN IDAM CHECKBOARD        E 
+C     DD_IAD             ARRAY FROM DD IN SUPER GROUPS              S
+C     IPARTC                                                        E/S
+C     INUM(9,NUMELC)     WORKING ARRAY                              E/S
+C     ITR1(NSELC)        WORKING ARRAY                              E/S
+C     INDEX(NUMELC)      WORKING ARRAY                              E/S
+C     THK(NUMELC)        THICKNESS ARRAY                            E/S
+C     XNUM(NUMELC)       WORKING ARRAY                              E/S
+C     CEP(NUMELC)        WORKING ARRAY                              E/S
+C     ISHEOFF(NUMELC)   FLAG ELEM RBY ON/OFF                        E/S
+C-----------------------------------------------
+C   I M P L I C I T   T Y P E S
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C O M M O N   B L O C K S
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com_xfem1.inc"
+#include      "units_c.inc"
+#include      "param_c.inc"
+#include      "vect01_c.inc"
+#include      "scr17_c.inc"
+#include      "remesh_c.inc"
+#include      "sms_c.inc"
+#include      "r2r_c.inc"
+#include      "drape_c.inc"
+C-----------------------------------------------
+C   D U M M Y   A R G U M E N T S
+C-----------------------------------------------
+      INTEGER ND, IDX
+      INTEGER IXC(NIXC,*),IPARG(NPARG,*),EADD(*),IGEO(NPROPGI,*),
+     .    DD_IAD(NSPMD+1,*),IPARTC(*),SH4TRIM(*),
+     .    INUM(9,*),ITR1(*),INDEX(*),CEP(*),
+     .    IPM(NPROPMI,*), IPART(LIPART1,*), SH4TREE(KSH4TREE,*), 
+     .    ISHEOFF(*),TAGPRT_SMS(*),LGAUGE(3,*),
+     .    NOD2ELC(*),IWORKSH(3,*)
+      INTEGER, INTENT(IN) :: IDDLEVEL
+      INTEGER, INTENT(IN) :: PRINT_FLAG !< flag to print the element group data
+      INTEGER , DIMENSION(NUMELC) , INTENT(INOUT):: PTSHEL
+      INTEGER , INTENT(IN) :: DAMP_RANGE_PART(NPART)     !< flag to compute the damping range
+      MY_REAL
+     .    PM(NPROPM,*), GEO(NPROPG,*), XNUM(*),THK(*),RNOISE(NPERTURB,*),
+     .    SH4ANG(*)
+      TYPE(MATPARAM_STRUCT_) ,DIMENSION(NUMMAT),INTENT(IN) :: MAT_PARAM
+C-----------------------------------------------     
+      TYPE (STACK_PLY) :: STACK
+      TYPE (DRAPE_)  , TARGET  :: DRAPE (NUMELC_DRAPE + NUMELTG_DRAPE)
+      TYPE (DRAPEG_)                             :: DRAPEG
+      TYPE (DRAPE_)  , DIMENSION(:), ALLOCATABLE :: XNUM_DRAPE
+      TYPE (DRAPEG_)                             :: XNUM_DRAPEG
+C-----------------------------------------------
+      TYPE (GROUP_)  , DIMENSION(NGRSHEL)  :: IGRSH4N
+      TYPE (SURF_)   , DIMENSION(NSURF)    :: IGRSURF
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+      INTEGER I,K,NGR1,MLN,ISMST, ICSEN, JLEV, MY_NVSIZ, IADM,NLEVXF,
+     .   NPN, N, MID, PID, IHBE,NPG,IXFEM_ERR,
+     .   II, J, MIDN, PIDN, NSG, NEL, NE1, ITHK,
+     .   IPLA, IGTYP, KFTS, P, NEL_PREC,NB,
+     .   NN,PRT,
+     .   IMATLY, IPT,ILEV,MPT, IE, NUVARR,
+     .   NGP(NSPMD+1),N1,NVARV,IVISC,IFWV,IXFEM,IPTUN,IREP,
+     .   ISUBSTACK,IPMAT, IPPID,
+     .   IPARTR2R,NB_LAW58,IPERT,STAT,IGMAT,IPINCH,ISM0,ISEATBELT,
+     .   NSLICE,KK,NPT_DRP, IDRAPE, JJ,IEL,IEL0,ISHEL,IDAMP_FREQ_RANGE
+      INTEGER, DIMENSION(:), ALLOCATABLE :: INUM_R2R
+      my_real, DIMENSION(:), ALLOCATABLE :: ANGLE
+      INTEGER, DIMENSION(:), ALLOCATABLE :: INDEXS2,INUM_PTSHEL
+
+      INTEGER MODE,WORK(70000)
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: ISTOR,INUM_WORKSH
+C     real or real*8
+      INTEGER ID
+      CHARACTER(LEN=NCHARTITLE)::TITR,TITR1,TITR2
+      my_real, DIMENSION(:,:), ALLOCATABLE :: XNUM_RNOISE
+      INTEGER :: NB_NODES, LDIM, OFFSET
+      
+      TYPE (DRAPE_PLY_)  , POINTER         :: DRAPE_PLY
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+      CALL MY_ALLOC(INUM_R2R,1+R2R_SIU*NUMELC,"INUM_R2R")
+      CALL MY_ALLOC(ANGLE,NUMELC,"ANGLE")
+
+      IF(NADMESH /= 0)THEN
+        call my_alloc(ISTOR, KSH4TREE+1, NUMELC, "ISTOR")
+      ELSE
+        call my_alloc(ISTOR, 0, 0, "ISTOR")
+      ENDIF
+
+      CALL MY_ALLOC(INDEXS2,NUMELC,"INDEXS2")
+      INDEXS2(1:NUMELC)=PERMUTATION%SHELL(1:NUMELC)
+C
+      IF (NPERTURB > 0) THEN
+        call my_alloc(XNUM_RNOISE, NPERTURB, NUMELC, "XNUM_RNOISE", stat=stat)
+        IF (STAT /= 0) CALL ANCMSG(MSGID=268,ANMODE=ANINFO,
+     .                           MSGTYPE=MSGERROR,
+     .                           C1='XNUM_RNOISE')
+      ELSE
+        call my_alloc(XNUM_RNOISE, 0, 0, "XNUM_RNOISE")
+      ENDIF
+C
+      IPTUN = 1
+      IXFEM_ERR = 0
+C--------------------------------------------------------------
+C         GROUPING BY MVSIZ GROUPS
+C--------------------------------------------------------------
+      NGR1 = NGROUP + 1
+C
+C Phase 1: Domain Decomposition
+C
+      IDX=IDX+ND*(NSPMD+1)
+      CALL ZEROIN(1,ND*(NSPMD+1),DD_IAD(1,NSPGROUP+1))
+      NFT = 0
+C initialization dd_iad
+      DO N=1,ND
+       DO P=1,NSPMD+1
+         DD_IAD(P,NSPGROUP+N) = 0
+       END DO
+      ENDDO
+C
+      IEL  = 0
+      DO N=1,ND
+       NEL = EADD(N+1)-EADD(N)
+C      
+       IF (NDRAPE > 0 .AND. NUMELC_DRAPE > 0) THEN
+         allocate(XNUM_DRAPE(NEL))
+         call my_alloc(XNUM_DRAPEG%INDX, NEL, "XNUM_DRAPEG%INDX")
+         XNUM_DRAPEG%INDX = 0                                             
+         DO I =1, NEL
+           IEL0 = DRAPEG%INDX(I + NFT)
+           IF(IEL0 == 0) CYCLE 
+           NPT = DRAPE(IEL0)%NPLY
+           NPT_DRP = DRAPE(IEL0)%NPLY_DRAPE
+           call my_alloc(XNUM_DRAPE(I)%INDX_PLY, NPT, "XNUM_DRAPE(I)%INDX_PLY")
+           allocate(XNUM_DRAPE(I)%DRAPE_PLY(NPT_DRP))
+           XNUM_DRAPE(I)%INDX_PLY= 0                                       
+           DO J = 1,NPT_DRP                            
+                NSLICE = DRAPE(IEL0)%DRAPE_PLY(J)%NSLICE   
+                call my_alloc(XNUM_DRAPE(I)%DRAPE_PLY(J)%RDRAPE, NSLICE, 2, "XNUM_DRAPE(I)%DRAPE_PLY(J)%RDRAPE")
+                call my_alloc(XNUM_DRAPE(I)%DRAPE_PLY(J)%IDRAPE, NSLICE, 3, "XNUM_DRAPE(I)%DRAPE_PLY(J)%IDRAPE")
+                XNUM_DRAPE(I)%DRAPE_PLY(J)%RDRAPE = 0             
+                XNUM_DRAPE(I)%DRAPE_PLY(J)%IDRAPE = 0
+           ENDDO                                                                           
+         ENDDO      
+        ELSE
+            allocate(XNUM_DRAPE(0))
+        ENDIF     
+        call my_alloc(INUM_WORKSH, 3, NEL, "INUM_WORKSH")
+C          
+        IF(NDRAPE > 0 .AND. NUMELC_DRAPE > 0) THEN
+          DO I = 1, NEL
+            INDEX(I) = I
+            INUM(1,I)=IPARTC(NFT+I)
+            INUM(2,I)=ISHEOFF(NFT+I)
+            INUM(3,I)=IXC(1,NFT+I)
+            INUM(4,I)=IXC(2,NFT+I)
+            INUM(5,I)=IXC(3,NFT+I)
+            INUM(6,I)=IXC(4,NFT+I)
+            INUM(7,I)=IXC(5,NFT+I)
+            INUM(8,I)=IXC(6,NFT+I)
+            INUM(9,I)=IXC(7,NFT+I)
+            XNUM(I)=THK(NFT+I)
+            INUM_WORKSH(1,I) = IWORKSH(1, NFT + I)
+            INUM_WORKSH(2,I) = IWORKSH(2, NFT + I)
+            INUM_WORKSH(3,I) = IWORKSH(3, NFT + I)
+            IF (NSUBDOM>0) INUM_R2R(I) = TAG_ELCF(NFT+I)
+            IF (NPERTURB > 0) THEN
+               DO IPERT = 1, NPERTURB
+                 XNUM_RNOISE(IPERT,I) = RNOISE(IPERT,NFT+I) 
+               ENDDO
+            ENDIF
+            ANGLE(I) = SH4ANG(NFT + I)
+            !drape structure
+            IEL0 = DRAPEG%INDX(NFT + I)  
+            XNUM_DRAPEG%INDX(I) = IEL0
+            IF(IEL0 == 0) CYCLE  
+            NPT = DRAPE(IEL0)%NPLY 
+            XNUM_DRAPE(I)%NPLY = NPT                          
+            XNUM_DRAPE(I)%INDX_PLY(1:NPT) = DRAPE(IEL0)%INDX_PLY(1:NPT)
+            NPT = DRAPE(IEL0)%NPLY_DRAPE                                      
+            XNUM_DRAPE(I)%NPLY_DRAPE = NPT                                    
+            XNUM_DRAPE(I)%THICK = DRAPE(IEL0)%THICK 
+            DO JJ = 1, NPT                                                  
+              DRAPE_PLY => DRAPE(IEL0)%DRAPE_PLY(JJ)
+              NSLICE =  DRAPE_PLY%NSLICE                                        
+              XNUM_DRAPE(I)%DRAPE_PLY(JJ)%NSLICE =  NSLICE 
+              XNUM_DRAPE(I)%DRAPE_PLY(JJ)%IPID = DRAPE_PLY%IPID                
+              DO KK = 1,NSLICE                                                  
+                XNUM_DRAPE(I)%DRAPE_PLY(JJ)%IDRAPE(KK,1)=DRAPE_PLY%IDRAPE(KK,1) 
+                XNUM_DRAPE(I)%DRAPE_PLY(JJ)%IDRAPE(KK,2)=DRAPE_PLY%IDRAPE(KK,2) 
+                XNUM_DRAPE(I)%DRAPE_PLY(JJ)%RDRAPE(KK,1)=DRAPE_PLY%RDRAPE(KK,1) 
+                XNUM_DRAPE(I)%DRAPE_PLY(JJ)%RDRAPE(KK,2)=DRAPE_PLY%RDRAPE(KK,2) 
+              ENDDO 
+              CALL MY_DEALLOC(DRAPE_PLY%IDRAPE)
+              CALL MY_DEALLOC(DRAPE_PLY%RDRAPE)
+            ENDDO
+             DEALLOCATE(DRAPE(IEL0)%DRAPE_PLY)  
+             DEALLOCATE(DRAPE(IEL0)%INDX_PLY)
+           ENDDO
+        ELSE
+          DO I = 1, NEL
+            INDEX(I) = I
+            INUM(1,I)=IPARTC(NFT+I)
+            INUM(2,I)=ISHEOFF(NFT+I)
+            INUM(3,I)=IXC(1,NFT+I)
+            INUM(4,I)=IXC(2,NFT+I)
+            INUM(5,I)=IXC(3,NFT+I)
+            INUM(6,I)=IXC(4,NFT+I)
+            INUM(7,I)=IXC(5,NFT+I)
+            INUM(8,I)=IXC(6,NFT+I)
+            INUM(9,I)=IXC(7,NFT+I)
+            XNUM(I)=THK(NFT+I)
+            INUM_WORKSH(1,I) = IWORKSH(1,NFT + I)
+            INUM_WORKSH(2,I) = IWORKSH(2,NFT + I)
+            INUM_WORKSH(3,I) = IWORKSH(3,NFT + I)
+            IF (NSUBDOM>0) INUM_R2R(I) = TAG_ELCF(NFT+I)
+            IF (NPERTURB > 0) THEN
+               DO IPERT = 1, NPERTURB
+                 XNUM_RNOISE(IPERT,I) = RNOISE(IPERT,NFT+I) 
+               ENDDO
+             ENDIF
+             ANGLE(I) = SH4ANG(NFT+I)          
+           ENDDO          
+        ENDIF   
+        IF(ABS(ISIGI) == 3  .OR. ABS(ISIGI) == 4 .OR. ABS(ISIGI) == 5) THEN
+          call my_alloc(INUM_PTSHEL, NEL, "INUM_PTSHEL")
+          DO I = 1, NEL
+            INUM_PTSHEL(I)=PTSHEL(NFT+I)
+          ENDDO
+         ENDIF    
+C
+        IF(NADMESH/=0)THEN
+          DO  K=1,KSH4TREE
+            DO  I=1,NEL
+              ISTOR(K,I)=SH4TREE(K,NFT+I)
+            ENDDO
+          ENDDO
+          IF(LSH4TRIM/=0)THEN
+            DO  I=1,NEL
+              ISTOR(KSH4TREE+1,I)=SH4TRIM(NFT+I)
+            ENDDO
+          END IF
+        END IF
+C 
+        IF(DOQA .NE. 0 .OR. NADMESH /=0 .OR. IDDLEVEL == 0) THEN
+          MODE=0
+          CALL MY_ORDERS( MODE, WORK, CEP(NFT+1), INDEX, NEL , 1)
+        ELSE
+          NB_NODES = 4 ! 8 nodes for solids
+          LDIM = 9 ! fist dimension of INUM
+          OFFSET = 3 ! nodes starts at INUM(4,I)
+          CALL CPP_REORDER_ELEMENTS(NEL, NSPMD, NB_NODES, OFFSET, LDIM , CEP(NFT+1), INUM, INDEX)
+        ENDIF
+        IF(NDRAPE > 0  .AND. NUMELC_DRAPE > 0) THEN
+            DO I = 1, NEL
+              PERMUTATION%SHELL(I+NFT)=INDEXS2(INDEX(I)+NFT)
+              IPARTC(I+NFT) =INUM(1,INDEX(I))
+              ISHEOFF(I+NFT)=INUM(2,INDEX(I))
+              THK(I+NFT)   =XNUM(INDEX(I))
+              IXC(1,I+NFT)=INUM(3,INDEX(I))
+              IXC(2,I+NFT)=INUM(4,INDEX(I))
+              IXC(3,I+NFT)=INUM(5,INDEX(I))
+              IXC(4,I+NFT)=INUM(6,INDEX(I))
+              IXC(5,I+NFT)=INUM(7,INDEX(I))
+              IXC(6,I+NFT)=INUM(8,INDEX(I))
+              IXC(7,I+NFT)=INUM(9,INDEX(I))
+              IF (NSUBDOM>0) TAG_ELCF(NFT+I) = INUM_R2R(INDEX(I))
+              ITR1(NFT+INDEX(I)) = NFT+I
+              IWORKSH(1, NFT + I)=INUM_WORKSH(1,INDEX(I))
+              IWORKSH(2, NFT + I)=INUM_WORKSH(2,INDEX(I))
+              IWORKSH(3, NFT + I)=INUM_WORKSH(3,INDEX(I))
+C             
+              IF (NPERTURB > 0) THEN
+                DO IPERT = 1, NPERTURB
+                  RNOISE(IPERT,I+NFT) = XNUM_RNOISE(IPERT,INDEX(I)) 
+                ENDDO
+              ENDIF
+               SH4ANG(NFT+I) = ANGLE(INDEX(I))
+               !!
+               IEL0 = XNUM_DRAPEG%INDX(INDEX(I))
+               DRAPEG%INDX(NFT + I)= 0
+               IF(IEL0 == 0) CYCLE
+               IEL = IEL + 1
+               NPT = XNUM_DRAPE(INDEX(I))%NPLY ! number of layer shell
+               call my_alloc(DRAPE(IEL)%INDX_PLY, NPT, "DRAPE(IEL)%INDX_PLY")
+               DRAPE(IEL)%INDX_PLY = 0
+               DRAPEG%INDX(NFT + I)= IEL
+               DRAPE(IEL)%INDX_PLY(1:NPT) =  XNUM_DRAPE(INDEX(I))%INDX_PLY(1:NPT)
+               DRAPE(IEL)%NPLY = NPT
+               NPT = XNUM_DRAPE(INDEX(I))%NPLY_DRAPE       ! NPT_DRP                                
+               DRAPE(IEL)%NPLY_DRAPE= NPT   
+               DRAPE(IEL)%THICK = XNUM_DRAPE(INDEX(I))%THICK 
+               allocate(DRAPE(IEL)%DRAPE_PLY(NPT))
+               DO JJ = 1, NPT         
+                 DRAPE_PLY => DRAPE(IEL)%DRAPE_PLY(JJ)                                  
+                 NSLICE = XNUM_DRAPE(INDEX(I))%DRAPE_PLY(JJ)%NSLICE                           
+                 DRAPE_PLY%NSLICE = NSLICE   
+                 DRAPE_PLY%IPID =  XNUM_DRAPE(INDEX(I))%DRAPE_PLY(JJ)%IPID
+                 call my_alloc(DRAPE_PLY%IDRAPE, NSLICE, 2, "DRAPE_PLY%IDRAPE")
+                 call my_alloc(DRAPE_PLY%RDRAPE, NSLICE, 2, "DRAPE_PLY%RDRAPE")
+                  DRAPE_PLY%IDRAPE = 0
+                  DRAPE_PLY%RDRAPE = ZERO
+                 DO KK = 1,NSLICE                                                              
+                   DRAPE_PLY%IDRAPE(KK,1) = XNUM_DRAPE(INDEX(I))%DRAPE_PLY(JJ)%IDRAPE(KK,1)    
+                   DRAPE_PLY%IDRAPE(KK,2) = XNUM_DRAPE(INDEX(I))%DRAPE_PLY(JJ)%IDRAPE(KK,2)    
+                   DRAPE_PLY%RDRAPE(KK,1) = XNUM_DRAPE(INDEX(I))%DRAPE_PLY(JJ)%RDRAPE(KK,1)    
+                   DRAPE_PLY%RDRAPE(KK,2) = XNUM_DRAPE(INDEX(I))%DRAPE_PLY(JJ)%RDRAPE(KK,2) 
+                 ENDDO                                                                         
+               ENDDO             
+            ENDDO
+        ELSE
+            DO I = 1, NEL
+              PERMUTATION%SHELL(I+NFT)=INDEXS2(INDEX(I)+NFT)
+              IPARTC(I+NFT) =INUM(1,INDEX(I))
+              ISHEOFF(I+NFT)=INUM(2,INDEX(I))
+              THK(I+NFT)   =XNUM(INDEX(I))
+              IXC(1,I+NFT)=INUM(3,INDEX(I))
+              IXC(2,I+NFT)=INUM(4,INDEX(I))
+              IXC(3,I+NFT)=INUM(5,INDEX(I))
+              IXC(4,I+NFT)=INUM(6,INDEX(I))
+              IXC(5,I+NFT)=INUM(7,INDEX(I))
+              IXC(6,I+NFT)=INUM(8,INDEX(I))
+              IXC(7,I+NFT)=INUM(9,INDEX(I))
+              IF (NSUBDOM>0) TAG_ELCF(NFT+I) = INUM_R2R(INDEX(I))
+              ITR1(NFT+INDEX(I)) = NFT+I
+              IWORKSH(1, NFT + I)=INUM_WORKSH(1,INDEX(I))
+              IWORKSH(2, NFT + I)=INUM_WORKSH(2,INDEX(I))
+              IWORKSH(3, NFT + I)=INUM_WORKSH(3,INDEX(I))
+              IF (NPERTURB > 0) THEN
+                DO IPERT = 1, NPERTURB
+                  RNOISE(IPERT,I+NFT) = XNUM_RNOISE(IPERT,INDEX(I)) 
+                ENDDO
+              ENDIF
+               SH4ANG(NFT+I) = ANGLE(INDEX(I))
+            ENDDO
+        ENDIF   ! NDRAPE  
+        
+        IF(ABS(ISIGI)==3.OR.ABS(ISIGI)== 4.OR.ABS(ISIGI)==5)THEN
+         DO I=1,NEL
+           PTSHEL(NFT+I) = INUM_PTSHEL(INDEX(I))
+         ENDDO  
+          CALL MY_DEALLOC(INUM_PTSHEL)
+        ENDIF
+        IF(NADMESH/=0)THEN
+            DO  K=1,KSH4TREE
+                DO  I=1,NEL
+                    SH4TREE(K,I+NFT)=ISTOR(K,INDEX(I))
+                ENDDO
+            ENDDO
+            IF(LSH4TRIM/=0)THEN
+                DO  I=1,NEL
+                    SH4TRIM(I+NFT)=ISTOR(KSH4TREE+1,INDEX(I))
+                ENDDO
+            END IF
+        END IF
+
+C dd-iad
+        P = CEP(NFT+INDEX(1))
+        NB = 1
+        DO I = 2, NEL
+          IF (CEP(NFT+INDEX(I))/=P) THEN
+            DD_IAD(P+1,NSPGROUP+N) = NB
+            NB = 1
+            P = CEP(NFT+INDEX(I))
+          ELSE
+            NB = NB + 1
+          ENDIF
+        ENDDO
+        DD_IAD(P+1,NSPGROUP+N) = NB
+        DO P = 2, NSPMD
+          DD_IAD(P,NSPGROUP+N) = DD_IAD(P,NSPGROUP+N)
+     .                         + DD_IAD(P-1,NSPGROUP+N)
+        ENDDO
+        DO P = NSPMD+1,2,-1
+          DD_IAD(P,NSPGROUP+N) = DD_IAD(P-1,NSPGROUP+N)+1
+        ENDDO
+        DD_IAD(1,NSPGROUP+N) = 1
+C          
+C update CEP
+C
+        DO I = 1, NEL
+          INDEX(I) = CEP(NFT+INDEX(I))          
+        ENDDO
+        DO I = 1, NEL
+          CEP(NFT+I) = INDEX(I)          
+        ENDDO
+        NFT = NFT + NEL
+C
+        IF(NDRAPE > 0 .AND. NUMELC_DRAPE > 0) THEN
+         DO I =1, NEL
+            IEL0 = XNUM_DRAPEG%INDX(I) 
+            IF(IEL0 == 0 ) CYCLE                                                        
+            NPT_DRP = XNUM_DRAPE(I)%NPLY_DRAPE                
+            DO J = 1,NPT_DRP                                             
+               CALL MY_DEALLOC(XNUM_DRAPE(I)%DRAPE_PLY(J)%RDRAPE)
+               CALL MY_DEALLOC(XNUM_DRAPE(I)%DRAPE_PLY(J)%IDRAPE)
+            ENDDO   
+            CALL MY_DEALLOC(XNUM_DRAPE(I)%INDX_PLY)
+            DEALLOCATE(XNUM_DRAPE(I)%DRAPE_PLY)
+         ENDDO
+         CALL MY_DEALLOC(XNUM_DRAPEG%INDX)
+         DEALLOCATE(XNUM_DRAPE)
+        ELSE
+          DEALLOCATE(XNUM_DRAPE )      
+        ENDIF 
+        !!
+        CALL MY_DEALLOC(INUM_WORKSH)
+      ENDDO   ! ND       
+C
+C TREE RENUMBERING
+C
+      IF(NADMESH/=0)THEN
+        DO  I=1,NUMELC
+          IF(SH4TREE(1,I)/=0)
+     .       SH4TREE(1,I)=ITR1(SH4TREE(1,I))
+          IF(SH4TREE(2,I)/=0)
+     .       SH4TREE(2,I)=ITR1(SH4TREE(2,I))
+        ENDDO
+      END IF
+C
+C RENUMBERING FOR SURFACES
+C
+      DO I=1,NSURF
+        NN=IGRSURF(I)%NSEG
+        DO J=1,NN
+          IF (IGRSURF(I)%ELTYP(J) == 3)
+     .        IGRSURF(I)%ELEM(J) = ITR1(IGRSURF(I)%ELEM(J))
+        ENDDO
+      ENDDO
+C
+C RENUMBERING FOR shell in Accel (gauge)
+C
+      DO I=1,NBGAUGE
+         N1 = LGAUGE(1,I)
+         IF(N1 <= 0) THEN
+            N1=-LGAUGE(3,I)
+            IF(N1 > 0) LGAUGE(3,I)=-ITR1(N1)
+         ENDIF
+      ENDDO
+C
+C RENUMBERING FOR SHELL GROUPS
+C
+      DO I=1,NGRSHEL
+        NN=IGRSH4N(I)%NENTITY
+        DO J=1,NN
+          IGRSH4N(I)%ENTITY(J) = ITR1(IGRSH4N(I)%ENTITY(J))
+        ENDDO
+      ENDDO
+C
+C renumbering INVERSE CONNECTIVITY
+C
+      DO I=1,4*NUMELC
+        IF(NOD2ELC(I) /= 0)NOD2ELC(I)=ITR1(NOD2ELC(I))
+      END DO
+C              
+C-------------------------------------------------------------------------
+C phase 2 : grouping by MVSIZ groups
+C ngroup is global, iparg is global but organized according to dd
+C
+      DO 300 N=1,ND
+       NFT = 0
+       DO P = 1, NSPMD
+        NGP(P)=0
+        NEL = DD_IAD(P+1,NSPGROUP+N)-DD_IAD(P,NSPGROUP+N)
+        IF (NEL>0) THEN
+         NEL_PREC = DD_IAD(P,NSPGROUP+N)-DD_IAD(1,NSPGROUP+N)
+         NGP(P)=NGROUP
+         DO WHILE (NFT < NEL_PREC+NEL)
+C ngroup global
+          NGROUP=NGROUP+1
+          II = EADD(N)+NFT
+          MID = IXC(1,II)
+          MLN = NINT(PM(19,MID))
+          PID = IXC(6,II)
+          IPARTR2R = 0
+          IF (NSUBDOM>0) IPARTR2R = TAG_MAT(MID)
+          NPN   = IGEO(4,PID)
+          ISMST = IGEO(5,PID)
+          IGTYP = IGEO(11,PID)
+          ISROT = IGEO(20,PID)
+          IPINCH= IGEO(51,PID)
+          ISHXFEM_PLY = IGEO(19,PID)
+          IREP = IGEO(6,PID)
+          IHBE = NINT(GEO(171,PID))
+          ITHK = NINT(GEO(35,PID))
+          IPLA = NINT(GEO(39,PID))
+          ISTRAIN = NINT(GEO(11,PID))
+          ICSEN= IGEO(3,PID)
+          IGMAT = IGEO(98 ,PID)
+          NLEVXF = 0
+          IXFEM = 0
+          ISUBSTACK = 0
+          IDRAPE = 0
+          IF (IGTYP == 17 .OR. IGTYP == 51 .OR. IGTYP == 52) THEN
+            NPN = IWORKSH(1,II)
+            ISUBSTACK =IWORKSH(3,II)
+            IF(NPN == 0) THEN
+              ID = IGEO(1,PID)
+              CALL FRETITL2(TITR,IGEO(NPROPGI-LTITR+1,PID),LTITR)
+              CALL ANCMSG(MSGID=1241,
+     .                    MSGTYPE=MSGERROR,
+     .                    ANMODE=ANINFO,
+     .                    I1=ID,
+     .                    C1=TITR,
+     .                    I2=IXC(NIXC,II))
+               CALL ARRET(2)
+            ENDIF
+          ENDIF
+          IF(NDRAPE > 0 .AND. (IGTYP == 17 .OR. IGTYP == 51 .OR. IGTYP ==52) ) THEN
+              IF(DRAPEG%INDX(II) /= 0 ) IDRAPE = 1
+          ENDIF
+          ISHEL=IHBE+1
+          IF ((ISHEL /=12 .AND. ISHEL /=24).AND.ISHEL > 5 ) THEN  ! not expected 
+            CALL FRETITL2(TITR,IGEO(NPROPGI-LTITR+1,PID),LTITR)
+            CALL ANCMSG(MSGID=3007,
+     .                  ANMODE=ANINFO,
+     .                  MSGTYPE=MSGERROR,
+     .                  I1=IGEO(1,PID),
+     .                  C1=TITR,
+     .                  I2=ISHEL,
+     .                  PRMOD=MSG_CUMU)
+          ENDIF
+c-------- check xfem compatibility
+c          IF (ICRACK3D > 0) THEN
+            IF (IGTYP == 11 .or. IGTYP == 16) THEN
+              DO IPT = 1, NPN                                    
+                IMATLY  = IGEO(100+IPT,PID)
+                IF (MAT_PARAM(IMATLY)%NFAIL > 0) THEN
+                  IXFEM = MAT_PARAM(IMATLY)%IXFEM
+                ENDIF
+              ENDDO                                              
+              IF (IXFEM  > 0) IXFEM = 1
+              IF (IXFEM == 1) NLEVXF = NXEL*NPN
+            ELSEIF (IGTYP == 51 .OR. IGTYP == 52) THEN
+               IPPID   = 2
+               IPMAT   = IPPID + NPN
+               DO IPT = 1, NPN
+                 IMATLY  = STACK%IGEO(IPMAT + IPT ,ISUBSTACK)
+                 IF (MAT_PARAM(IMATLY)%NFAIL > 0) IXFEM = MAT_PARAM(IMATLY)%IXFEM
+                 IF (IXFEM  > 0) IXFEM = 1
+                 IF (IXFEM == 1) NLEVXF = NXEL*NPN
+               ENDDO
+            ELSEIF (IGTYP == 1 .or. IGTYP == 9 .or. IGTYP == 10 .or. IGTYP == 17) THEN
+              IXFEM = MAT_PARAM(MID)%IXFEM
+              IF (IXFEM == 1) THEN
+                IXFEM  = 2
+                NLEVXF = NXEL 
+              ENDIF
+            ENDIF
+            NLEVMAX = MAX(NLEVMAX, NLEVXF)
+c          ENDIF
+c
+          IF (IHBE == 11 .and. IXFEM > 0) THEN  ! not compatible with Batoz shells
+            IXFEM     = 0
+            NLEVXF    = 0
+            NLEVMAX   = 0
+            NUMELCRK  = 0
+            ICRACK3D  = 0
+            IXFEM_ERR = 1
+            CALL ANCMSG(MSGID=1601,
+     .                  ANMODE=ANINFO,
+     .                  MSGTYPE=MSGERROR,
+     .                  I1=IGEO(1,PID),
+     .                  C1=TITR,
+     .                  PRMOD=MSG_CUMU)
+          ENDIF
+c--------
+C         
+          ID=IGEO(1,PID)
+          CALL FRETITL2(TITR,IGEO(NPROPGI-LTITR+1,PID),LTITR)
+C--------------------
+C-   ISMSTR IPLAST,ITHICK Automatic           
+C-----------all shell prop
+          IF (IGTYP > 0)  THEN
+C----- fixed to 1 excepting small strain case          
+           IF (ITHK<0) THEN
+            ITHK = 1 
+            IF (MAT_PARAM(MID)%SMSTR==1 .OR. MLN == 1) ITHK = 0
+C------- Out message       
+            ISM0 = ITHK
+            IF (ITHK == 0) ISM0=2
+                CALL ANCMSG(MSGID=1770,
+     .                      MSGTYPE=MSGINFO,
+     .                      ANMODE=ANINFO_BLIND_2,
+     .                      I1=ID,
+     .                      C1=TITR,
+     .                      I2=ISM0,
+     .                      PRMOD=MSG_CUMU)
+           END IF
+C----- fixed to iterative, but can be changed according to law           
+           IF (IPLA<0) THEN
+             IPLA = 1
+C------- Out message       
+                CALL ANCMSG(MSGID=1771,
+     .                      MSGTYPE=MSGINFO,
+     .                      ANMODE=ANINFO_BLIND_2,
+     .                      I1=ID,
+     .                      C1=TITR,
+     .                      I2=IPLA,
+     .                      PRMOD=MSG_CUMU)
+           END IF 
+C------ --           
+           IF (ISMST<0) THEN
+C---  MATPARAM%SMSTR : 2 large, 1: small  ;   MATPARAM%STRAIN_FORMULATION : 1 inc, 2 total     
+c       there is no recommended total strain for shell for the moment
+              IF (MAT_PARAM(MID)%SMSTR==1) THEN
+                ISMST = 1
+              ELSE
+                ISMST = 2
+C----certain laws to use 4 to see one by one
+                IF (MAT_PARAM(MID)%STRAIN_FORMULATION==2) ISMST =4             
+                IF (MLN == 58 ) ISMST =4
+                IF (MLN == 19 .AND. NPN==1) ISMST =11
+              END IF
+              GEO(3,PID) = ISMST
+C------- Out message       
+                CALL ANCMSG(MSGID=1772,
+     .                      MSGTYPE=MSGINFO,
+     .                      ANMODE=ANINFO_BLIND_2,
+     .                      I1=ID,
+     .                      C1=TITR,
+     .                      I2=ISMST,
+     .                      PRMOD=MSG_CUMU)
+           END IF
+          END IF !(IGTYP > 0)  THEN
+C-----
+          IF (IGTYP == 16 .and. MLN == 58 .and. ISMST /= 4) THEN
+            ISMST = 4
+            CALL ANCMSG(MSGID=772,
+     .                  MSGTYPE=MSGWARNING,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                   I1=ID,
+     .                   C1=TITR,
+     .                   PRMOD=MSG_CUMU)
+          ENDIF
+          IF (IGTYP == 1 .AND. (MLN == 25 .OR. 
+     .        MLN == 15  )) THEN
+            CALL ANCMSG(MSGID=1052,
+     .                  MSGTYPE=MSGERROR,
+     .                  ANMODE=ANINFO,
+     .                   I1=ID,
+     .                   C1=TITR,
+     .                   I2=IPM(1,MID))
+          ELSEIF (IGTYP == 1 .AND. (MLN ==57.OR. MLN ==78 .OR.
+     .        MLN == 32 .OR. MLN == 43 .OR. MLN == 73.OR.MLN == 87
+     .        .OR.MLN == 107.OR.MLN == 112) ) THEN
+            CALL ANCMSG(MSGID=1065,
+     .                  MSGTYPE=MSGWARNING,
+     .                  ANMODE=ANINFO_BLIND_1,
+     .                   I1=ID,
+     .                   C1=TITR,
+     .                   I2=IPM(1,MID))
+          ELSEIF (IGTYP == 1 .AND. MLN ==200)THEN
+             CALL ANCMSG(MSGID=2035,
+     .                   MSGTYPE=MSGERROR,
+     .                   ANMODE=ANINFO_BLIND_1,
+     .                   I1=ID,
+     .                   C1=TITR,
+     .                   I2=MLN)
+          ENDIF
+          IF (IGTYP == 1 .and. ISMST == 11 ) THEN
+           ! ISMST = 11 compatibility
+            ISMST = 2
+                CALL ANCMSG(MSGID=1876,
+     .                      MSGTYPE=MSGWARNING,
+     .                      ANMODE=ANINFO_BLIND_2,
+     .                      I1=ID,
+     .                      C1=TITR,
+     .                      I2=MLN,
+     .                      I3=ISMST,
+     .                      PRMOD=MSG_CUMU)
+          ELSEIF (ISMST == 10 ) THEN
+            IF (ISHEL /=12 .AND. ISHEL /=24 ) THEN  ! not expected 
+              CALL ANCMSG(MSGID=3019,
+     .                    ANMODE=ANINFO,
+     .                    MSGTYPE=MSGWARNING,
+     .                    I1=ID,
+     .                    C1=TITR,
+     .                    I2=ISHEL,
+     .                    PRMOD=MSG_CUMU)
+              ISMST = 2
+            ENDIF
+            IF (MLN /=42 .AND. MLN /=69 .AND. MLN /=88 .and. MLN /= 99) THEN
+              CALL ANCMSG(MSGID=3020, ANMODE=ANINFO, MSGTYPE=MSGWARNING,
+     .                    I1=ID,
+     .                    C1=TITR,
+     .                    I2=MLN,
+     .                    PRMOD=MSG_CUMU)
+              ISMST = 2
+            ENDIF
+          ENDIF
+
+          IF(IGTYP == 0)MLN=0
+          IF(NADMESH == 0)THEN
+            ILEV=0
+            MY_NVSIZ=NVSIZ
+          ELSE
+            PRT = IPARTC(II)
+            IADM= IPART(10,PRT)
+            IF(IADM==0)THEN
+              ILEV = 0
+              MY_NVSIZ=NVSIZ
+            ELSE
+              ILEV= SH4TREE(3,II)
+              IF(ILEV<0)ILEV=-ILEV-1
+              MY_NVSIZ=MAX(4,MIN(4**ILEV,NVSIZ))
+            END IF
+          END IF
+c------
+c         global integration 
+          IF (NPN > 1  .and. MLN == 1) THEN
+            NPN = 0
+            CALL FRETITL2(TITR2,IPM(NPROPMI-LTITR+1,MID),LTITR)             
+            CALL ANCMSG(MSGID=1084,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  MSGTYPE=MSGWARNING,   
+     .                  I1=ID,
+     .                  C1=TITR,     
+     .                  I2=IPM(1,MID),
+     .                  C2=TITR2,
+     .                  PRMOD=MSG_CUMU)
+          ENDIF
+          IF (NPN > 1  .and. (MLN == 91 .or. MLN == 136)) THEN
+            NPN = 0
+          ENDIF
+c         switch global integration to npt=3 
+          IF (NPN == 0  .and. MLN /= 0 .and. MLN /= 1 .and. MLN /= 91 
+     .        .and. MLN /= 136) THEN
+              CALL ANCMSG(MSGID=1912,
+     .                    ANMODE=ANINFO,
+     .                    MSGTYPE=MSGWARNING,
+     .                    I1=ID,
+     .                    C1=TITR,
+     .                    I2=MLN,
+     .                    PRMOD=MSG_CUMU)
+            NPN = 3
+          ENDIF
+          IF (NPN == 0  .and. MLN > 2   .and. MLN /= 22 .and. 
+     .        MLN /= 36 .and. MLN /= 43 .and. MLN /= 60 .and.
+     .        MLN /= 86 .and. MLN /= 13 .and. MLN /= 91 .and. 
+     .        MLN /= 136) THEN
+              CALL FRETITL2(TITR1,
+     .                      IPM(NPROPMI-LTITR+1,MID),
+     .                      LTITR)
+              CALL ANCMSG(MSGID=23,
+     .                    ANMODE=ANINFO,
+     .                    MSGTYPE=MSGERROR,
+     .                    I1=ID,
+     .                    C1=TITR,
+     .                    I2=IPM(1,MID),
+     .                    C2=TITR1,
+     .                    I3=MLN)
+          ENDIF
+c
+          IF (NPN == 0.AND.(MLN == 36.OR.MLN == 86))THEN
+            IF(IPLA == 0) IPLA=1
+            IF(IPLA == 2) IPLA=0
+          ELSEIF(NPN == 0.AND.MLN == 2)THEN
+            IF(IPLA == 2) IPLA=0
+          ELSE
+            IF(IPLA == 2) IPLA=0
+            IF(IPLA == 3) IPLA=2
+          ENDIF
+C
+          IF(ITHK == 2)THEN
+            ITHK = 0
+          ELSEIF(MLN == 32)THEN
+            ITHK = 1
+          ENDIF
+C---------Drilling dof---ISHELL=12(QBAT uses NB4)--------         
+         IF (ISROT>0.AND.IHBE<11) THEN
+          CALL ANCMSG(MSGID=854,
+     .                MSGTYPE=MSGWARNING,
+     .                ANMODE=ANINFO_BLIND_2,
+     .                I1=ID,
+     .                C1=TITR)
+          ISROT=0
+         END IF
+C------
+          CALL ZEROIN(1,NPARG,IPARG(1,NGROUP))
+          IPARG(1,NGROUP) = MLN
+          NE1 = MIN( MY_NVSIZ, NEL + NEL_PREC - NFT)
+          IPARG(2,NGROUP) = NE1
+          IPARG(3,NGROUP)=  EADD(N)-1 + NFT
+          IPARG(4,NGROUP) = LBUFEL+1  !  kept in place for compatibility with
+c                                        other groups using old buffer
+          IPARG(43,NGROUP) = 0
+C
+         NVARV = 0
+         IVISC = 0
+         IFWV  = 0
+C-------------
+        
+         IF (IGTYP == 11) THEN
+           DO IPT = 1, NPN                                         
+              IMATLY  = IGEO(100+IPT,PID)                          
+              IF(MAT_PARAM(IMATLY)%NFAIL >  0)THEN                         
+                 IPARG(43,NGROUP) = 1                              
+              ENDIF                                                
+              IF (MAT_PARAM(IMATLY)%IVISC > 0 ) IVISC =  1                 
+              IF (MAT_PARAM(IMATLY)%IFAILWAVE > 0)  IFWV = 1                         
+           ENDDO                                                   
+C-------------
+         ELSEIF(IGTYP == 17) THEN
+!!               IIGEO   =  40 + 5*(ISUBSTACK - 1) 
+!!               IADI    = IGEO(IIGEO + 3,PID)
+!!               IPPID   = IADI
+!!               IPMAT   = IPPID + NPN
+!!               IPMAT_IPLY   = IPMAT + NPN
+               IPPID   = 2
+               IPMAT   = IPPID + NPN
+               DO IPT = 1, NPN
+                IMATLY  = STACK%IGEO(IPMAT + IPT ,ISUBSTACK)
+                IF(MAT_PARAM(IMATLY)%NFAIL >  0)THEN
+                 IPARG(43,NGROUP) = 1
+                ENDIF
+                IF( MAT_PARAM(IMATLY)%IVISC > 0 ) IVISC =  1  
+               ENDDO 
+C---
+C new shell property (variable NPT through each layer)
+C---
+         ELSEIF (IGTYP == 51 .OR. IGTYP == 52) THEN
+               NB_LAW58 = 0
+               IPPID   = 2
+               IPMAT   = IPPID + NPN
+               DO IPT = 1, NPN
+                 IMATLY  = STACK%IGEO(IPMAT + IPT ,ISUBSTACK)
+                 IF (MAT_PARAM(IMATLY)%NFAIL >  0) THEN
+                   IPARG(43,NGROUP) = 1
+                 ENDIF
+                 IF (MAT_PARAM(IMATLY)%IVISC > 0) IVISC =  1  
+                 IF (MAT_PARAM(IMATLY)%IFAILWAVE > 0) IFWV = 1                         
+C --- PID 51 combined with LAW58 ---
+                 IF (NINT(PM(19,IMATLY)) == 58) NB_LAW58 = NB_LAW58 + 1
+               ENDDO
+C --- set new IREP for groups:
+               IF (NB_LAW58 == NPN) THEN
+                 IREP = 2
+               ELSEIF (NB_LAW58 > 0) THEN
+                 IREP = IREP + 3
+               ENDIF
+C-------------
+         ELSE  ! IGTYP = 1
+            IF(MAT_PARAM(MID)%NFAIL > 0.AND.MLN /= 0 .AND. MLN /=13)THEN
+              IPARG(43,NGROUP) = 1
+            ENDIF
+            IF (MAT_PARAM(MID)%IVISC > 0 ) IVISC =  1  
+            IF (MAT_PARAM(MID)%IFAILWAVE > 0)  IFWV = 1                         
+         ENDIF ! IGTYP 
+C-------------
+C         
+         IF (MLN == 13) IRIGID_MAT = 1
+         JTHE = NINT(PM(71,MID))           
+C        thermal material expansion 
+         IPARG(49,NGROUP) = 0
+         IF(IPM(218,MID) > 0 .AND. MLN /= 0 .AND. MLN /=13) THEN
+          IPARG(49,NGROUP) = 1
+         ENDIF
+C        Visco model using /VISC
+         IF (IVISC > 0 .AND. MLN /= 0 .AND. MLN /=13) THEN
+           IPARG(61,NGROUP) = 1
+         ENDIF   
+C          
+         JSMS=0
+         IF(ISMS/=0)THEN
+           IF(IDTGRS/=0)THEN
+             IF(TAGPRT_SMS(IPARTC(II))/=0)JSMS=1
+           ELSE
+             JSMS=1
+           END IF
+         END IF
+         IPARG(52,NGROUP)=JSMS
+C---------
+          IPARG(54,NGROUP) = IXFEM
+          IPARG(65,NGROUP) = NLEVXF
+C         flag for group of duplicated elements in multidomains
+          IF (NSUBDOM>0) IPARG(77,NGROUP)= IPARTR2R
+          IPARG(5,NGROUP)  = 3          ! ITY
+          IPARG(6,NGROUP)  = NPN
+          IPARG(9,NGROUP)  = ISMST
+          IPARG(13,NGROUP) = JTHE !shell : 0 or 1 only
+          IPARG(23,NGROUP) = IHBE
+          IPARG(28,NGROUP) = ITHK
+          IPARG(29,NGROUP) = IPLA
+          IPARG(41,NGROUP) = ISROT
+          IPARG(44,NGROUP) = ISTRAIN
+          IPARG(62,NGROUP) = PID
+          IPARG(90,NGROUP) = IPINCH
+C
+          ISEATBELT = 0
+          IF(MLN == 119) ISEATBELT = 1
+          IPARG(91,NGROUP) = ISEATBELT
+C         damping frequency range apply to group
+          IDAMP_FREQ_RANGE = DAMP_RANGE_PART(IPARTC(II))
+          IPARG(93,NGROUP) = IDAMP_FREQ_RANGE
+C
+          NSG = 1
+          KFTS= 0
+          DO 210 J = 2,NE1
+            MIDN = IXC(1,J+EADD(N)+NFT-1)
+            PIDN = IXC(6,J+EADD(N)+NFT-1)
+            IF(MID/=MIDN.OR.PID/=PIDN)THEN
+              PID = PIDN
+              MID = MIDN
+              NSG = NSG + 1
+              KFTS= J
+            ENDIF
+  210     CONTINUE
+C
+          IPARG(10,NGROUP)= NSG
+          IPARG(18,NGROUP)= MID
+          IPARG(30,NGROUP)= KFTS
+          IPARG(35,NGROUP)= IREP
+          IPARG(38,NGROUP)= IGTYP
+          IPARG(39,NGROUP)= ICSEN
+          IPARG(45,NGROUP)= ILEV
+          IF(NADMESH/=0)THEN
+            IPARG(8,NGROUP)=1
+            DO J=1,NE1
+              SH4TREE(4,J+EADD(N)+NFT-1)=NGROUP
+              JLEV=SH4TREE(3,J+EADD(N)+NFT-1)
+              IF(JLEV >= 0)IPARG(8,NGROUP)=0
+            END DO
+          END IF
+
+          NUVARR = 0
+          IF (IGTYP == 11) THEN
+            MPT  = IABS(NPN)
+            DO IPT= 1,MPT
+             DO J=1,NE1
+              IE=J+EADD(N)+NFT-1
+              IMATLY  = IGEO(100+IPT,IXC(6,IE))
+              NUVARR = MAX(NUVARR,IPM(221,IXC(1,IE)))
+             ENDDO
+            ENDDO
+          ELSE
+            DO J=1,NE1
+             IE=J+EADD(N)+NFT-1
+             NUVARR = MAX(NUVARR,IPM(221,IXC(1,IE)))
+            ENDDO
+          END IF
+          IPARG(47,NGROUP)=NUVARR
+
+
+          IF(IHBE == 11)THEN
+            NPG=4
+          ELSE
+            NPG=1
+          END IF
+          IPARG(48,NGROUP)=NPG
+C group/processor identification
+          IPARG(32,NGROUP) = P-1
+          IPARG(50,NGROUP) = ISHXFEM_PLY  
+C for stack         
+          IPARG(71,NGROUP) = ISUBSTACK 
+          IPARG(75,NGROUP) = IGMAT
+c         non-local variable regularization flag for failure models
+          IPARG(78,NGROUP) = MAT_PARAM(MID)%NLOC   ! NLOC_FAIL 
+          IPARG(79,NGROUP) = IFWV
+C
+          IPARG(92,NGROUP) = IDRAPE  !
+          NFT = NFT + NE1  
+C         
+         END DO
+         NGP(P)=NGROUP-NGP(P)
+        ENDIF
+       ENDDO
+C Dd_iad => nb groups per sub domain
+       NGP(NSPMD+1)=0
+       DO P = 1, NSPMD
+         NGP(NSPMD+1)=NGP(NSPMD+1)+NGP(P)
+         DD_IAD(P,NSPGROUP+N)=NGP(P)
+       END DO
+       DD_IAD(NSPMD+1,NSPGROUP+N)=NGP(NSPMD+1)
+       
+C
+  300 CONTINUE
+c
+      IF (IXFEM_ERR == 1) ICRACK3D = 0
+C
+      NSPGROUP = NSPGROUP + ND
+C-----------
+      CALL ANCMSG(MSGID=1084,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  MSGTYPE=MSGWARNING,
+     .                  PRMOD=MSG_PRINT) 
+c
+      CALL ANCMSG(MSGID=1601,                 
+     .            ANMODE=ANINFO,
+     .            MSGTYPE=MSGERROR,
+     .            I1=PID,
+     .            C1=TITR ,
+     .            PRMOD=MSG_PRINT)       
+      CALL ANCMSG(MSGID=1770,
+     .                  MSGTYPE=MSGINFO,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  PRMOD=MSG_PRINT)
+      CALL ANCMSG(MSGID=1771,
+     .                  MSGTYPE=MSGINFO,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  PRMOD=MSG_PRINT)
+      CALL ANCMSG(MSGID=1772,
+     .                  MSGTYPE=MSGINFO,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  PRMOD=MSG_PRINT)
+      CALL ANCMSG(MSGID=1876,
+     .                  MSGTYPE=MSGWARNING,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  PRMOD=MSG_PRINT)
+      CALL ANCMSG(MSGID=1912,                 
+     .            ANMODE=ANINFO_BLIND_2,
+     .            MSGTYPE=MSGWARNING,
+     .            PRMOD=MSG_PRINT)       
+      CALL ANCMSG(MSGID=772,
+     .                  MSGTYPE=MSGWARNING,
+     .                  ANMODE=ANINFO_BLIND_2,
+     .                  PRMOD=MSG_PRINT)
+      CALL ANCMSG(MSGID=3007,                 
+     .            ANMODE=ANINFO,
+     .            MSGTYPE=MSGERROR,
+     .            PRMOD=MSG_PRINT)       
+      CALL ANCMSG(MSGID=3019,                 
+     .            ANMODE=ANINFO,
+     .            MSGTYPE=MSGWARNING,
+     .            PRMOD=MSG_PRINT)       
+      CALL ANCMSG(MSGID=3020,                 
+     .            ANMODE=ANINFO,
+     .            MSGTYPE=MSGWARNING,
+     .            PRMOD=MSG_PRINT)       
+C-----------
+      IF(PRINT_FLAG>6) THEN
+        WRITE(IOUT,1000) 
+        DO  N=NGR1,NGROUP
+            MLN = IPARG(1,N)       
+c
+            WRITE(IOUT,1001)N,MLN,IPARG(2,N),IPARG(3,N)+1,
+     +                IPARG(5,N),IABS(IPARG(6,N)),
+     +                IPARG(9,N),IPARG(10,N),IPARG(44,N),
+     +                IPARG(23,N),IPARG(43,N),IPARG(90,N)   
+        ENDDO
+      ENDIF
+C-----------
+ 1000 FORMAT(/
+     +       /6X,'3D - SHELL ELEMENT GROUPS'/
+     +        6X,'-------------------------'/
+     +'      GROUP   MATERIAL    ELEMENT      FIRST',
+     +'    ELEMENT      INTEG',
+     +'      SMALL        SUB     STRAIN  HOURGLASS    FAILURE   PINCHING'/
+     +'                   LAW     NUMBER    ELEMENT',
+     +'       TYPE        PTS',
+     +'     STRAIN     GROUPS     OUTPUT       FLAG       FLAG       FLAG'/)
+ 1001 FORMAT(12(1X,I10))
+cc 1002 FORMAT(/6X,'BUFFER LENGTH : ',I10 )
+C
+      IF (ALLOCATED(XNUM_RNOISE)) CALL MY_DEALLOC(XNUM_RNOISE)
+C
+
+      CALL MY_DEALLOC(INDEXS2)
+      CALL MY_DEALLOC(ISTOR)
+      CALL MY_DEALLOC(INUM_R2R)
+      CALL MY_DEALLOC(ANGLE)
+      RETURN
+      END

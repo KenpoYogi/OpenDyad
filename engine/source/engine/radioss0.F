@@ -1,0 +1,99 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    radioss0                   ../engine/source/engine/radioss0.F
+!||--- called by ------------------------------------------------------
+!||    radioss                    ../engine/source/engine/radioss.F
+!||--- calls      -----------------------------------------------------
+!||    execargcheck               ../engine/source/engine/execargcheck.F
+!||    file_init                  ../common_source/tools/input_output/write_routines.c
+!||    init_dyn_lib_struc         ../engine/share/modules/dynlib_mod.F
+!||    radioss2                   ../engine/source/engine/radioss2.F
+!||    radioss_set_env_variable   ../common_source/comm/radioss_set_env_variable.c
+!||--- uses       -----------------------------------------------------
+!||    dynlib_mod                 ../engine/share/modules/dynlib_mod.F
+!||    inoutfile_mod              ../common_source/modules/inoutfile_mod.F
+!||====================================================================
+      SUBROUTINE  RADIOSS0
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE INOUTFILE_MOD
+      USE DYNLIB_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "chara_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER MRDATA, MIDATA
+      PARAMETER(MRDATA=3,MIDATA=9)
+      INTEGER, DIMENSION(:),ALLOCATABLE :: IDATA
+      my_real
+     +       , DIMENSION(:),ALLOCATABLE :: RDATA
+      INTEGER I
+ 
+ 
+      INTEGER :: DYN_LIB_MODE
+C     Reading the D01 file to detect the /MADYMO/ON option
+C     is not allowed in SPMD.
+C     => A modify if this option should be supported in SPMD ../ ..
+C----------------------------------------------
+C Run argument parameters
+      CALL FILE_INIT()       ! Initialize C FILE buffer for IEEE writing
+
+C 
+      ALLOCATE( DLIB_STRUCT(NBR_DLIB) )
+      DYN_LIB_MODE = 0
+      CALL INIT_DYN_LIB_STRUC(DYN_LIB_MODE)
+      CALL EXECARGCHECK(GOT_INPUT, INPUT, LENINPUT,
+     *                  GOT_PATH,  PATH,  LENPATH )
+
+!     ----------------------------
+!     if -infile or outfile cdl are used, then one needs to change $TMPDIR 
+!     in order to write all scratch files in the user folder
+      IF(INOUT_BOOL) CALL RADIOSS_SET_ENV_VARIABLE(OUTFILE_NAME , OUTFILE_NAME_LEN)
+!     ---------------------------- 
+C-----------------------------------------------
+C     Minimum allowance (in the absence of Madymo coupling).
+      ALLOCATE(IDATA(MIDATA))
+      ALLOCATE(RDATA(MRDATA))
+      DO I=1,MIDATA
+       IDATA(I)=0
+      ENDDO
+      DO I=1,MRDATA
+       RDATA(I)=ZERO
+      ENDDO
+C-----------------------------------------------
+      CALL RADIOSS2(IDATA, MIDATA, RDATA, MRDATA)
+C-----------------------------------------------
+      RETURN
+      END 
+
+

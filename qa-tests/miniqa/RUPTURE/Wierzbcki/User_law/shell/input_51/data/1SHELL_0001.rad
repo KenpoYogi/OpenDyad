@@ -1,0 +1,32 @@
+# Copyright (C) 2026 SISW Siemens Industry Software Inc. ("Holder")
+# Model is licensed by Holder under CC BY-NC 4.0
+# (https://creativecommons.org/licenses/by-nc/4.0/legalcode).
+#
+/RUN/1SHELL/1
+ 0.01001
+#
+/PRINT/-500
+#
+/DT/NODA
+0.67 0
+#
+/TFILE
+0.00001
+#
+/RFILE
+50000 0 0
+#
+/ANIM/DT
+0 0.001
+/ANIM/ELEM/EPSP
+/ANIM/ELEM/ENER
+/ANIM/ELEM/HOUR
+/ANIM/ELEM/VONM
+/ANIM/VECT/VEL
+/ANIM/NODA/DMAS
+/ANIM/MASS
+/ANIM/SHELL/TENS/STRAIN/ALL
+/ANIM/GZIP
+#
+/MON/ON
+#

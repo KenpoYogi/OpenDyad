@@ -1,0 +1,242 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+! --------------------------------------------------------------------------------------------------------------
+!
+!||====================================================================
+!||    func_table_copy_mod       ../starter/source/materials/tools/func_table_copy.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_fail_biquad       ../starter/source/materials/fail/biquad/hm_read_fail_biquad.F
+!||    hm_read_fail_connect      ../starter/source/materials/fail/connect/hm_read_fail_connect.F
+!||    hm_read_fail_energy       ../starter/source/materials/fail/energy/hm_read_fail_energy.F
+!||    hm_read_fail_fabric       ../starter/source/materials/fail/fabric/hm_read_fail_fabric.F
+!||    hm_read_fail_fld          ../starter/source/materials/fail/fld/hm_read_fail_fld.F
+!||    hm_read_fail_gene1        ../starter/source/materials/fail/gene1/hm_read_fail_gene1.F
+!||    hm_read_fail_nxt          ../starter/source/materials/fail/nxt/hm_read_fail_nxt.F
+!||    hm_read_fail_orthbiquad   ../starter/source/materials/fail/orthbiquad/hm_read_fail_orthbiquad.F
+!||    hm_read_fail_orthstrain   ../starter/source/materials/fail/orthstrain/hm_read_fail_orthstrain.F
+!||    hm_read_fail_sahraei      ../starter/source/materials/fail/sahraei/hm_read_fail_sahraei.F
+!||    hm_read_fail_snconnect    ../starter/source/materials/fail/snconnect/hm_read_fail_snconnect.F
+!||    hm_read_fail_tab2         ../starter/source/materials/fail/tabulated/hm_read_fail_tab2.F
+!||    hm_read_fail_tensstrain   ../starter/source/materials/fail/tensstrain/hm_read_fail_tensstrain.F
+!||    hm_read_mat123            ../starter/source/materials/mat/mat123/hm_read_mat123.F90
+!||    hm_read_mat125            ../starter/source/materials/mat/mat125/hm_read_mat125.F90
+!||    hm_read_mat129            ../starter/source/materials/mat/mat129/hm_read_mat129.F90
+!||    hm_read_mat132            ../starter/source/materials/mat/mat132/hm_read_mat132.F90
+!||    hm_read_mat135            ../starter/source/materials/mat/mat135/hm_read_mat135.F90
+!||    hm_read_mat50             ../starter/source/materials/mat/mat050/hm_read_mat50.F90
+!||    hm_read_mat57             ../starter/source/materials/mat/mat057/hm_read_mat57.F90
+!||    hm_read_mat87             ../starter/source/materials/mat/mat087/hm_read_mat87.F90
+!||    hm_read_mat88             ../starter/source/materials/mat/mat088/hm_read_mat88.F90
+!||====================================================================
+      module func_table_copy_mod
+        implicit none
+      contains
+
+!! \brief  creates local 2d table in material parameter structure from input function list
+!! \detail mat_param table array : mat_param%ntable > 0 should be already allocated
+
+!||====================================================================
+!||    func_table_copy           ../starter/source/materials/tools/func_table_copy.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_fail_biquad       ../starter/source/materials/fail/biquad/hm_read_fail_biquad.F
+!||    hm_read_fail_connect      ../starter/source/materials/fail/connect/hm_read_fail_connect.F
+!||    hm_read_fail_energy       ../starter/source/materials/fail/energy/hm_read_fail_energy.F
+!||    hm_read_fail_fabric       ../starter/source/materials/fail/fabric/hm_read_fail_fabric.F
+!||    hm_read_fail_fld          ../starter/source/materials/fail/fld/hm_read_fail_fld.F
+!||    hm_read_fail_gene1        ../starter/source/materials/fail/gene1/hm_read_fail_gene1.F
+!||    hm_read_fail_nxt          ../starter/source/materials/fail/nxt/hm_read_fail_nxt.F
+!||    hm_read_fail_orthbiquad   ../starter/source/materials/fail/orthbiquad/hm_read_fail_orthbiquad.F
+!||    hm_read_fail_orthstrain   ../starter/source/materials/fail/orthstrain/hm_read_fail_orthstrain.F
+!||    hm_read_fail_sahraei      ../starter/source/materials/fail/sahraei/hm_read_fail_sahraei.F
+!||    hm_read_fail_snconnect    ../starter/source/materials/fail/snconnect/hm_read_fail_snconnect.F
+!||    hm_read_fail_tab2         ../starter/source/materials/fail/tabulated/hm_read_fail_tab2.F
+!||    hm_read_fail_tensstrain   ../starter/source/materials/fail/tensstrain/hm_read_fail_tensstrain.F
+!||    hm_read_mat123            ../starter/source/materials/mat/mat123/hm_read_mat123.F90
+!||    hm_read_mat125            ../starter/source/materials/mat/mat125/hm_read_mat125.F90
+!||    hm_read_mat129            ../starter/source/materials/mat/mat129/hm_read_mat129.F90
+!||    hm_read_mat132            ../starter/source/materials/mat/mat132/hm_read_mat132.F90
+!||    hm_read_mat50             ../starter/source/materials/mat/mat050/hm_read_mat50.F90
+!||    hm_read_mat57             ../starter/source/materials/mat/mat057/hm_read_mat57.F90
+!||    hm_read_mat87             ../starter/source/materials/mat/mat087/hm_read_mat87.F90
+!||    hm_read_mat88             ../starter/source/materials/mat/mat088/hm_read_mat88.F90
+!||--- calls      -----------------------------------------------------
+!||    mattab_usr2sys            ../starter/source/materials/tools/mattab_usr2sys.F
+!||    table_values_2d           ../starter/source/materials/tools/table_values_2d.F
+!||    unify_abscissa_2d         ../starter/source/materials/tools/unify_abscissas_2d.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+        subroutine func_table_copy(mat_table,mat_title,mat_id   ,     &
+          nfunc    ,ifunc_id ,x2vect   ,x1scale  ,x2scale  ,fscale   ,               &
+          ntable   ,table    ,ierr     )
+! --------------------------------------------------------------------------------------------------------------
+!     M o d u l e s
+! --------------------------------------------------------------------------------------------------------------
+          use table4d_mod
+          use MY_ALLOC_MOD
+          use names_and_titles_mod , only : nchartitle
+          use constant_mod         , only : zero
+          use precision_mod, only : WP
+          use my_dealloc_mod, only : my_dealloc
+! --------------------------------------------------------------------------------------------------------------
+          implicit none
+!-----------------------------------------------
+!                                                   Arguments
+! --------------------------------------------------------------------------------------------------------------
+          character(len=nchartitle)       ,intent(in)    :: mat_title  !< material law title
+          integer                         ,intent(in)    :: mat_id     !< material law Id
+          integer                         ,intent(in)    :: ntable     !< number of function tables in input deck
+          integer                         ,intent(in)    :: nfunc      !< number of functions to convert
+          real(kind=WP)                         ,intent(in)    :: x1scale    !< scale factor for function abscissa
+          real(kind=WP)                         ,intent(in)    :: x2scale    !< scale factor for second abscissa dimension
+          integer            ,dimension(nfunc)  ,intent(in)    :: ifunc_id   !< liste of functions Ids
+          real(kind=WP)      ,dimension(nfunc)  ,intent(in)    :: x2vect     !< second variable values for each function
+          real(kind=WP)      ,dimension(nfunc)  ,intent(in)    :: fscale     !< scale factor for values of each function
+          type(ttable) ,dimension(ntable) ,intent(in)    :: table      !< input table array
+          type(table_4d_)                 ,intent(inout) :: mat_table  !< target material table structure
+          integer                         ,intent(out)   :: ierr       !< output error flag : no error=0 , error=1
+! --------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! --------------------------------------------------------------------------------------------------------------
+          integer :: i,j
+          integer :: ndim,nptx,npi,lmax,idebug
+          integer :: func_n
+          integer ,dimension(:)   ,allocatable :: len
+          real(kind=WP) ,dimension(:)   ,allocatable :: xf
+          real(kind=WP) ,dimension(:,:) ,allocatable :: yf
+          real(kind=WP) ,dimension(:,:) ,allocatable :: xi
+          real(kind=WP) ,dimension(:,:) ,allocatable :: yi
+!=========================================================================================
+          idebug = 0
+          ierr   = 0
+!--------------------------------------------------------
+!     check the input function Ids and convert them into internal function numbers
+!--------------------------------------------------------
+          call mattab_usr2sys(mat_title,mat_id,ntable,table,nfunc,ifunc_id)
+          do i = 1,nfunc
+            if (ifunc_id(i) == 0) then
+              ierr = 1
+              mat_table%notable = 0
+            end if
+          end do
+!
+!--------------------------------------------------------
+          ! exit when there are errors in function identification
+          if (ierr == 1) return
+!--------------------------------------------------------
+          mat_table%notable = nfunc
+          if (nfunc == 1) then
+            ndim = 1
+          else
+            ndim = 2
+          end if
+          mat_table%ndim = ndim
+          allocate(mat_table%x(ndim))
+!--------------------------------------------------------
+          if (ndim == 1) then                       !  just need to copy original function to mat_table
+            func_n = ifunc_id(1)
+            npi = size(table(func_n)%x(1)%values)
+            call my_alloc(mat_table%x(1)%values, npi, "mat_table%x(1)%values")
+            call my_alloc(mat_table%y1d, npi, "mat_table%y1d")
+            call my_alloc(mat_table%y2d, 0, 0, "mat_table%y2d")
+            call my_alloc(mat_table%y3d, 0, 0, 0, "mat_table%y3d")
+            allocate(mat_table%y4d(0,0,0,0))
+            mat_table%x(1)%values(1:npi) = x1scale   * table(func_n)%x(1)%values(1:npi)
+            mat_table%y1d(1:npi)         = fscale(1) * table(func_n)%y%values(1:npi)
+!
+          else   ! table 2d : need to unify all abscissas and create full value matrix
+!
+            !--------------------------------------------------------
+            !     create X,Y vectors for all curves and unify all abscissas
+            !--------------------------------------------------------
+            call my_alloc(len, nfunc, "len")
+            nptx = 0
+            lmax = 0
+            do i = 1,nfunc
+              func_n = ifunc_id(i)
+              len(i) = size(table(func_n)%x(1)%values)
+              nptx = nptx + len(i)
+              lmax = max(lmax,len(i))
+            end do
+            call my_alloc(xf, nptx, "xf")
+            call my_alloc(yf, nptx, nfunc, "yf")
+            call my_alloc(xi, lmax, nfunc, "xi")
+            call my_alloc(yi, lmax, nfunc, "yi")
+            xi(:,:) = zero
+            yi(:,:) = zero
+!
+            do i = 1,nfunc
+              func_n = ifunc_id(i)
+              npi    = len(i)
+              xi(1:npi,i) = x1scale   * table(func_n)%x(1)%values(1:npi)
+              yi(1:npi,i) = fscale(i) * table(func_n)%y%values(1:npi)
+            end do
+!
+            call unify_abscissa_2d(nfunc,len,lmax,nptx ,xi  ,xf  )
+
+            do i = 1,nfunc
+              call table_values_2d(len(i) ,nptx ,xi(1,i) ,yi(1,i) ,xf ,yf(1,i) )
+            end do
+            len(1:nfunc) = nptx
+!
+            call my_alloc(mat_table%x(1)%values, nptx, "mat_table%x(1)%values")
+            call my_alloc(mat_table%x(2)%values, nfunc, "mat_table%x(2)%values")
+            call my_alloc(mat_table%y2d, nptx, nfunc, "mat_table%y2d")
+            call my_alloc(mat_table%y1d, 0, "mat_table%y1d")
+            call my_alloc(mat_table%y3d, 0, 0, 0, "mat_table%y3d")
+            allocate(mat_table%y4d(0,0,0,0))
+            mat_table%x(1)%values(1:nptx)  = xf(1:nptx)
+            mat_table%x(2)%values(1:nfunc) = x2scale * x2vect(1:nfunc)
+            do i = 1,nfunc
+              mat_table%y2d(1:nptx,i) = yf(1:nptx,i)
+            end do
+            !--------------------
+            call my_dealloc(yi)
+            call my_dealloc(xi)
+            call my_dealloc(yf)
+            call my_dealloc(xf)
+            call my_dealloc(len)
+            !--------------------
+!
+          end if  ! end of 2d table treatment
+!----------------------------------------
+          ! print mat_tables
+          if (idebug == 1) then
+            print*," "
+            if (mat_table%ndim == 1) then
+              do j = 1,size(mat_table%x(1)%values)
+                print*,mat_table%x(1)%values(j),mat_table%y1d(j)
+              end do
+            else if (mat_table%ndim == 2) then
+              do i = 1, size(mat_table%x(2)%values)
+                print*," dimension, epsp", i,mat_table%x(2)%values(i)
+                do j = 1,size(mat_table%x(1)%values)
+                  print*,mat_table%x(1)%values(j),mat_table%y2d(j,i)
+                end do
+              end do
+            end if
+          end if
+!------------------------------
+          return
+        end subroutine func_table_copy
+      end module func_table_copy_mod

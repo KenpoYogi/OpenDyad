@@ -1,0 +1,97 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C ds008  18/2/00  +2
+!||====================================================================
+!||    srota3        ../engine/source/elements/solid/solide/srota3.F
+!||--- called by ------------------------------------------------------
+!||    ig3duforc3    ../engine/source/elements/ige3d/ig3duforc3.F
+!||    q1np_gp_mat   ../engine/source/elements/solid/solid_q1np/q1np_forc3.F90
+!||    s10forc3      ../engine/source/elements/solid/solide10/s10forc3.F
+!||    s16forc3      ../engine/source/elements/thickshell/solide16/s16forc3.F
+!||    s20forc3      ../engine/source/elements/solid/solide20/s20forc3.F
+!||    s4forc3       ../engine/source/elements/solid/solide4/s4forc3.F
+!||    s8cforc3      ../engine/source/elements/thickshell/solide8c/s8cforc3.F
+!||    s8eforc3      ../engine/source/elements/solid/solide8e/s8eforc3.F
+!||    s8zforc3      ../engine/source/elements/solid/solide8z/s8zforc3.F
+!||    sforc3        ../engine/source/elements/solid/solide/sforc3.F
+!||    spstres       ../engine/source/elements/sph/spstres.F
+!||====================================================================
+      SUBROUTINE SROTA3(
+     1   SIG,     S1,      S2,      S3,
+     2   S4,      S5,      S6,      WXX,
+     3   WYY,     WZZ,     NEL,     MTN,
+     4   ISMSTR)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: MTN
+      INTEGER, INTENT(IN) :: ISMSTR
+      INTEGER NEL
+      my_real
+     .   SIG(NEL,6),WXX(*), WYY(*), WZZ(*),
+     .   S1(MVSIZ), S2(MVSIZ), S3(MVSIZ), S4(MVSIZ), S5(MVSIZ), S6(MVSIZ)
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I
+      my_real
+     .   Q1, Q2, Q3
+C=======================================================================
+      S1(1:NEL)=SIG(1:NEL,1)
+      S2(1:NEL)=SIG(1:NEL,2)
+      S3(1:NEL)=SIG(1:NEL,3)
+      S4(1:NEL)=SIG(1:NEL,4)
+      S5(1:NEL)=SIG(1:NEL,5)
+      S6(1:NEL)=SIG(1:NEL,6)
+
+C
+      IF (MTN==6.OR.MTN==17.OR.MTN==46.OR.MTN==47
+     .   .OR.ISMSTR==10.OR.ISMSTR==12) RETURN
+C
+      DO I=1,NEL
+        Q1 = TWO*S4(I)*WZZ(I)
+        Q2 = TWO*S6(I)*WYY(I)
+        Q3 = TWO*S5(I)*WXX(I)
+!
+        SIG(I,1)=S1(I)-Q1+Q2
+        SIG(I,2)=S2(I)+Q1-Q3
+        SIG(I,3)=S3(I)-Q2+Q3
+        SIG(I,4)=S4(I)+WZZ(I)*(S1(I)-S2(I))+WYY(I)*S5(I)-WXX(I)*S6(I)
+        SIG(I,5)=S5(I)+WXX(I)*(S2(I)-S3(I))+WZZ(I)*S6(I)-WYY(I)*S4(I)
+        SIG(I,6)=S6(I)+WYY(I)*(S3(I)-S1(I))+WXX(I)*S4(I)-WZZ(I)*S5(I)
+      ENDDO
+C-----------    
+      RETURN
+      END

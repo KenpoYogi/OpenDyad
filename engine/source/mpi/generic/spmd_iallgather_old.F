@@ -1,0 +1,92 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_iallgather_old   ../engine/source/mpi/generic/spmd_iallgather_old.F
+!||--- called by ------------------------------------------------------
+!||    spmd_sphvox           ../engine/source/mpi/sph/spmd_sphvox.F
+!||--- calls      -----------------------------------------------------
+!||====================================================================
+        SUBROUTINE SPMD_IALLGATHER_OLD(SENDBUF,RECVBUF,SEND_SIZE,TOTAL_RCV_SIZE,RCV_SIZE, 
+     .                              REQUEST,COMM)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "r4r8_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+        INTEGER, INTENT(inout) :: SEND_SIZE,TOTAL_RCV_SIZE
+        INTEGER, INTENT(inout) :: REQUEST
+        INTEGER, INTENT(inout) :: COMM
+        INTEGER, INTENT(inout) :: RCV_SIZE
+        my_real, DIMENSION(SEND_SIZE), INTENT(inout) :: SENDBUF
+        my_real, DIMENSION(TOTAL_RCV_SIZE), INTENT(inout) :: RECVBUF
+
+#ifdef MPI
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+        INTEGER :: error
+!       ----------------------------------------
+
+!       ------------------------------------------
+!       processor P(1-->n) :
+!       send buffer 
+!                   |  s(m)   |
+!       size =           N      
+!
+!       For all processor :
+!       rcv buffer
+!       from proc :   P(1)        P(2)              P(n)
+!                   |  s(1)   |   s(2)   |  ...  |  s(n)    |
+!       size =          N       N                    N
+!       ------------------------------------------
+
+!   PLMPI uses MPI-2.x version : MPI_IALLGATHER was introduced in MPI-3.0 version
+#if _PLMPI
+!       ------------------
+        CALL MPI_ALLGATHER(SENDBUF,SEND_SIZE,REAL,
+     .                   RECVBUF,RCV_SIZE,REAL,
+     .                   COMM,error)
+!       ------------------
+#else
+!       ------------------
+        CALL MPI_IALLGATHER(SENDBUF,SEND_SIZE,REAL,
+     .                   RECVBUF,RCV_SIZE,REAL,
+     .                   COMM,REQUEST,error)
+!       ------------------
+#endif
+#else
+        RECVBUF = 0
+#endif
+        RETURN
+        END SUBROUTINE SPMD_IALLGATHER_OLD
+
+
+!       ----------------------------------------

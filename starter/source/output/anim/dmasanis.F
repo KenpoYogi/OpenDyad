@@ -1,0 +1,158 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    dmasanis       ../starter/source/output/anim/dmasanis.F
+!||--- called by ------------------------------------------------------
+!||    genani1        ../starter/source/output/anim/genani1.F
+!||--- calls      -----------------------------------------------------
+!||    initbuf        ../starter/source/output/anim/initbuf.F
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE DMASANIS(ELBUF_TAB,IPARG   ,       
+     2              IXS     ,MAS     ,PM      ,EL2FA   ,NBF     ,       
+     3              IPART   ,IPARTSP ,ISPH3D  )                         
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD            
+      use element_mod , only : nixs
+C-----------------------------------------------                        
+C   I m p l i c i t   T y p e s                                         
+C-----------------------------------------------                        
+#include      "implicit_f.inc"                                          
+C-----------------------------------------------                        
+C   C o m m o n   B l o c k s                                           
+C-----------------------------------------------                        
+#include      "vect01_c.inc"                                            
+#include      "mvsiz_p.inc"                                            
+#include      "com01_c.inc"                                             
+#include      "com04_c.inc"                                             
+#include      "scr17_c.inc"
+#include      "param_c.inc"                                             
+C-----------------------------------------------                        
+C   D u m m y   A r g u m e n t s                                       
+C-----------------------------------------------                        
+C     REAL                                                    
+      my_real                                                           
+     .   MAS(*) ,PM(NPROPM,*)                                              
+      INTEGER IPARG(NPARG,*),IXS(NIXS,*),EL2FA(*),NBF,IPART(LIPART1,*),     
+     .        IPARTSP(*),ISPH3D                                         
+      TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+C-----------------------------------------------                        
+C   L o c a l   V a r i a b l e s                                       
+C-----------------------------------------------                        
+      my_real                                                           
+     .   OFF,VALUE
+      INTEGER I, NG, NEL, N, MLW,                                          
+     .        MT, IALEL,                     
+     .        NN1,NN2,NN3,       
+     .        OFFSET,NFT_FA,N_FA,                       
+     .        ISOLNOD, IPRT,                                      
+     .        JHBE, JIVF, JCLOSE, JPLASOL, IREP, IGTYP,          
+     .        ICSEN, ISORTHG, IFAILURE, IINT                            
+      TYPE(G_BUFEL_)  ,POINTER :: GBUF     
+C---+----1----+----2----+----3----+----4----+----5----+----6----+----7--
+      NN1 = 1                                                           
+      NN2 = 1                                                           
+      NN3 = NN2 + NUMELS                                                
+C-----------------------------------------------                        
+C       face ext                                                        
+C-----------------------------------------------                        
+      DO 490 NG=1,NGROUP                                                
+        CALL INITBUF (IPARG    ,NG      ,                               
+     2          MLW     ,NEL     ,NFT     ,IAD     ,ITY     ,           
+     3          NPT     ,JALE    ,ISMSTR  ,JEUL    ,JTUR    ,           
+     4          JTHE    ,JLAG    ,JMULT   ,JHBE    ,JIVF    ,           
+     5          JPOR    ,JCVT    ,JCLOSE  ,JPLASOL ,           
+     6          IREP    ,IINT    ,IGTYP   ,ISRAT   ,ISROT   ,           
+     7          ICSEN   ,ISORTH  ,ISORTHG ,IFAILURE)                    
+        ISOLNOD = IPARG(28,NG)                                          
+        DO OFFSET = 0,NEL-1,NVSIZ                                       
+          NFT   =IPARG(3,NG) + OFFSET                                   
+          IAD   =IPARG(4,NG)                                            
+          LFT=1                                                         
+          LLT=MIN(NVSIZ,NEL-OFFSET)                                     
+          NFT_FA = NFT                                                  
+C-----------------------------------------------                        
+C       SOLIDE                                                          
+C-----------------------------------------------                        
+          IF (ITY==1 .and. MLW > 0) THEN                                              
+           IALEL=IPARG(7,NG)+IPARG(11,NG)                               
+           GBUF => ELBUF_TAB(NG)%GBUF
+           DO 130 I=LFT,LLT                                             
+             N = I + NFT                                                
+             N_FA = I + NFT_FA                                          
+             IF(EL2FA(NN2+N_FA)/=0)THEN                               
+               IF(IALEL==0)THEN                                       
+                 MT=IXS(1,N)                                            
+                 VALUE=PM(89,MT)*GBUF%VOL(I)                          
+               ELSE                                                     
+                 OFF = MIN(GBUF%OFF(I),ONE)                             
+                 VALUE=GBUF%RHO(I)*GBUF%VOL(I)*OFF                    
+               ENDIF                                                    
+               IF(ISOLNOD==16)THEN                                    
+                 VALUE = FOURTH*VALUE                                    
+                 MAS(EL2FA(NN2+N_FA)) = VALUE                           
+                 MAS(EL2FA(NN2+N_FA)+1) = VALUE                         
+                 MAS(EL2FA(NN2+N_FA)+2) = VALUE                         
+                 MAS(EL2FA(NN2+N_FA)+3) = VALUE                         
+               ELSE                                                     
+                 MAS(EL2FA(NN2+N_FA)) = VALUE                           
+               ENDIF                                                    
+             ENDIF                                                      
+ 130       CONTINUE                                                     
+C                                                                       
+        ELSEIF(ISPH3D==1.AND.ITY==51.and.MLW > 0)THEN                           
+C-----------------------------------------------                        
+C        TETRAS SPH.                                                    
+C-----------------------------------------------                        
+           GBUF => ELBUF_TAB(NG)%GBUF
+           IALEL=IPARG(7,NG)+IPARG(11,NG)                               
+           DO 140 I=LFT,LLT                                             
+             N = I + NFT                                                
+             N_FA = I + NFT_FA                                          
+             IF(EL2FA(NN3+N_FA)/=0)THEN                               
+               IF(IALEL==0)THEN                                       
+                 IPRT=IPARTSP(N)                                        
+                 MT  =IPART(1,IPRT)                                     
+                 VALUE=PM(89,MT)*GBUF%VOL(I)                       
+               ELSE                                                     
+                 OFF = MIN(GBUF%OFF(I),ONE)                             
+                 VALUE=GBUF%RHO(I)*GBUF%VOL(I)*OFF                    
+               ENDIF                                                    
+               MAS(EL2FA(NN3+N_FA)) = VALUE                             
+             ENDIF                                                      
+ 140       CONTINUE                                                     
+C                                                                       
+        ELSE                                                            
+        ENDIF                                                           
+C-----------------------------------------------                        
+C       END OF LOOP ON OFFSETS
+C-----------------------------------------------                        
+       END DO                                                           
+ 490  CONTINUE                                                          
+C-----------------------------------------------                        
+C                                                                       
+      RETURN                                                            
+      END                                                               

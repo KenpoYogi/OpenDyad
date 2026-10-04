@@ -1,0 +1,1622 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    forint                  ../engine/source/elements/forint.F
+!||--- called by ------------------------------------------------------
+!||    resol                   ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                  ../engine/source/output/message/message.F
+!||    arret                   ../engine/source/system/arret.F
+!||    get_preload_axial       ../engine/source/elements/spring/preload_axial.F90
+!||    ig3duforc3              ../engine/source/elements/ige3d/ig3duforc3.F
+!||    initbuf                 ../engine/share/resol/initbuf.F
+!||    my_barrier              ../engine/source/system/machine.F
+!||    pforc3                  ../engine/source/elements/beam/pforc3.F
+!||    prelecflow              ../engine/source/elements/solid/solide/prelecflow.F
+!||    preload_solid_ini       ../engine/source/elements/solid/solide/preload_solid_ini.F90
+!||    q1np_forc3              ../engine/source/elements/solid/solid_q1np/q1np_forc3.F90
+!||    q4forc2                 ../engine/source/elements/solid_2d/quad4/q4forc2.F
+!||    qforc2                  ../engine/source/elements/solid_2d/quad/qforc2.F
+!||    r23forc3                ../engine/source/elements/spring/r23forc3.F
+!||    rforc3                  ../engine/source/elements/spring/rforc3.F
+!||    s10forc3                ../engine/source/elements/solid/solide10/s10forc3.F
+!||    s16forc3                ../engine/source/elements/thickshell/solide16/s16forc3.F
+!||    s20forc3                ../engine/source/elements/solid/solide20/s20forc3.F
+!||    s4forc3                 ../engine/source/elements/solid/solide4/s4forc3.F
+!||    s6cforc3                ../engine/source/elements/thickshell/solide6c/s6cforc3.F
+!||    s6zforc3                ../engine/source/elements/solid/solide6z/s6zforc3.F90
+!||    s8cforc3                ../engine/source/elements/thickshell/solide8c/s8cforc3.F
+!||    s8eforc3                ../engine/source/elements/solid/solide8e/s8eforc3.F
+!||    s8forc3                 ../engine/source/elements/solid/solide8/s8forc3.F
+!||    s8sforc3                ../engine/source/elements/solid/solide8s/s8sforc3.F
+!||    s8zforc3                ../engine/source/elements/solid/solide8z/s8zforc3.F
+!||    scforc3                 ../engine/source/elements/thickshell/solidec/scforc3.F
+!||    section_p               ../engine/source/tools/sect/section_p.F
+!||    section_r               ../engine/source/tools/sect/section_r.F
+!||    section_s               ../engine/source/tools/sect/section_s.F
+!||    section_s4              ../engine/source/tools/sect/section_s4.F
+!||    section_s6              ../engine/source/tools/sect/section_s6.F
+!||    section_t               ../engine/source/tools/sect/section_t.F
+!||    sensor_energy_part      ../engine/source/tools/sensor/sensor_energy_part.F
+!||    sforc3                  ../engine/source/elements/solid/solide/sforc3.F
+!||    srota6                  ../engine/source/output/anim/generate/srota6.F
+!||    startimeg               ../engine/source/system/timer.F
+!||    stoptimeg               ../engine/source/system/timer.F
+!||    suforc3                 ../engine/source/user_interface/suforc3.F
+!||    szforc3                 ../engine/source/elements/solid/solidez/szforc3.F
+!||    tforc3                  ../engine/source/elements/truss/tforc3.F
+!||--- uses       -----------------------------------------------------
+!||    ale_connectivity_mod    ../common_source/modules/ale/ale_connectivity_mod.F
+!||    ale_mod                 ../common_source/modules/ale/ale_mod.F
+!||    dt_mod                  ../engine/source/modules/dt_mod.F
+!||    elbufdef_mod            ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod             ../common_source/modules/elements/element_mod.F90
+!||    glob_therm_mod          ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||    groupdef_mod            ../common_source/modules/groupdef_mod.F
+!||    h3d_mod                 ../engine/share/modules/h3d_mod.F
+!||    initbuf_mod             ../engine/share/resol/initbuf.F
+!||    mat_elem_mod            ../common_source/modules/mat_elem/mat_elem_mod.F90
+!||    message_mod             ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod            ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod          ../common_source/tools/memory/my_dealloc.F90
+!||    nlocal_reg_mod          ../common_source/modules/nlocal_reg_mod.F
+!||    output_mod              ../common_source/modules/output/output_mod.F90
+!||    preload_axial_mod       ../engine/source/elements/spring/preload_axial.F90
+!||    preload_solid_ini_mod   ../engine/source/elements/solid/solide/preload_solid_ini.F90
+!||    python_funct_mod        ../common_source/modules/python_mod.F90
+!||    q1np_restart_mod        ../common_source/modules/q1np_restart_mod.F90
+!||    s6zforc3_mod            ../engine/source/elements/solid/solide6z/s6zforc3.F90
+!||    sensor_mod              ../common_source/modules/sensor_mod.F90
+!||    sfem_mod                ../common_source/modules/elements/sfem_mod.F90
+!||    table_mod               ../engine/share/modules/table_mod.F
+!||    timer_mod               ../engine/source/system/timer_mod.F90
+!||====================================================================
+      SUBROUTINE FORINT(TIMERS, PYTHON, 
+     1    PM        ,GEO       ,X          ,A         ,AR        ,
+     2    V         ,VR        ,MS         ,IN        ,W         ,
+     3    ELBUF     ,WA        ,VAL2       ,VEUL      ,FV        ,
+     4    STIFN     ,STIFR     ,FSKY       ,TF        ,BUFMAT    ,
+     5    PARTSAV   ,D         ,DR         ,EANI      ,ELBUF_TAB ,
+     6    TANI      ,FANI      ,FSAV       ,SENSORS   ,NLOC_DMG  ,
+     7    SKEW      ,ANIN      ,DT2T       ,BUFGEO    ,ITAB      ,
+     8    IADS      ,IADQ      ,IADT       ,IADP      ,MAT_ELEM  ,
+     9    IADR      ,IPARG     ,ALE_CONNECT,NPC       ,
+     A    IXS       ,IXQ       ,IXT        ,IXP       ,
+     B    IXR       ,NELTST    ,IPARI      ,
+     C    ITYPTST   ,NSTRF      ,IPART     ,
+     D    IPARTS    ,IPARTQ    ,IPARTT     ,IPARTP    ,
+     E    IPARTR    ,IPARTUR   ,FR_WAVE    ,RBY       ,
+     F    SECFCUM   ,AGRAV      ,IGRV      ,LGRAV     ,
+     G    IXS10     ,
+     H    IXS20     ,IADS10    ,IADS20     ,IXS16     ,IADS16    ,
+     I    W16       ,FSKYM     ,MSNF       ,IGEO      ,IPM       ,
+     J    XSEC      ,ITASK     ,TEMP       ,
+     K    FTHE      ,FTHESKY               ,IGROUNC   ,NGROUNC   ,
+     M    GRESAV    ,GRTH      ,IGRTH      ,XDP       ,MSSA      ,                                                                  
+     N    DMELS     ,MSTR      ,DMELTR     ,MSP       ,DMELP     ,
+     O    MSRT      ,DMELRT    ,TABLE      ,VF        ,AF        ,
+     P    DF        ,WF        ,FFSKY      ,AFGLOB    ,NBSDVOIS  ,
+     Q    NERCVOIS  ,NESDVOIS  ,LERCVOIS   ,LESDVOIS  ,PHI1      ,
+     R    PHI2      ,MSF       ,NODFT      ,NODLT     ,
+     S    FLG_KJ2   ,POR       ,ICONTACT   ,IFOAM     ,
+     T    KXIG3D    ,IXIG3D    ,KNOT       ,WIGE      ,CONDN     ,
+     U    CONDNSKY  ,
+     V    TAGPRT_SMS,ITAGND    ,MS_2D      ,NALE      ,STRESSMEAN,
+     W    KNOTLOCPC ,KNOTLOCEL ,SUBSET     ,FLAG_SLIPRING_UPDATE,FLAG_RETRACTOR_UPDATE,
+     Y    H3D_DATA  ,IFTHE     ,ICONDN     ,DT        ,OUTPUT,
+     Z    SBUFMAT   ,SNPC      ,STF        ,NODADT    ,DTFAC1,
+     .    DTMIN1    ,IDTMIN    ,IOUT       ,ISTDO     ,IDTMINS,DTFACS,NSVOIS,
+     *    IRESP     ,MAXFUNC   ,USERL_AVAIL,GLOB_THERM,IMON_MAT,DTMINS,SANIN,
+     *    NGRTH     ,NELEM     ,SFEM      ,FLG_SPR_DT )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE TIMER_MOD
+      USE python_funct_mod
+      USE INITBUF_MOD
+      USE TABLE_MOD
+      USE MAT_ELEM_MOD            
+      USE MESSAGE_MOD
+      USE NLOCAL_REG_MOD
+      USE GROUPDEF_MOD
+      USE SENSOR_MOD
+      USE ALE_CONNECTIVITY_MOD
+      USE H3D_MOD
+      USE ALE_MOD
+      USE DT_MOD
+      USE OUTPUT_MOD
+      USE PRELOAD_AXIAL_MOD
+      USE ELBUFDEF_MOD
+      use glob_therm_mod
+      USE PRELOAD_SOLID_INI_MOD
+      USE S6ZFORC3_MOD
+      use element_mod , only : nixs,nixq,nixt,nixr,nixp
+      USE Q1NP_RESTART_MOD
+      use sfem_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "comlock.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "com06_c.inc"
+#include      "com08_c.inc"
+#include      "param_c.inc"
+#include      "vect01_c.inc"
+#include      "scr06_c.inc"
+#include      "scr07_c.inc"
+#include      "scr14_c.inc"
+#include      "scr17_c.inc"
+#include      "task_c.inc"
+#include      "impl1_c.inc"
+#include      "stati_c.inc"
+#include      "parit_c.inc"
+C-----------------------------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(TIMER_), INTENT(INOUT) :: TIMERS
+      type(python_), intent(inout) :: PYTHON
+      INTEGER IXS(NIXS,*),ITAB(*),FLG_KJ2,
+     .   IXQ(NIXQ,*), IXT(NIXT,*), IXP(NIXP,*),
+     .   IXR(NIXR,*), IGEO(NPROPGI,NUMGEO),IPARI(NPARI,*),
+     .   IPM(NPROPMI,NUMMAT),NPC(*), IPARG(NPARG,NGROUP), 
+     .   NSTRF(*), IPART(LIPART1,*) ,
+     .   IPARTS(*) ,IPARTQ(*) ,IPARTT(*) ,IPARTP(*) ,
+     .   IPARTR(*) ,IPARTUR(*) ,
+     .   IADS(8,*),IADQ(4,*),IADT(2,*),
+     .   IADP(2,*),IADR(3,*),
+     .   NELTST,ITYPTST,
+     .   IXS10(6,*),IXS20(12,*),IADS10(6,*),IADS20(12,*),
+     .   IXS16(8,*),IADS16(8,*),ITASK,IGROUNC(*),
+     .   NGROUNC,GRTH(*),IGRTH(*),NBSDVOIS(*),NERCVOIS(*),
+     .   NESDVOIS(*),LERCVOIS(*),LESDVOIS(*),NODFT, NODLT,
+     .   ICONTACT(*),IFOAM(*),KXIG3D(NIXIG3D,*),IXIG3D(*),
+     .   IGRV(*),LGRAV(*),
+     .   TAGPRT_SMS(*),ITAGND(*),NALE(*),FLAG_SLIPRING_UPDATE,FLAG_RETRACTOR_UPDATE
+      INTEGER ,INTENT(IN) :: SANIN
+      INTEGER ,INTENT(IN) :: SBUFMAT
+      INTEGER ,INTENT(IN) :: SNPC
+      INTEGER ,INTENT(IN) :: STF
+      INTEGER ,INTENT(IN) :: IOUT
+      INTEGER ,INTENT(IN) :: ISTDO
+      INTEGER ,INTENT(IN) :: NSVOIS
+      INTEGER ,INTENT(IN) :: IRESP
+      INTEGER ,INTENT(IN) :: MAXFUNC
+      INTEGER, INTENT(IN) :: USERL_AVAIL
+      INTEGER, INTENT(IN) :: IMON_MAT
+      INTEGER, INTENT(IN) :: IDTMINS
+      INTEGER, INTENT(IN) :: NGRTH
+      INTEGER, INTENT(IN) :: NELEM
+      INTEGER, INTENT(INOUT) :: FLG_SPR_DT
+      my_real, INTENT(IN) :: DTMINS
+      my_real, INTENT(IN) :: DTFACS
+      my_real
+     .   X(3,*),V(3,*),VR(3,*),D(3,*),MS(*),IN(*),A(3,*),AR(3,*),
+     .   DR(3,*),W(3,*),PM(NPROPM,NUMMAT),SKEW(LSKEW,*),GEO(NPROPG,NUMGEO),
+     .   BUFMAT(*),VEUL(*),TF(*),FR_WAVE(*),ELBUF(*) ,
+     .   FSAV(NTHVKI,*) ,WA(*),
+     .   FV(*),VAL2(*),RBY(*),
+     .   FANI(3,*) ,PARTSAV(*)    ,STIFN(*) ,STIFR(*),ANIN(*)    ,
+     .   FSKY(*),TANI(*),EANI(*),BUFGEO(*),
+     .   DT2T, SECFCUM(7,NUMNOD,NSECT),W16(*), FSKYM(*),
+     .   MSNF(*),XSEC(4,3,NSECT),
+     .   TEMP(*),FTHE(*), FTHESKY(*),
+     .   GRESAV(*), MSSA(*), DMELS(*), MSTR(*), DMELTR(*),
+     .   MSP(*), DMELP(*), MSRT(*), DMELRT(*),VF(3,*),AF(3,*),FFSKY(*),
+     .   PHI1(*),PHI2(*),DF(3,*),WF(3,*),MSF(*),AFGLOB(3,*),
+     .   POR(*) ,KNOT(*),WIGE(*),CONDN(*),CONDNSKY(*),AGRAV(*),
+     .   MS_2D(*),STRESSMEAN(6,*),KNOTLOCPC(*),KNOTLOCEL(*)
+      DOUBLE PRECISION XDP(3,*)
+      TYPE(TTABLE) TABLE(*)
+      TYPE(ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+      TYPE (NLOCAL_STR_) :: NLOC_DMG 
+      TYPE (MAT_ELEM_) ,INTENT(INOUT) :: MAT_ELEM
+      TYPE (SUBSET_) , DIMENSION(NSUBS) :: SUBSET
+      TYPE(H3D_DATABASE) :: H3D_DATA
+      INTEGER, INTENT(IN) :: IFTHE, ICONDN
+      TYPE (SENSORS_) ,INTENT(INOUT) ,TARGET :: SENSORS
+      TYPE (DT_) ,  INTENT(INOUT) :: DT
+      TYPE(OUTPUT_), INTENT(INOUT) :: OUTPUT !< output structure
+      INTEGER, INTENT(IN) :: NODADT,IDTMIN(102)
+      my_real, INTENT(IN) :: DTFAC1(102),DTMIN1(102)
+      TYPE(t_ale_connectivity), INTENT(IN) :: ALE_CONNECT
+      type (glob_therm_) ,intent(inout)    :: glob_therm
+      TYPE(global_sfem_) ,INTENT(INOUT) :: SFEM  
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      DOUBLE PRECISION, POINTER :: pFBSAV6
+      INTEGER  IERROR, NV46,IPREID,FUN_ID,SENS_ID
+      INTEGER I,J,N, NG, NVC, MLW, JFT, JLT,ISOLNOD,ITHK,IPLA,IFAIL,
+     .   K1, K2, KAD,NF1,IPRI, OFFSET,
+     .   K0, K3, K6, K7, K8, NSG, NEL, KFTS, ISTRA,
+     .   NPE,NIPMAX,ICNOD,IBID,NN,
+     .   L1,L2,L3,L4,L5,L6,L7,L8,L9,L10,L11,L12,L13,L14,L15,L16,
+     .   L17,L18,L19,L20,L21,L22,L23,L24,L25,L26,L27,L28,L29,L30,
+     .   ICP,ICS,IMATVIS,IEXPAN,NPT0,IG,OFF_IGRTH,
+     .   NCTRL,IPARSENS,ISECT,GAMA(6),PX,PY,PZ,ISENS_ENERGY
+      LOGICAL IS_Q1NP_GROUP, lFOUND
+      my_real BID,QMVBID,PRELOAD1,STF_F
+      my_real SBID
+      my_real VOLN(MVSIZ)
+      my_real, ALLOCATABLE, DIMENSION(:,:) :: FX,FY,FZ,MX,MY,MZ,JFAC
+      my_real, DIMENSION(MVSIZ,6) :: SVIS
+      TYPE(G_BUFEL_) ,POINTER :: GBUF
+      integer :: fake_size = 0
+C======================================================================|
+       call my_alloc(FX, MVSIZ, 64, "FX", stat=IERROR)
+       call my_alloc(FY, MVSIZ, 64, "FY", stat=IERROR)
+       call my_alloc(FZ, MVSIZ, 64, "FZ", stat=IERROR)
+       call my_alloc(MX, MVSIZ, 4, "MX", stat=IERROR)
+       call my_alloc(MY, MVSIZ, 4, "MY", stat=IERROR)
+       call my_alloc(MZ, MVSIZ, 4, "MZ", stat=IERROR)
+       call my_alloc(JFAC, MVSIZ, 729, "JFAC") ! for solid 8z
+       SBID=1
+!
+       IF(IERROR/=0)THEN
+        CALL ANCMSG(MSGID=246,ANMODE=ANINFO)
+        CALL ARRET(2)
+       END IF
+C  IOUTPRT for assembly synthesis, not need for spring which call *bilan each cycle   
+         IPRI = 0
+         IF(MOD(NCYCLE,IABS(NCPRI))==0.OR.TT>=OUTPUT%TH%THIS.OR.MDESS /= 0.
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS).
+     .   OR.TT>=OUTPUT%TH%THIS1(1).OR.TT>=OUTPUT%TH%THIS1(2).
+     .   OR.TT>=OUTPUT%TH%THIS1(3).OR.TT>=OUTPUT%TH%THIS1(4).OR.TT>=OUTPUT%TH%THIS1(5).
+     .   OR.TT>=OUTPUT%TH%THIS1(6).OR.TT>=OUTPUT%TH%THIS1(7).OR.TT>=OUTPUT%TH%THIS1(8).
+     .   OR.TT>=OUTPUT%TH%THIS1(9).OR.NTH /= 0.OR.NANIM /= 0          .
+     .   OR.TT>=TABFIS(1).OR.TT>=TABFIS(2).
+     .   OR.TT>=TABFIS(3).OR.TT>=TABFIS(4).OR.TT>=TABFIS(5).
+     .   OR.TT>=TABFIS(6).OR.TT>=TABFIS(7).OR.TT>=TABFIS(8).
+     .   OR.TT>=TABFIS(9).OR.TT>=TABFIS(10).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(1)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(2)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(3)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(4)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(5)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(6)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(7)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(8)).
+     .   OR.(ALE%SUB%IALESUB /= 0.AND.T1S+DT2S>=OUTPUT%TH%THIS1(9)).OR.ISTAT==3) IPRI=1
+!
+      ISENS_ENERGY = 0
+      DO I=1,SENSORS%NSENSOR
+        IF (SENSORS%SENSOR_TAB(I)%TYPE == 14) ISENS_ENERGY = 1 ! save internal/kinetic energy (PARTSAV)
+      ENDDO ! DO I=1,NSENSOR
+C
+       OFF_IGRTH = 0
+       IBID = 0
+       nv46 = 6
+       if(n2d/=0) nv46 = 4
+C
+        IF (IALELAG > 0) THEN   ! law 77
+         DO I=NODFT,NODLT
+           MSF(I) = MSF(I) - MSNF(I)
+           MSNF(I) = ZERO
+         ENDDO
+c           /---------------/
+            CALL MY_BARRIER
+c           /---------------/
+          CALL PRELECFLOW(ELBUF_TAB,NGROUNC,IGROUNC,IPARG ,NBSDVOIS,
+     .                    NERCVOIS,NESDVOIS,LERCVOIS,LESDVOIS,PHI1 ,
+     .                    PHI2,POR )
+        ENDIF
+C        
+C-------------------------------
+C Dynamic parallel loop SMP
+C
+!$OMP DO SCHEDULE(DYNAMIC,1)
+c------------------------
+      DO IG = 1, NGROUNC
+        NG = IGROUNC(IG)         
+        SENSORS%NGR_SENSOR(ITASK+1) = NG   
+C       temporarily used to avoid pass KTBUF_STR everywhere
+        NG_IMP = NG
+
+        IF (IPARG(8,NG)==1) GOTO 250                                 
+        ITY = IPARG(5,NG)
+C       IF (ITY==3.OR.ITY==7) GOTO 250                              
+        IF (IDDW>0) CALL STARTIMEG(NG)                              
+        OFFSET  = 0                                                    
+        MLW     = IPARG(1,NG)                                          
+C       MLW= 0 ----> void                                              
+C       MLW = 13 ----> rigid material                       
+        IF (MLW == 0 .OR. MLW == 13) GOTO 250                          
+C
+C---
+        CALL INITBUF(IPARG    ,NG      ,                              
+     2     MLW     ,NEL     ,NFT     ,KAD     ,ITY     ,               
+     3     NPT     ,JALE    ,ISMSTR  ,JEUL    ,JTUR    ,               
+     4     JTHE    ,JLAG    ,JMULT   ,JHBE    ,JIVF    ,               
+     5     NVAUX   ,JPOR    ,JCVT    ,JCLOSE  ,IPLA    ,               
+     6     IREP    ,IINT    ,IGTYP   ,ISRAT   ,ISROT   ,               
+     7     ICSEN   ,ISORTH  ,ISORTHG ,IFAILURE,JSMS    )               
+C
+        ICNOD   = IPARG(11,NG)                                        
+        NSG     = IPARG(10,NG)                                        
+        ICS     = IPARG(17,NG)                                        
+        NVC     = IPARG(19,NG)                                        
+        ITHK    = IPARG(28,NG)                                        
+        ISOLNOD = IPARG(28,NG)                                        
+        KFTS    = IPARG(30,NG)                                        
+        ISTRA   = IPARG(44,NG)                                        
+        IFAIL   = IPARG(43,NG)
+        IMATVIS = IPARG(45,NG)                                        
+        IEXPAN  = IPARG(49,NG)                                        
+        IGRE    = IPARG(51,NG)                                        
+        ISPH2SOL = 0
+        IPARTSPH = IPARG(69,NG)
+        IPREID   = IPARG(72,NG)  
+        IFORMDT  = IPARG(73,NG)  
+C
+C       Group of enriched elements for contact
+        IS_Q1NP_GROUP = .FALSE.  
+        IF (IPARG(94,NG) == 1) IS_Q1NP_GROUP = .TRUE.
+C
+        IF (ITY==1) ICP = NSG                                       
+        IF (ITY==1 .OR. ITY==2) JPLASOL=IPLA
+C---------------------------------
+        LFT   = 1                  
+        LLT   = MIN(NVSIZ,NEL)     
+        MTN   = MLW                
+        JFT=LFT                    
+        JLT=LLT                    
+        NF1 = NFT+1                
+        IAD = KAD                  
+        JSPH=0                     
+        IHET = 0                   
+C----6---------------------------------------------------------------7---------8
+        IF (ITY==1 .AND. JLAG==1)THEN
+          IF(IXS(10,NF1)/=0)THEN         
+            IGTYP = IGEO(11,IXS(10,NF1))   
+          ELSE                             
+            IGTYP=0                        
+          ENDIF                            
+!
+          IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .     CALL SENSOR_ENERGY_PART(IPARTS(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+          IF (IPREID>0) THEN
+             GBUF => ELBUF_TAB(NG)%GBUF 
+             FUN_ID = IPARG(67,NG)
+             SENS_ID= IPARG(68,NG) 
+             CALL PRELOAD_SOLID_INI(PYTHON, NFUNCT,
+     1           FUN_ID        ,SENS_ID       ,NPC          ,SNPC          ,
+     2           TF            ,STF           ,SENSORS      ,TT            ,
+     3           GBUF%BPRELD   ,GBUF%G_BPRELD ,NEL          )
+          END IF
+C---------
+          IF(IS_Q1NP_GROUP)THEN
+C-------------------------
+C             Q1NP replacement for tagged HEX8 solids.
+C-------------------------
+            CALL Q1NP_FORC3(TIMERS, OUTPUT,
+     1                      ELBUF_TAB(NG), PM, GEO, IXS, IGEO, X, A, V, W,
+     2                      FV, ALE_CONNECT, IPARG, TF, NPC, BUFMAT, PARTSAV, NPART,
+     3                      NLOC_DMG, STIFN, OFFSET, IPARTS(NF1), NEL, DT2T,
+     4                      NELTST, ITYPTST, IPM, ITASK, GRESAV, GRTH,
+     5                      IGRTH(NF1), MSSA(NF1), DMELS(NF1), TABLE, IPRI,
+     6                      MAT_ELEM, NG, H3D_DATA%STRAIN, SVIS, GLOB_THERM,
+     7                      SNPC, NUMGEO, NUMNOD, NUMELS, NUMELQ, NGROUP,
+     8                      SBUFMAT, STF, NUMMAT, NTABLE, NSVOIS, IRESP,
+     9                      IDEL7NOK, MAXFUNC, USERL_AVAIL, IMON_MAT, impl_s,
+     A                      idyna, IDTMIN, DT, SENSORS,
+     B                      MTN, ISMSTR, JLAG, JEUL, JALE, JCVT, JSPH, JPLASOL,
+     C                      NPARG, NPROPG, NPROPGI, NPROPM, NPROPMI, NPSAV, TT, DT1)    
+C            
+          ELSEIF(ISOLNOD==4.AND.(ISROT==0.OR.ISROT==3))THEN
+C---------
+            CALL S4FORC3(TIMERS, OUTPUT,
+     1   ELBUF_TAB,  NG,              PM,         GEO,
+     2   IXS,        X,               A,          V,
+     3   MS,         W,               WA,         VAL2,
+     4   VEUL,       FV,              ALE_CONNECT,IPARG,
+     5   TF,         NPC,             BUFMAT,     PARTSAV,
+     6   NLOC_DMG,   DT2T,            NELTST,     ITYPTST,
+     7   STIFN,      FSKY,            IADS,       OFFSET,
+     8   EANI,       IPARTS(NF1),     FX(1,1),    FY(1,1),
+     9   FZ(1,1),    FX(1,2),         FY(1,2),    FZ(1,2),
+     A   FX(1,3),    FY(1,3),         FZ(1,3),    FX(1,4),
+     B   FY(1,4),    FZ(1,4),         NEL,        FSKYM,
+     C   MSNF,       IPM,             IGEO,       BID,
+     D   ISTRA,      ITASK,           TEMP,       FTHE,
+     E   FTHESKY,    IEXPAN,          GRESAV,     GRTH,
+     F   IGRTH(NF1), MSSA(NF1),       DMELS(NF1), TABLE,
+     G   XDP,      sfem%lag%nodvar,  VOLN,       CONDN,
+     H   CONDNSKY,   D,               SENSORS,    IPRI,
+     I   MAT_ELEM,   IBID,            DT,         IDEL7NOK,NSVOIS,IBID,
+     *   SNPC,       STF,             SBUFMAT,    SVIS,IDTMINS,IRESP,
+     *   IDEL7NG,    MAXFUNC,         USERL_AVAIL, GLOB_THERM,
+     V   impl_s,     idyna,           sfem%S_SFEM_NODVAR,fake_size,nv46,sfem%lag%need_it(nf1:nf1+nel-1) )
+C
+            IF (NSECT > 0) THEN 
+              K0=NSTRF(25)                                             
+              N=NINTER+NRWALL+NRBODY                            
+              DO I=1,NSECT                                             
+               N=N+1                                                   
+               K2=K0+30+NSTRF(K0+14)                                   
+               K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+               IPARSENS=0
+               ISECT=0
+               IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF (ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C               
+               CALL SECTION_S4(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2          NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),       
+     3          IXS ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,        
+     4          FZ  ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),  
+     5          NSTRF(K2),MS,                                          
+     7          IXS10,ISOLNOD,XSEC(1,1,I),pFBSAV6,IPARSENS)                            
+               K0=NSTRF(K0+24)                                         
+              ENDDO                                                    
+            ENDIF     
+c---------
+          ELSEIF (ISOLNOD==10 .OR. (ISOLNOD==4.AND.ISROT==1)) THEN
+c---------
+            CALL S10FORC3(TIMERS, OUTPUT,
+     1   ELBUF_TAB,           NG,                  PM,                  GEO,
+     2   IXS,                 X,                   A,                   V,
+     3   MS,                  W,                   VAL2,
+     4   VEUL,                FV,                  ALE_CONNECT,         IPARG,
+     5   TF,                  NPC,                 BUFMAT,              PARTSAV,
+     6   NLOC_DMG,            DT2T,                NELTST,              ITYPTST,
+     7   STIFN,               FSKY,                IADS,                OFFSET,
+     8   EANI,                IPARTS(NF1),         IXS10,               IADS10,
+     9   NEL,                 FX,                  FY,                  FZ,
+     A   AR,                  VR,                  DR,                  IPM,
+     B   ISTRA,               ISOLNOD,             ITASK,               TEMP,
+     C   FTHE,                FTHESKY,             IEXPAN,              STIFR,
+     D   D,                   GRESAV,              GRTH,                IGRTH(OFF_IGRTH+NF1),
+     E   TABLE,               MSSA(NF1),           DMELS(NF1),          IGEO,
+     F   XDP,                 VOLN,                CONDN,               CONDNSKY,
+     G   sfem%lag%nodvar,    ITAGND,              SENSORS,             IPRI,
+     H   MAT_ELEM,            IBID,                DT,                  IDEL7NOK,
+     I   SNPC,                STF,                 SBUFMAT,             SVIS,
+     J   NSVOIS,              IDTMINS,             IDEL7NG,             MAXFUNC ,     
+     V   USERL_AVAIL,         GLOB_THERM,          impl_s,              idyna ,
+     W   sfem%S_SFEM_NODVAR,  sfem%lag%need_it(nf1:nf1+nel-1))
+c
+            IF(NSECT>0)THEN 
+              K0=NSTRF(25)                                             
+              N=NINTER+NRWALL+NRBODY                            
+              DO I=1,NSECT                                             
+               N=N+1                                                   
+               K2=K0+30+NSTRF(K0+14)                                   
+               K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+               IPARSENS=0
+               ISECT=0
+               IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C                
+               CALL SECTION_S4(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2          NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),       
+     3          IXS ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,        
+     4          FZ  ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),  
+     5          NSTRF(K2),MS,                                          
+     7         IXS10,ISOLNOD,XSEC(1,1,I),pFBSAV6,IPARSENS)     
+               K0=NSTRF(K0+24)                                         
+              ENDDO                                                    
+            ENDIF                                                      
+c---------
+          ELSEIF(ISOLNOD==20)THEN
+C-------------------------
+C             20 NODE SOLID
+C-------------------------
+              NPE = 20
+              NIPMAX = 81
+              L1 = 1
+              L2 = L1 + MVSIZ * NIPMAX
+              L3 = L2 + MVSIZ * NIPMAX
+              L4 = L3 + MVSIZ * NIPMAX
+              L5 = L4 + MVSIZ * NIPMAX
+              L6 = L5 + MVSIZ * NIPMAX
+              L7 = L6 + MVSIZ * NIPMAX
+              L8 = L7 + MVSIZ * NIPMAX
+              L9 = L8 + MVSIZ * NIPMAX
+              L10 = L9 + MVSIZ * NIPMAX
+              L11 = L10 + MVSIZ * NIPMAX
+              L12 = L11
+              L13 = L12 + MVSIZ * NPE
+              L14 = L13 + MVSIZ * NPE
+              L15 = L14 + MVSIZ * NPE
+              L16 = L15 + MVSIZ * NPE
+              L17 = L16 + MVSIZ * NPE
+              L18 = L17 + MVSIZ * NPE
+              L19 = L18 + MVSIZ * NPE
+              L20 = L19 + MVSIZ * NPE
+              L21 = L20 + MVSIZ * NPE
+              L22 = L21 + MVSIZ * NPE
+              L23 = L22 + MVSIZ * NPE
+              L24 = L23 + MVSIZ * NPE
+              L25 = L24 + MVSIZ * NPE
+              L26 = L25 + MVSIZ * NPE
+              L27 = L26 + MVSIZ * NPE
+              L28 = L27 + MVSIZ * NPE * NIPMAX
+              L29 = L28 + MVSIZ * NPE * NIPMAX
+              L30 = L29 + MVSIZ * NPE * NIPMAX
+              OFF_IGRTH = NUMELS8 + NUMELS10
+c
+              CALL S20FORC3(TIMERS, OUTPUT,
+     1   ELBUF_TAB,           NG,                  PM,                  GEO,
+     2   IXS,                 X,                   A,                   V,
+     3   MS,                  W,                   VAL2,
+     4   VEUL,                FV,                  ALE_CONNECT,         IPARG,
+     5   TF,                  NPC,                 BUFMAT,              PARTSAV,
+     6   NLOC_DMG,            DT2T,                NELTST,              ITYPTST,
+     7   STIFN,               FSKY,                IADS,                OFFSET,
+     8   EANI,                IPARTS(NF1),         IXS20,               IADS20,
+     9   NEL,                 FX,                  FY,                  FZ,
+     A   W16(L1),             W16(L2),             W16(L3),             W16(L4),
+     B   W16(L5),             W16(L6),             W16(L7),             W16(L8),
+     C   W16(L9),             W16(L10),            W16(L12),            W16(L13),
+     D   W16(L14),            W16(L15),            W16(L16),            W16(L17),
+     E   W16(L18),            W16(L19),            W16(L20),            W16(L21),
+     F   W16(L22),            W16(L23),            W16(L24),            W16(L25),
+     G   W16(L26),            W16(L27),            W16(L28),            W16(L29),
+     H   IPM,                 ISTRA,               TEMP,                FTHE,
+     I   FTHESKY,             IEXPAN,              GRESAV,              GRTH,
+     J   IGRTH(OFF_IGRTH+NF1),TABLE,               IGEO,                VOLN,
+     K   CONDN,               CONDNSKY,            ITASK,               IPRI,
+     L   MAT_ELEM,            IBID,                DT,                  IDEL7NOK,
+     M   SNPC,                STF,                 SBUFMAT,             SVIS,
+     N   IDTMINS,             NSVOIS,              IRESP,               IDEL7NG,
+     O   IDTMIN,              MAXFUNC,             IMON_MAT,            USERL_AVAIL,
+     .   GLOB_THERM,  impl_s,  idyna,              SENSORS)
+c
+              IF(NSECT>0)THEN
+               K0=NSTRF(25)
+               N=NINTER+NRWALL+NRBODY
+               DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2        NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3        IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4        FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5        NSTRF(K2),MS,
+     7        IXS20,IXS16,ISOLNOD,XSEC(1,1,I),pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+               ENDDO
+              ENDIF
+c---------
+          ELSEIF(ISOLNOD==16)THEN
+C-------------------------
+C             16 NODE THICK SHELLS
+C-------------------------
+              NPE = 16
+              NIPMAX = 81
+              L1 = 1
+              L2 = L1 + MVSIZ * NIPMAX
+              L3 = L2 + MVSIZ * NIPMAX
+              L4 = L3 + MVSIZ * NIPMAX
+              L5 = L4 + MVSIZ * NIPMAX
+              L6 = L5 + MVSIZ * NIPMAX
+              L7 = L6 + MVSIZ * NIPMAX
+              L8 = L7 + MVSIZ * NIPMAX
+              L9 = L8 + MVSIZ * NIPMAX
+              L10 = L9 + MVSIZ * NIPMAX
+              L11 = L10 + MVSIZ * NIPMAX
+              L12 = L11 + MVSIZ * NIPMAX
+              L13 = L12 + MVSIZ * NPE
+              L14 = L13 + MVSIZ * NPE
+              L15 = L14 + MVSIZ * NPE
+              L16 = L15 + MVSIZ * NPE
+              L17 = L16 + MVSIZ * NPE
+              L18 = L17 + MVSIZ * NPE
+              L19 = L18 + MVSIZ * NPE
+              L20 = L19 + MVSIZ * NPE
+              L21 = L20 + MVSIZ * NPE
+              L22 = L21 + MVSIZ * NPE
+              L23 = L22 + MVSIZ * NPE
+              L24 = L23 + MVSIZ * NPE
+              L25 = L24 + MVSIZ * NPE
+              L26 = L25 + MVSIZ * NPE
+              L27 = L26 + MVSIZ * NPE
+              L28 = L27 + MVSIZ * NPE * NIPMAX
+              L29 = L28 + MVSIZ * NPE * NIPMAX
+              L30 = L29 + MVSIZ * NPE * NIPMAX
+              OFF_IGRTH = NUMELS8 + NUMELS10 + NUMELS20
+
+              CALL S16FORC3(TIMERS, OUTPUT,ELBUF_TAB,NG     ,
+     1         PM       ,GEO      ,IXS      ,X          ,
+     2         A        ,V        ,MS       ,W          ,
+     3         VAL2     ,VEUL     ,FV       ,ALE_CONNECT      ,IPARG      ,
+     4         TF       ,NPC      ,BUFMAT   ,PARTSAV    ,NLOC_DMG   ,
+     5         DT2T     ,NELTST   ,ITYPTST  ,STIFN      ,FSKY       ,
+     6         IADS     ,OFFSET   ,EANI     ,IPARTS(NF1),
+     7         IXS16    ,IADS16   ,NEL      ,FX         ,
+     8         FY       ,FZ       ,W16(L1)  ,W16(L2)    ,W16(L3)    ,
+     9         W16(L4)  ,W16(L5)  ,W16(L6)  ,W16(L7)    ,W16(L8)    ,
+     A         W16(L9)  ,W16(L10) ,W16(L11) ,W16(L12)   ,W16(L13)   ,
+     B         W16(L14) ,W16(L15) ,W16(L16) ,W16(L17)   ,W16(L18)   ,
+     C         W16(L19) ,W16(L20) ,W16(L21) ,W16(L22)   ,W16(L23)   ,
+     D         W16(L24) ,W16(L25) ,W16(L26) ,W16(L27)   ,W16(L28)   ,
+     E         W16(L29) ,ICP      ,ICS      ,
+     F         IPM      ,ISTRA    ,TEMP     ,FTHE       , FTHESKY,
+     G         IEXPAN   ,GRESAV   ,GRTH ,IGRTH(OFF_IGRTH + NF1),TABLE,
+     H         IGEO     ,VOLN     ,CONDN    ,CONDNSKY   ,ITASK,IPRI  ,
+     I         MAT_ELEM ,IBID     ,DT      ,SNPC  ,
+     J         STF      ,SBUFMAT  ,SVIS,NSVOIS,IDTMINS,IRESP,      
+     .         IDEL7NG,     IDEL7NOK,    IDTMIN,      MAXFUNC, 
+     .         IMON_MAT ,USERL_AVAIL, GLOB_THERM,     impl_s,
+     V         idyna,SENSORS)   
+c
+              IF(NSECT>0)THEN
+
+               K0=NSTRF(25)
+               N=NINTER+NRWALL+NRBODY
+               DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2        NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3        IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4        FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5        NSTRF(K2),MS,
+     7        IXS20,IXS16,ISOLNOD,XSEC(1,1,I),pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+               ENDDO
+              ENDIF
+C
+C-------------------------------------------------------------------7---------8
+          ELSEIF (JHBE == 24 .AND. ISOLNOD == 6) THEN 
+C-------------------------
+            CALL S6ZFORC3(
+     .        TIMERS   ,OUTPUT   ,NGROUP   ,ELBUF_TAB,NPROPM   ,NUMMAT   ,PM       , 
+     .        NG       ,NPROPG   ,NUMGEO   ,GEO      ,NIXS     ,NUMELS   ,NUMELQ   ,
+     .        NSVOIS   ,IXS      ,NUMNOD   ,X        ,A        ,V        ,
+     .        W        ,VAL2     ,ALE_CONNECT,NPARG  ,IPARG    ,
+     .        STF      ,TF       ,SNPC     ,NPC      ,SBUFMAT  ,BUFMAT   ,NPSAV    ,
+     .        NPART    ,PARTSAV  ,DT2T     ,NELTST   ,ITYPTST  ,STIFN    ,LSKY     ,
+     .        FSKY     ,IADS     ,OFFSET   ,NEL      ,IPARTS(NF1),
+     .        FX(1,1) ,FY(1,1)   ,FZ(1,1)  ,FX(1,2)  ,FY(1,2)  ,FZ(1,2)  ,
+     .        FX(1,3) ,FY(1,3)   ,FZ(1,3)  ,FX(1,4)  ,FY(1,4)  ,FZ(1,4)  ,
+     .        FX(1,5) ,FY(1,5)   ,FZ(1,5)  ,FX(1,6)  ,FY(1,6)  ,FZ(1,6)  ,
+     .        NLOC_DMG,NPROPMI   ,IPM      ,ISTRA    ,NPROPGI  ,IGEO     ,NGPE     ,
+     .        NTHREAD ,GRESAV    ,NGRTH    ,NELEM    ,GRTH     ,IGRTH(NF1),NTABLE  , 
+     .        TABLE   ,MSSA(NF1) ,DMELS(NF1),VOLN    ,ITASK    ,IPRI     ,MAT_ELEM ,
+     .        IBID    ,IFTHE     ,FTHE     ,FTHESKY  ,ICONDN   ,CONDN    ,CONDNSKY ,
+     .        IEXPAN  ,DT        ,SVIS     ,IRESP    ,idel7nok ,MAXFUNC  ,IMON_MAT ,
+     .        USERL_AVAIL,GLOB_THERM,XDP   ,SENSORS  ,DT1      ,TH_STRAIN,
+     .        IDTMIN  ,TT        ,IDYNA    ,IMPL_S   ,IPARIT   ,IREP     , 
+     .        ISCAU   ,ISMDISP   ,ISMSTR   ,ISORTH   ,ISORTHG  ,JALE     ,JCVT     ,
+     .        JEUL    ,JLAG      ,JSPH     ,JPLASOL  ,JTHE     ,MTN      , 
+     .        N2D     ,NCPRI     ,NCYCLE   ,NFILSOL  ,NFT      ,IINT     ,NODADT   ,
+     .        DTFAC1  ,D         ,IMATVIS  ,INVSTR   ,ICP      , 
+     .        JHBE)
+c
+              IF (NSECT>0) THEN
+                K0 = NSTRF(25)
+                N = NINTER+NRWALL+NRBODY
+                DO I=1,NSECT
+                  N  = N+1
+                  K2 = K0+30+NSTRF(K0+14)
+                  K3 = K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                  IPARSENS = 0
+                  ISECT = 0
+                  IF (SENSORS%STABSEN > 0) ISECT = SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                  NULLIFY(pFBSAV6)
+                  IF (ISECT/=0) THEN
+                    IPARSENS=1
+                    pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                  ENDIF
+C 
+                  CALL SECTION_S6(JFT, JLT, NFT, NSTRF(K0+7), NSTRF(K0+3),
+     .              NSTRF(K0+4), NSTRF(K0+5), NSTRF(K3), X, V,
+     .              FSAV(1,N), IXS, FANI(1,1+2*(I-1)), SECFCUM(1,1,I), FX,
+     .              FY, FZ, NSTRF(K0), NSTRF(K0+14), NSTRF(K0+26),
+     .              NSTRF(K0+6), NSTRF(K2), MS,XSEC(1,1,I),
+     .              pFBSAV6,IPARSENS)
+                  K0 = NSTRF(K0+24)
+                ENDDO
+              ENDIF
+C
+C-------------------------------------------------------------------7---------8
+          ELSEIF(JHBE == 15)THEN
+C-------------------------
+C             THICK SHELLS HQEPH
+C-------------------------
+            IF(ISOLNOD==6)THEN
+C              6 node penta
+              CALL S6CFORC3(TIMERS, OUTPUT, ELBUF_TAB,NG         ,
+     1         PM   ,GEO   ,IXS    ,X            ,
+     2         A           ,V    ,MS    ,W      ,
+     3         VAL2 ,VEUL  ,FV     ,ALE_CONNECT        ,IPARG       ,
+     4         TF    ,NPC    ,BUFMAT       ,PARTSAV     ,
+     5         DT2T ,NELTST,ITYPTST,STIFN        ,FSKY        ,
+     6         IADS    ,OFFSET  ,EANI    ,IPARTS(NF1) ,
+     7         FX(1,1) ,FY(1,1) ,FZ(1,1) ,FX(1,2) ,FY(1,2) ,
+     8         FZ(1,2) ,FX(1,3) ,FY(1,3) ,FZ(1,3) ,FX(1,4) ,
+     9         FY(1,4) ,FZ(1,4) ,FX(1,5) ,FY(1,5) ,FZ(1,5) ,
+     A         FX(1,6) ,FY(1,6) ,FZ(1,6) ,NEL     ,
+     B         ICP     ,ICS     ,NLOC_DMG,
+     C         IPM     ,ISTRA   ,IGEO    ,GRESAV  ,GRTH       ,
+     D         IGRTH(NF1),TABLE ,MSSA(NF1),DMELS(NF1)  ,VOLN  ,
+     E         ITASK ,IPRI      ,MAT_ELEM ,IBID,TEMP       ,
+     F         FTHE  ,FTHESKY   ,CONDN    ,CONDNSKY ,
+     G         IEXPAN,IFTHE ,ICONDN    ,DT      ,SNPC,STF,
+     H         SBUFMAT,SVIS,NSVOIS, IDTMINS  ,IRESP, 
+     I         IDEL7NG  ,IDEL7NOK,MAXFUNC, IMON_MAT, USERL_AVAIL, 
+     J         GLOB_THERM,XDP,SENSORS )
+c
+              IF(NSECT>0)THEN
+               K0=NSTRF(25)
+               N=NINTER+NRWALL+NRBODY
+               DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S6(JFT, JLT, NFT, NSTRF(K0+7), NSTRF(K0+3),
+     2           NSTRF(K0+4), NSTRF(K0+5), NSTRF(K3), X, V,
+     3           FSAV(1,N), IXS, FANI(1,1+2*(I-1)), SECFCUM(1,1,I), FX,
+     4           FY, FZ, NSTRF(K0), NSTRF(K0+14), NSTRF(K0+26),
+     5           NSTRF(K0+6), NSTRF(K2), MS,XSEC(1,1,I),
+     6           pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+               ENDDO
+              ENDIF
+c---------
+            ELSE
+c---------
+C              8 node hexa
+              CALL SCFORC3(TIMERS, OUTPUT, ELBUF_TAB,NG          ,
+     1         PM       ,GEO      ,IXS     ,X           ,
+     2         A        ,V        ,MS      ,W           ,
+     3         VAL2     ,VEUL     ,FV      ,ALE_CONNECT       ,IPARG     ,
+     4         TF       ,NPC      ,BUFMAT  ,PARTSAV     ,NLOC_DMG  ,
+     5         DT2T     ,NELTST   ,ITYPTST ,STIFN       ,FSKY    ,
+     6         IADS     ,OFFSET   ,EANI    ,IPARTS(NF1) ,
+     7         FX(1,1)  ,FY(1,1)  ,FZ(1,1) ,FX(1,2)     ,FY(1,2) ,
+     8         FZ(1,2)  ,FX(1,3)  ,FY(1,3) ,FZ(1,3)     ,FX(1,4) ,
+     9         FY(1,4)  ,FZ(1,4)  ,FX(1,5) ,FY(1,5)     ,FZ(1,5) ,
+     A         FX(1,6)  ,FY(1,6)  ,FZ(1,6) ,FX(1,7)     ,FY(1,7) ,
+     B         FZ(1,7)  ,FX(1,8)  ,FY(1,8) ,FZ(1,8)     ,NEL     ,
+     C         ICP      ,ICS      ,NVC     ,
+     D         IPM      ,ISTRA    ,TEMP    ,FTHE        ,FTHESKY   ,
+     E         IEXPAN   ,IGEO     ,GRESAV  ,GRTH        ,IGRTH(NF1),
+     F         MSSA(NF1),DMELS(NF1),TABLE  ,XDP         ,VOLN      ,
+     G         CONDN    ,CONDNSKY ,ITASK   ,IPRI        ,MAT_ELEM  ,
+     H         IBID     ,DT       ,SNPC    ,STF         ,SBUFMAT   ,
+     I         SVIS     ,NSVOIS   , IDTMINS,IRESP,IDEL7NG  ,IDEL7NOK,MAXFUNC,IMON_MAT,
+     J         USERL_AVAIL, GLOB_THERM, impl_s,     idyna,SENSORS)
+C
+            IF (NSECT > 0)THEN
+              K0=NSTRF(25)
+              N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2        NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3        IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4        FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5        NSTRF(K2),MS,
+     7        IXS20,IXS16,ISOLNOD,XSEC(1,1,I),pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+              ENDDO
+            ENDIF
+C
+           ENDIF
+          ELSEIF (JHBE == 17) THEN
+C------------------------- Isolid=19 for Salim
+            IF (IPARG(36,NG)==3) THEN
+!            IF (IMPL_S /= 0) THEN
+             CALL S8SFORC3(TIMERS,OUTPUT, ELBUF_TAB,NG   ,
+     1         PM         ,GEO      ,IXS      ,X          ,
+     2         A          ,V        ,MS       ,W          ,
+     3         VAL2       ,VEUL     ,FV       ,ALE_CONNECT      ,IPARG     ,
+     4         TF         ,NPC      ,BUFMAT   ,PARTSAV    ,NLOC_DMG  ,
+     5         DT2T       ,NELTST   ,ITYPTST  ,STIFN      ,FSKY      ,
+     6         IADS       ,OFFSET   ,EANI     ,IPARTS(NF1),ICP       ,
+     7         FX(1,1)    ,FY(1,1)  ,FZ(1,1)  ,FX(1,2)    ,FY(1,2)   ,
+     8         FZ(1,2)    ,FX(1,3)  ,FY(1,3)  ,FZ(1,3)    ,FX(1,4)   ,
+     9         FY(1,4)    ,FZ(1,4)  ,FX(1,5)  ,FY(1,5)    ,FZ(1,5)   ,
+     A         FX(1,6)    ,FY(1,6)  ,FZ(1,6)  ,FX(1,7)    ,FY(1,7)   ,
+     B         FZ(1,7)    ,FX(1,8)  ,FY(1,8)  ,FZ(1,8)    ,NEL       ,
+     C         NVC        ,IPM      ,ITASK    ,ISTRA      ,
+     D         TEMP       ,FTHE     ,FTHESKY  ,IEXPAN     ,GRESAV    ,
+     E         GRTH       ,IGRTH(NF1),MSSA(NF1),DMELS(NF1),TABLE     ,
+     F         IGEO       ,XDP      ,VOLN      ,CONDN    ,CONDNSKY   ,
+     G         D          ,IPRI     ,MAT_ELEM ,IBID,SNPC,STF,SBUFMAT,
+     H         SVIS       ,NSVOIS   ,IDTMINS  ,IRESP,IDTMIN,MAXFUNC ,
+     I         USERL_AVAIL,DT       ,GLOB_THERM,SENSORS)
+            ELSE
+C-------------------------
+C             SOLID HE8<->HE8
+C-------------------------
+            CALL S8EFORC3(TIMERS, OUTPUT,
+     1   ELBUF_TAB,  NG,         PM,         GEO,
+     2   IXS,        X,          A,          V,
+     3   MS,         W,          VAL2,
+     4   VEUL,       FV,         ALE_CONNECT,IPARG,
+     5   TF,         NPC,        BUFMAT,     PARTSAV,
+     6   NLOC_DMG,   DT2T,       NELTST,     ITYPTST,
+     7   STIFN,      FSKY,       IADS,       OFFSET,
+     8   EANI,       IPARTS(NF1),ICP,        FX(1,1),
+     9   FY(1,1),    FZ(1,1),    FX(1,2),    FY(1,2),
+     A   FZ(1,2),    FX(1,3),    FY(1,3),    FZ(1,3),
+     B   FX(1,4),    FY(1,4),    FZ(1,4),    FX(1,5),
+     C   FY(1,5),    FZ(1,5),    FX(1,6),    FY(1,6),
+     D   FZ(1,6),    FX(1,7),    FY(1,7),    FZ(1,7),
+     E   FX(1,8),    FY(1,8),    FZ(1,8),    NEL,
+     F   NVC,        IPM,        ITASK,      ISTRA,
+     G   TEMP,       FTHE,       FTHESKY,    IEXPAN,
+     H   GRESAV,     GRTH,       IGRTH(NF1), MSSA(NF1),
+     I   DMELS(NF1), TABLE,      IGEO,       XDP,
+     J   VOLN,       CONDN,      CONDNSKY,   D,
+     K   SENSORS,    IPRI,       MAT_ELEM,   IBID,
+     L   DT,         SNPC,       STF,        SBUFMAT,SVIS,
+     M   NSVOIS,     IDTMINS,    IRESP,      MAXFUNC,  
+     V   USERL_AVAIL,GLOB_THERM, impl_s,     idyna  )
+            ENDIF !(IPARG(36,NG)==3)   (IMPL_S /= 0)
+c
+            IF (NSECT > 0) THEN
+              K0=NSTRF(25)
+              N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2           NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3           IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4           FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5           NSTRF(K2),MS,
+     7          IXS20,IXS16,ISOLNOD,XSEC(1,1,I),
+     8          pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+              ENDDO
+            ENDIF
+          ELSEIF (JHBE == 14 .AND. 
+     .           (IGTYP == 20 .OR. IGTYP == 21 .OR. IGTYP == 22)) THEN
+C-------------------------
+C           THICK SHELL HA8
+C-------------------------
+            NIPMAX = 729                      
+            L1  = 1                           
+            L2  = L1  + MVSIZ * NIPMAX         
+            L3  = L2  + MVSIZ * NIPMAX         
+            L4  = L3  + MVSIZ * NIPMAX         
+            L5  = L4  + MVSIZ * NIPMAX         
+            L6  = L5  + MVSIZ * NIPMAX         
+            L7  = L6  + MVSIZ * NIPMAX         
+            L8  = L7  + MVSIZ * NIPMAX         
+            L9  = L8  + MVSIZ * NIPMAX         
+            L10 = L9  + MVSIZ * NIPMAX         
+            L11 = L10 + MVSIZ * NIPMAX        
+            L12 = L11 + MVSIZ * NIPMAX             
+c
+            CALL S8CFORC3(TIMERS, OUTPUT, ELBUF_TAB,NG    ,
+     1         PM    ,GEO   ,IXS    ,X            ,
+     2         A            ,V     ,MS    ,W      ,
+     3         VAL2    ,VEUL    ,FV      ,ALE_CONNECT   ,IPARG       ,
+     4         TF      ,NPC     ,BUFMAT  ,PARTSAV ,NLOC_DMG    ,
+     5         DT2T ,NELTST ,ITYPTST,STIFN        ,FSKY        ,
+     6         IADS ,OFFSET ,EANI     ,IPARTS(NF1) ,
+     7         FX(1,1) ,FY(1,1) ,FZ(1,1) ,FX(1,2) ,FY(1,2) ,
+     8         FZ(1,2) ,FX(1,3) ,FY(1,3) ,FZ(1,3) ,FX(1,4) ,
+     9         FY(1,4) ,FZ(1,4) ,FX(1,5) ,FY(1,5) ,FZ(1,5) ,
+     A         FX(1,6) ,FY(1,6) ,FZ(1,6) ,FX(1,7) ,FY(1,7) ,
+     B         FZ(1,7) ,FX(1,8) ,FY(1,8) ,FZ(1,8) ,NEL     ,
+     C         ICP ,
+     F         ICS      ,W16(L1)   ,W16(L2) ,W16(L3) ,W16(L4) ,
+     G         W16(L5)  ,W16(L6)   ,W16(L7) ,W16(L8) ,W16(L9) ,
+     H         W16(L10) ,W16(L11)  ,W16(L12),NVC     ,IPM     ,
+     I         ITASK    ,ISTRA     ,TEMP    ,FTHE,
+     J         FTHESKY  ,IEXPAN    ,IGEO    ,NPT     ,GRESAV  ,
+     K         GRTH     ,IGRTH(NF1),MSSA(NF1),DMELS(NF1),TABLE,
+     L         XDP      ,VOLN      ,CONDN    ,CONDNSKY,SENSORS,
+     M         IPRI     ,MAT_ELEM  ,IBID  ,DT ,NODADT,  DTFAC1,
+     N         DTMIN1   ,IDTMIN    ,SNPC,STF,SBUFMAT,SVIS,NSVOIS,IDTMINS,
+     O         IRESP    ,MAXFUNC   ,USERL_AVAIL, 
+     P         GLOB_THERM,impl_s,idyna)
+C
+            IF (NSECT > 0) THEN
+              K0=NSTRF(25)
+              N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2           NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3           IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4           FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5           NSTRF(K2),MS,
+     7          IXS20,IXS16,ISOLNOD,XSEC(1,1,I),
+     8          pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+              ENDDO
+            ENDIF
+          ELSEIF (JHBE == 14 .OR. JHBE == 222) THEN
+C-------------------------
+C             SOLID HA8
+C-------------------------
+              NIPMAX = 729
+              L1 = 1
+              L2 = L1 + MVSIZ * NIPMAX
+              L3 = L2 + MVSIZ * NIPMAX
+              L4 = L3 + MVSIZ * NIPMAX
+              L5 = L4 + MVSIZ * NIPMAX
+              L6 = L5 + MVSIZ * NIPMAX
+              L7 = L6 + MVSIZ * NIPMAX
+              L8 = L7 + MVSIZ * NIPMAX
+              L9 = L8 + MVSIZ * NIPMAX
+              L10 = L9 + MVSIZ * NIPMAX
+              L11 = L10 + MVSIZ * NIPMAX
+              L12 = L11 + MVSIZ * NIPMAX
+c
+c            MPT =IABS(NPT)
+c            NPTS=MPT/100
+c            IF (NPTS==0) NPTS=IINT
+c            NPTT=MOD(MPT/10,10)
+c            IF (NPTT==0) NPTT=IINT
+c            NPTR=MOD(MPT,10)
+c            IF (NPTR==0) NPTR=IINT
+
+            NPT0 = IPARG(6,NG)
+            
+            CALL S8ZFORC3(TIMERS, OUTPUT, ELBUF_TAB,NG     ,
+     1         PM         ,GEO       ,IXS      ,X          ,        
+     2         A          ,V         ,MS       ,W          ,
+     3         VAL2       ,VEUL      ,FV       ,ALE_CONNECT      ,IPARG      , 
+     4         TF         ,NPC       ,BUFMAT   ,PARTSAV    ,NLOC_DMG   , 
+     5         DT2T       ,NELTST    ,ITYPTST  ,STIFN      ,FSKY       ,
+     6         IADS       ,OFFSET    ,EANI     ,IPARTS(NF1),ICP        ,
+     7         FX(1,1)    ,FY(1,1)   ,FZ(1,1)  ,FX(1,2)    ,FY(1,2)    ,
+     8         FZ(1,2)    ,FX(1,3)   ,FY(1,3)  ,FZ(1,3)    ,FX(1,4)    ,
+     9         FY(1,4)    ,FZ(1,4)   ,FX(1,5)  ,FY(1,5)    ,FZ(1,5)    ,
+     A         FX(1,6)    ,FY(1,6)   ,FZ(1,6)  ,FX(1,7)    ,FY(1,7)    ,
+     B         FZ(1,7)    ,FX(1,8)   ,FY(1,8)  ,FZ(1,8)    ,NEL        ,
+     F         ICS        ,W16(L1)   ,W16(L2)  ,W16(L3)    ,W16(L4)    ,
+     G         W16(L5)    ,W16(L6)   ,W16(L7)  ,W16(L8)    ,W16(L9)    ,
+     H         W16(L10)   ,W16(L11)  ,W16(L12) ,NVC        ,IPM        ,
+     I         ITASK      ,ISTRA    ,TEMP       ,FTHE       ,
+     J         FTHESKY    ,IEXPAN    ,IGEO     ,NPT0       ,GRESAV     ,
+     K         GRTH       ,IGRTH(NF1),MSSA(NF1),DMELS(NF1) ,TABLE      ,
+     L         XDP        ,VOLN      ,CONDN    ,CONDNSKY   ,JFAC,
+     M         D          ,SENSORS   ,IPRI     ,MAT_ELEM   ,IBID,DT ,SNPC,
+     N         STF        ,SBUFMAT   ,SVIS     ,NSVOIS     ,IDTMINS  ,
+     O         IRESP      ,MAXFUNC   ,USERL_AVAIL, GLOB_THERM, 
+     P         impl_s     ,idyna)
+C
+            IF (NSECT > 0) THEN
+              K0=NSTRF(25)
+              N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2           NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3           IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4           FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5           NSTRF(K2),MS,
+     7          IXS20,IXS16,ISOLNOD,XSEC(1,1,I),
+     8          pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+              ENDDO
+            ENDIF
+C----6---------------------------------------------------------------7---------8
+          ELSEIF(IGTYP>=29)THEN
+!
+            IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .       CALL SENSOR_ENERGY_PART(IPARTS(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+C-------------------------
+C           USER SOLID PROPERTY
+C-------------------------
+            CALL SUFORC3(TIMERS,ELBUF_TAB(NG),
+     1           JFT     ,JLT     ,NFT     ,NEL     ,IXS      ,
+     2           PM      ,GEO     ,IPM     ,IGEO    ,X        ,
+     3           A       ,AR      ,V       ,VR      ,W        ,
+     4           D       ,MS      ,IN      ,TF      ,NPC      ,
+     5           BUFMAT  ,IPARG   ,IPARTS(NF1),PARTSAV ,MAT_ELEM%MAT_PARAM,
+     6           FSKY    ,FR_WAVE ,IADS    ,EANI    ,STIFN    ,
+     7           STIFR   ,FX      ,FY      ,FZ      ,IFAILURE ,
+     8           MTN     ,IGTYP   ,NPT     ,JSMS    ,MSSA(NF1),
+     9           DMELS(NF1),ITASK ,IPRI    ,JTHE    ,TABLE    ,
+     A           IDTMINS,DTFACS   ,DTMINS)
+C--------------------------
+          ELSEIF (NPT == 1)THEN
+C--------------------------
+            IF (JHBE == 24) THEN
+C-------------------------
+C              SOLID HEPH FORMULATION
+C-------------------------
+               IHET = IINT
+C
+               CALL SZFORC3(TIMERS,ELBUF_TAB,NG    ,
+     1         PM      ,GEO    ,IXS    ,X            ,
+     2         A       ,V     ,MS     ,W      ,
+     3         VAL2      ,VEUL      ,FV         ,ALE_CONNECT      ,IPARG     ,  
+     4         TF      ,NPC    ,BUFMAT       ,PARTSAV     ,
+     5         DT2T    ,NELTST,ITYPTST,STIFN        ,FSKY        ,
+     6         IADS    ,OFFSET,EANI     ,IPARTS(NF1) ,ICP,
+     7         FX(1,1) ,FY(1,1) ,FZ(1,1) ,FX(1,2) ,FY(1,2) ,
+     8         FZ(1,2) ,FX(1,3) ,FY(1,3) ,FZ(1,3) ,FX(1,4) ,
+     9         FY(1,4) ,FZ(1,4) ,FX(1,5) ,FY(1,5) ,FZ(1,5) ,
+     A         FX(1,6) ,FY(1,6) ,FZ(1,6) ,FX(1,7) ,FY(1,7) ,
+     B         FZ(1,7) ,FX(1,8) ,FY(1,8) ,FZ(1,8) ,NEL     ,
+     C         FSKYM   ,MSNF    ,NVC     ,IPM     ,ITASK  ,
+     D         QMVBID  ,ISTRA   ,IMATVIS ,TEMP    ,FTHE   ,
+     E         FTHESKY ,IEXPAN  ,GRESAV  ,GRTH    ,IGRTH(NF1),
+     F         MSSA(NF1),DMELS(NF1),TABLE,IGEO    ,XDP    ,
+     G         CONDN     ,CONDNSKY  ,
+     H         D         ,TAGPRT_SMS,SENSORS  ,IPRI      ,
+     I         NALE      ,NLOC_DMG  ,MAT_ELEM,IBID,DT,
+     J         OUTPUT,NSVOIS,IBID,SNPC,STF,SBUFMAT,SVIS,IRESP,
+     K         MAXFUNC,  USERL_AVAIL, GLOB_THERM, impl_s   ,idyna)
+C
+            ELSE
+C-------------------------
+C             STANDARD 8 NODE SOLID ELEMENT (JHBE = 1,2,101,102)
+C-------------------------
+              !
+              CALL SFORC3(TIMERS, OUTPUT,
+     1   ELBUF_TAB,  NG,         PM,         GEO,
+     2   IXS,        X,          NV46,       A,
+     3   V,          MS,         W,          WA,
+     4   VAL2,       VEUL,       FV,         ALE_CONNECT,
+     5   IPARG,      TF,         NPC,        BUFMAT,
+     6   PARTSAV,    ITAB,       DT2T,       NELTST,
+     7   ITYPTST,    STIFN,      FSKY,       IADS,
+     8   OFFSET,     EANI,       IPARTS(NF1),FX(1,1),
+     9   FY(1,1),    FZ(1,1),    FX(1,2),    FY(1,2),
+     A   FZ(1,2),    FX(1,3),    FY(1,3),    FZ(1,3),
+     B   FX(1,4),    FY(1,4),    FZ(1,4),    FX(1,5),
+     C   FY(1,5),    FZ(1,5),    FX(1,6),    FY(1,6),
+     D   FZ(1,6),    FX(1,7),    FY(1,7),    FZ(1,7),
+     E   FX(1,8),    FY(1,8),    FZ(1,8),    NEL,
+     F   FSKYM,      MSNF,       IBID,       BID,
+     G   NVC,        IPM,        IGEO,       AR,
+     H   VR,         IN,         FR_WAVE,    DR,
+     I   BID,        ITASK,      QMVBID,     ISTRA,
+     J   TEMP,       FTHE,       FTHESKY,    IEXPAN,
+     K   GRESAV,     GRTH,       IGRTH(NF1), MSSA(NF1),
+     L   DMELS(NF1), TABLE,      PHI1,       PHI2,
+     M   VF,         AF,         DF,         WF,
+     N   FFSKY,      AFGLOB,     MSF,        IPARG(1,NG),
+     O   XDP,        POR,        ICONTACT,   IFOAM,
+     P   VOLN,       CONDN,      CONDNSKY,   AGRAV,
+     Q   IGRV,       LGRAV,      SENSORS,    SKEW,
+     R   NALE,       D,          IPRI,       NLOC_DMG,
+     S   MAT_ELEM,   IBID,       DT,         IDEL7NOK,NSVOIS,
+     T   IBID,       SNPC,       STF,        SBUFMAT,SVIS,IDTMINS,
+     U   IRESP,      IDEL7NG,    MAXFUNC,    USERL_AVAIL, GLOB_THERM, 
+     V   impl_s,     idyna,      OUTPUT%TH%WFEXT,fake_size,fake_size)
+
+            ENDIF
+
+            IF (NSECT > 0)THEN
+               K0=NSTRF(25)
+               N=NINTER+NRWALL+NRBODY
+               DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2           NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3           IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4           FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5           NSTRF(K2),MS,
+     7           IXS20,IXS16,ISOLNOD,XSEC(1,1,I),
+     8           pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+               ENDDO
+            ENDIF
+          ELSEIF (NPT == 8 .AND. MTN /= 0) THEN
+C-------------------------
+C             8 NODE SOLID ELEMENT (JHBE = 12,112), 8 integration points (old)
+C-------------------------
+            CALL S8FORC3(TIMERS, OUTPUT,
+     1      ELBUF_TAB(NG),PM           ,GEO      ,IXS      ,X         ,           
+     2      A          ,V            ,MS       ,                       
+     3      VEUL         ,FV       ,ALE_CONNECT     ,IPARG      ,                     
+     4      TF       ,NPC      ,BUFMAT    ,PARTSAV    ,             
+     5      STIFN        ,FSKY     ,IADS     ,OFFSET    ,IPARTS(NF1),           
+     6      NEL          ,DT2T     ,NELTST   ,ITYPTST   ,IPM        ,           
+     7      ITASK        ,GRESAV   ,GRTH     ,IGRTH(NF1),MSSA(NF1)  ,           
+     8      DMELS(NF1)   ,TABLE,IPRI     ,MAT_ELEM,NG  ,SVIS ,GLOB_THERM,
+     9      SNPC         ,NUMGEO         ,SBUFMAT      ,STF,NTABLE,SENSORS)     
+                                                 
+            IF (NSECT > 0)THEN
+               K0=NSTRF(25)
+               N=NINTER+NRWALL+NRBODY
+               DO I=1,NSECT
+                N=N+1
+                K2=K0+30+NSTRF(K0+14)
+                K3=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+                IPARSENS=0
+                ISECT=0
+                IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+                CALL SECTION_S(JFT,JLT,NFT,NSTRF(K0+7),NSTRF(K0+3),
+     2           NSTRF(K0+4),NSTRF(K0+5),NSTRF(K3),X,V,FSAV(1,N),
+     3           IXS        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I),FX ,FY ,
+     4           FZ   ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     5           NSTRF(K2),MS,
+     7           IXS20,IXS16,ISOLNOD,XSEC(1,1,I),
+     8           pFBSAV6,IPARSENS)
+                K0=NSTRF(K0+24)
+               ENDDO
+            ENDIF
+          ENDIF
+C----6---------------------------------------------------------------7---------8
+        ELSEIF(ITY==2.AND.JMULT==0.AND.JLAG==1.AND.
+     .         ICRACK==0) THEN
+             OFF_IGRTH = NUMELS
+!
+          IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .     CALL SENSOR_ENERGY_PART(IPARTQ(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+          IF(JHBE==17 .OR. (N2D==1.AND.JHBE==22)) THEN
+          
+            CALL Q4FORC2(TIMERS,OUTPUT,
+     1        PM   ,GEO   ,IXQ    ,X         ,A           ,
+     2        V    ,MS    ,W      ,VAL2 ,
+     3        VEUL  ,FV     ,ALE_CONNECT     ,IPARG     ,NLOC_DMG,
+     4        ELBUF_TAB,TF    ,NPC    ,BUFMAT    ,PARTSAV     ,
+     5        DT2T ,NELTST,ITYPTST,STIFN     ,OFFSET      ,
+     6        EANI ,IPARTQ(NF1),NEL,IADQ     ,FSKY        ,
+     7        IPARG(10,NG),NG    ,
+     8        IPM         ,BID   ,GRESAV   ,GRTH        ,
+     9        IGRTH(OFF_IGRTH+NF1),TABLE     ,IGEO      ,ITASK   ,IEXPAN,
+     A        MS_2D      ,FSKYM   ,IPRI      ,MAT_ELEM  ,IBID,IBID,SNPC,
+     B        STF,SBUFMAT,SVIS,NSVOIS,IDTMINS,IRESP,TT,DT1,      
+     .        IDEL7NG,     IDEL7NOK,    IDTMIN,      MAXFUNC,IMON_MAT,
+     V        USERL_AVAIL, impl_s,     idyna,
+     .        DT         , GLOB_THERM,SENSORS)
+          ELSE
+
+            CALL QFORC2(TIMERS, OUTPUT, ELBUF_TAB,NG   ,
+     1        PM      ,GEO    ,IXQ     ,X         ,A           ,
+     2        V       ,MS     ,W       ,WA        ,VAL2        ,
+     3        VEUL    ,ALE_CONNECT   ,IPARG     ,NLOC_DMG    ,
+     4        TF      ,NPC    ,BUFMAT  ,PARTSAV   ,
+     5        DT2T    ,NELTST ,ITYPTST ,STIFN     ,OFFSET      ,
+     6        EANI    ,IPARTQ(NF1),NEL ,IADQ      ,FSKY        ,
+     9        IPM     ,BID    ,QMVBID       ,
+     A        GRESAV  ,GRTH   ,IGRTH(OFF_IGRTH+NF1),TABLE,IGEO ,
+     B        VOLN    ,ITASK  ,MS_2D   ,FSKYM     ,IPRI        ,
+     C        MAT_ELEM,H3D_DATA%STRAIN,IBID,SNPC,STF,SBUFMAT,
+     D        SVIS,NSVOIS,IRESP,TT,DT1,      
+     .        IDEL7NOK,    IDTMIN,     MAXFUNC,  
+     .        IMON_MAT,USERL_AVAIL, impl_s,     idyna,
+     .        DT      ,GLOB_THERM,SENSORS,fake_size,fake_size,nv46)
+
+          ENDIF
+C----6---------------------------------------------------------------7---------8
+        ELSEIF (ITY == 4) THEN
+             K1=1 + 6*(NUMELC+NUMELTG)*IEPSDOT+15*NFT
+             OFF_IGRTH = NUMELS+NUMELQ+NUMELC
+C
+          IF (IPREID>0) THEN
+             FUN_ID = IPARG(73,NG)
+             SENS_ID= IPARG(74,NG) 
+             CALL GET_PRELOAD_AXIAL(PYTHON, NFUNCT,
+     1           FUN_ID        ,SENS_ID       ,NPC          ,SNPC          ,
+     2           TF            ,STF           ,SENSORS      ,TT            ,
+     3           PRELOAD1      ,STF_F         )
+          ELSE
+             PRELOAD1 =ZERO
+          END IF
+!
+          IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .     CALL SENSOR_ENERGY_PART(IPARTT(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+c
+          CALL TFORC3(MAT_ELEM%MAT_PARAM,NUMMAT,
+     1   ELBUF_TAB(NG),       JFT,                 JLT,                 PM,
+     2   GEO,                 IXT,                 X,                   A,
+     3   V,                   PARTSAV,             BUFMAT,              DT2T,
+     4   NELTST,              ITYPTST,             STIFN,               FSKY,
+     5   IADT,                OFFSET,              IPARTT(NF1),         TANI(K1),
+     6   FX(1,1),             FX(1,2),             FY(1,1),             FY(1,2),
+     7   FZ(1,1),             FZ(1,2),             NEL,                 GRESAV,
+     8   GRTH,                IGRTH(OFF_IGRTH+NF1),MSTR(NF1),           DMELTR(NF1),
+     9   IPRI,                IPM,                 NPC,                 TF,
+     A   ITASK,               H3D_DATA,            NFT,                 MTN,
+     B   JSMS,                IGRE,                PRELOAD1,            STF_F,
+     C   DT,                  SENSORS)
+C
+             IF (NSECT > 0) THEN
+              K0=NSTRF(25)
+            N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+               N=N+1
+               K2=K0+30+NSTRF(K0+14)
+               K6=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+     1           +2*NSTRF(K0+7)+2*NSTRF(K0+8)+2*NSTRF(K0+9)
+               IPARSENS=0
+               ISECT=0
+               IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+               CALL SECTION_T(JFT,JLT,NFT,NSTRF(K0+10),NSTRF(K0+3),
+     2          NSTRF(K0+4),NSTRF(K0+5),NSTRF(K6),X,V,FSAV(1,N),
+     3          IXT        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I) ,
+     4          FX ,FY ,FZ ,NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),
+     5          NSTRF(K0+6),NSTRF(K2) ,MS,
+     6                 XSEC(1,1,I), pFBSAV6,IPARSENS)
+C
+               K0=NSTRF(K0+24)
+            ENDDO ! DO I=1,NSECT
+          ENDIF ! IF (NSECT > 0)
+C----6---------------------------------------------------------------7---------8
+        ELSEIF (ITY == 5) THEN
+             OFF_IGRTH = NUMELS+NUMELQ+NUMELC+NUMELT
+             K1=1 + 6*(NUMELC+NUMELTG)*IEPSDOT + 15*(NUMELT+NFT)
+C
+          IF (IPREID>0) THEN
+             FUN_ID = IPARG(73,NG)
+             SENS_ID= IPARG(74,NG) 
+             CALL GET_PRELOAD_AXIAL(PYTHON, NFUNCT,
+     1           FUN_ID        ,SENS_ID       ,NPC          ,SNPC          ,
+     2           TF            ,STF           ,SENSORS      ,TT            ,
+     3           PRELOAD1      ,STF_F         )
+          ELSE
+             PRELOAD1 =ZERO
+          END IF
+!
+          IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .      CALL SENSOR_ENERGY_PART(IPARTP(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+c
+          CALL PFORC3(
+     1         ELBUF_TAB(NG),JFT                 ,JLT           ,NEL        ,
+     2         MTN          ,ISMSTR              ,PM            ,IXP(1,NF1) ,
+     3         X            ,A                   ,AR            ,V          ,
+     4         VR           ,GEO                 ,PARTSAV       ,DT2T       ,
+     5         NELTST       ,ITYPTST             ,STIFN         ,STIFR      ,
+     6         FSKY         ,IADP                ,OFFSET        ,IPARTP(NF1),
+     7         TANI(K1)     ,FX(1,1)             ,FX(1,2)       ,FY(1,1)    ,
+     8         FY(1,2)      ,FZ(1,1)             ,FZ(1,2)       ,MX(1,1)    ,
+     9         MX(1,2)      ,MY(1,1)             ,MY(1,2)       ,MZ(1,1)    ,
+     A         MZ(1,2)      ,IGEO                ,IPM           ,BUFMAT     ,
+     B         NPT          ,NPC                 ,TF            ,GRESAV     ,
+     C         GRTH         ,IGRTH(OFF_IGRTH+NF1),MSP(NF1)      ,DMELP(NF1) ,
+     D         IPRI         ,ITASK               ,JTHE          ,TEMP       ,
+     E         FTHE         ,FTHESKY             ,IEXPAN        ,H3D_DATA   ,
+     F         JSMS         ,IGRE                ,NFT           ,IFAIL      ,
+     G         SBUFMAT      ,SNPC                ,STF           ,NUMMAT     ,
+     H         NUMGEO       ,IOUT                ,ISTDO         ,IDEL7NOK   ,
+     I         IDYNA        ,IMCONV              ,IMPL_S        ,MAT_ELEM%MAT_PARAM,
+     J         PRELOAD1     ,STF_F               ,DT            ,SENSORS    ,
+     K         NTABLE       ,TABLE               )
+C 
+             IF (NSECT > 0) THEN
+              K0=NSTRF(25)
+              N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+               N=N+1
+               K2=K0+30+NSTRF(K0+14)
+               K7=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+     1           +2*NSTRF(K0+7)+2*NSTRF(K0+8)+2*NSTRF(K0+9)
+     2           +2*NSTRF(K0+10)
+               IPARSENS=0
+               ISECT=0
+               IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+               CALL SECTION_P(JFT,JLT,NFT,NSTRF(K0+11),NSTRF(K0+3),
+     2          NSTRF(K0+4),NSTRF(K0+5),NSTRF(K7),X,V,VR,FSAV(1,N),
+     3          IXP        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I) ,
+     4          FX ,FY ,FZ  ,MX  ,MY,  MZ,
+     5          NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     6          NSTRF(K2),MS,
+     8                  XSEC(1,1,I),pFBSAV6,IPARSENS)
+               K0=NSTRF(K0+24)
+            ENDDO ! DO I=1,NSECT
+          ENDIF ! IF (NSECT > 0)
+C----6---------------------------------------------------------------7---------8
+        ELSEIF (ITY == 6) THEN
+             K1=1 + 6*(NUMELC+NUMELTG)*IEPSDOT + 15*(NUMELT+NUMELP+NFT)
+             OFF_IGRTH = NUMELS+NUMELQ+NUMELC+NUMELT+NUMELP
+c
+          IF (IPREID>0) THEN
+             FUN_ID = IPARG(73,NG)
+             SENS_ID= IPARG(74,NG) 
+             CALL GET_PRELOAD_AXIAL(PYTHON, NFUNCT, 
+     1           FUN_ID        ,SENS_ID       ,NPC          ,SNPC          ,
+     2           TF            ,STF           ,SENSORS      ,TT            ,
+     3           PRELOAD1      ,STF_F         )
+          ELSE
+             PRELOAD1 =ZERO
+          END IF
+          IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .     CALL SENSOR_ENERGY_PART(IPARTR(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+         IF(IGTYP == 23) THEN
+              CALL R23FORC3(PYTHON,
+     1   ELBUF_TAB(NG),        JFT,                  JLT,                  NEL,
+     2   MTN,                  IGEO,                 GEO,                  IPM,
+     3   IXR(1,NF1),           X,                    TABLE,                XDP,
+     4   A,                    NPC,                  TF,                   SKEW,
+     5   FLG_KJ2,              VR,                   AR,                   V,
+     6   DT2T,                 NELTST,               ITYPTST,              STIFN,
+     7   STIFR,                MS,                   IN,                   FSKY,
+     8   IADR,                 SENSORS   ,           OFFSET,               ANIN,
+     9   PARTSAV,              IPARTR(NF1),          TANI(K1),             FR_WAVE,
+     A   BUFMAT,               BUFGEO,               PM,                   RBY,
+     B   FX(1,1),              FX(1,2),              FY(1,1),              FY(1,2),
+     C   FZ(1,1),              FZ(1,2),              MX(1,1),              MX(1,2),
+     D   MY(1,1),              MY(1,2),              MZ(1,1),              MZ(1,2),
+     E   GRESAV,               GRTH,                 IGRTH(OFF_IGRTH+NF1), MSRT(NF1),
+     F   DMELRT(NF1),          FLAG_SLIPRING_UPDATE, FLAG_RETRACTOR_UPDATE,H3D_DATA,
+     G   JSMS,                 IGRE,                 NFT,                  PRELOAD1   ,
+     H   STF_F,                STF,                  SANIN,                IRESP,
+     I   SNPC ,                mat_elem,             NGRTH,                NELEM,
+     J   FLG_SPR_DT)
+         ELSE
+          CALL RFORC3(PYTHON,
+     1   ELBUF_TAB(NG),       JFT,                 JLT,                 NEL,
+     2   MTN,                 IGEO,                GEO,                 IXR(1,NF1),
+     3   X,                   TABLE,               XDP,                 A,
+     4   NPC,                 TF,                  SKEW,                FLG_KJ2,
+     5   VR,                  AR,                  V,                   DT2T,
+     6   NELTST,              ITYPTST,             STIFN,               STIFR,
+     7   MS,                  IN,                  FSKY,                IADR,
+     8   SENSORS   ,          OFFSET,              ANIN,                PARTSAV,
+     9   IPARTR(NF1),         TANI(K1),            FR_WAVE,             BUFMAT,
+     A   BUFGEO,              PM,                  RBY,                 FX(1,1),
+     B   FX(1,2),             FY(1,1),             FY(1,2),             FZ(1,1),
+     C   FZ(1,2),             MX(1,1),             MX(1,2),             MY(1,1),
+     D   MY(1,2),             MZ(1,1),             MZ(1,2),             GRESAV,
+     E   GRTH,                IGRTH(OFF_IGRTH+NF1),MSRT(NF1),           DMELRT(NF1),
+     F   ITASK,               H3D_DATA,            JSMS,                NFT,
+     G   IAD,                 IGRE,                PRELOAD1 ,           STF_F ,
+     H   STF,                 SANIN,               IRESP,               IMPL_S,
+     I   IDYNA,               SNPC,                FLG_SPR_DT)
+             
+         ENDIF
+C
+            IF (NSECT > 0) THEN
+              K0=NSTRF(25)
+              N=NINTER+NRWALL+NRBODY
+              DO I=1,NSECT
+               N=N+1
+               K2=K0+30+NSTRF(K0+14)
+               K8=K0+30+NSTRF(K0+14)+NSTRF(K0+6)
+     1           +2*NSTRF(K0+7)+2*NSTRF(K0+8)+2*NSTRF(K0+9)
+     2           +2*NSTRF(K0+10)+2*NSTRF(K0+11)
+               IPARSENS=0
+               ISECT=0
+               IF (SENSORS%STABSEN > 0) ISECT=SENSORS%TABSENSOR(I+1)-SENSORS%TABSENSOR(I)
+                NULLIFY(pFBSAV6)
+                IF(ISECT/=0) THEN
+                  IPARSENS=1
+                  pFBSAV6 => SENSORS%FSAV(1,1,ISECT)
+                ENDIF
+C
+               CALL SECTION_R(JFT,JLT,NFT,NSTRF(K0+12),NSTRF(K0+3),
+     2          NSTRF(K0+4),NSTRF(K0+5),NSTRF(K8),X,V,VR,FSAV(1,N),
+     3          IXR        ,FANI(1,1+2*(I-1)), SECFCUM(1,1,I) ,
+     4          FX ,FY ,FZ  ,MX  ,MY,  MZ,
+     5          NSTRF(K0),NSTRF(K0+14),NSTRF(K0+26),NSTRF(K0+6),
+     6          NSTRF(K2),MS,
+     8          XSEC(1,1,I), pFBSAV6,IPARSENS)
+               K0=NSTRF(K0+24)
+              ENDDO
+            ENDIF
+C----6---------------------------------------------------------------7---------8
+        ELSEIF(ITY==101)THEN
+              OFF_IGRTH = NUMELS+NUMELQ+NUMELC+NUMELT+NUMELP+
+     .                   NUMELR
+c              K = 1+2*(NSECT+NRBODY+NRWALL)
+              
+            NCTRL = IPARG(75,NG)
+            PX = IGEO(41,IPARG(62,NG))
+            PY = IGEO(42,IPARG(62,NG))
+            PZ = IGEO(43,IPARG(62,NG))
+!
+          IF (ISENS_ENERGY == 1 .AND. IPRI == 0)
+     .     CALL SENSOR_ENERGY_PART(IPARTS(NF1) ,SUBSET ,IPRI,SENSORS,ITASK)
+
+            CALL IG3DUFORC3(TIMERS, OUTPUT,
+     1   ELBUF_TAB,           NG,                  JFT,                 JLT,
+     2   NFT,                 NEL,                 IXS,                 PM,
+     3   GEO,                 IPM,                 IGEO,                X,
+     4   A,                   AR,                  V,                   VR,
+     5   W,                   D,                   MS,                  IN,
+     6   TF,                  NPC,                 BUFMAT,              IPARG,
+     7   IPARTS(NF1),         PARTSAV,             NLOC_DMG,            FSKY,
+     8   FR_WAVE,             IADS,                EANI,                STIFN,
+     9   STIFR,               FX,                  FY,                  FZ,
+     A   IFAILURE,            MTN,                 IGTYP,               NPT,
+     B   JSMS,                MSSA(NF1),           DMELS(NF1),          KXIG3D,
+     C   IXIG3D,              KNOT,                NCTRL,               WIGE,
+     D   VAL2,                DT2T,                NELTST,
+     E   ITYPTST,             OFFSET,              TABLE,               IEXPAN,
+     F   ALE_CONNECT,         FV,                  ITASK,               IPRI,
+     G   PX,                  PY,                  PZ,                  KNOTLOCPC,
+     H   KNOTLOCEL,           GRESAV,              GRTH,                IGRTH(OFF_IGRTH+NF1),
+     I   MAT_ELEM,            IBID,                ISMSTR,              JALE,
+     J   JEUL,                JLAG,                JCVT,                JPLASOL,
+     K   JSPH,                SNPC,                STF,                 SBUFMAT,
+     L   SVIS,                NSVOIS,              IDTMINS,             IRESP,      
+     M   IDEL7NG,             IDEL7NOK,            USERL_AVAIL,         
+     .   impl_s,              idyna,               DT,                  GLOB_THERM,
+     .   SENSORS)
+
+        ENDIF
+            IF (IDDW>0) CALL STOPTIMEG(NG)
+
+C---------Nitsche Method : element mean stress storing----
+
+        IF(NITSCHE > 0 .AND. ITY == 1) THEN
+          GBUF => ELBUF_TAB(NG)%GBUF 
+
+          DO J=1,6
+            DO I=LFT,LLT 
+              IF(GBUF%OFF(I) > 0) THEN            
+                 STRESSMEAN(J,NFT + I) = GBUF%SIG(NEL*(J-1)+I)
+              ELSE
+                 STRESSMEAN(J,NFT + I) = ZERO
+              ENDIF
+            ENDDO 
+          ENDDO
+
+C           STRESS TENSOR IN GLOBAL SYSTEM
+          IF (JCVT /= 0 .AND. JHBE /= 16) THEN
+C             ROTATION IF COROTA SYSTEM
+            DO I=LFT,LLT   
+              NN = NFT +I
+             IF(JCVT==2.AND.JHBE/=14)THEN
+                GAMA(1)=GBUF%GAMA(I + I)
+                GAMA(2)=GBUF%GAMA(NEL + I)
+                GAMA(3)=GBUF%GAMA(2*NEL + I)
+                GAMA(4)=GBUF%GAMA(3*NEL + I)
+                GAMA(5)=GBUF%GAMA(4*NEL + I)
+                GAMA(6)=GBUF%GAMA(5*NEL + I)
+              ELSE
+                GAMA(1)=ONE
+                GAMA(2)=ZERO
+                GAMA(3)=ZERO
+                GAMA(4)=ZERO
+                GAMA(5)=ONE
+                GAMA(6)=ZERO
+              END IF
+              CALL SROTA6(
+     1   X,               IXS(1,NN),       JCVT,            STRESSMEAN(1,NN),
+     2   GAMA,            JHBE,            IGTYP,           ISORTH)
+            ENDDO           
+          ENDIF
+       ENDIF
+  250   CONTINUE
+      END DO
+C
+      call my_dealloc(FX)
+      call my_dealloc(FY)
+      call my_dealloc(FZ)
+      call my_dealloc(MX)
+      call my_dealloc(MY)
+      call my_dealloc(MZ)
+      call my_dealloc(JFAC)
+
+C-----------
+      RETURN
+      END
+C-----------
+

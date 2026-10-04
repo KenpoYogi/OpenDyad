@@ -1,0 +1,94 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+C            XYZ16                  /anim/genani.F
+!||====================================================================
+!||    spmd_gather_xyz16     ../engine/source/mpi/anim/spmd_gather_xyz16.F
+!||--- called by ------------------------------------------------------
+!||    xyz16                 ../engine/source/output/anim/generate/monvol_anim.F90
+!||--- calls      -----------------------------------------------------
+!||    spmd_get_count_real   ../engine/source/mpi/generic/spmd_get_count.F90
+!||    write_r_c             ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod              ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE SPMD_GATHER_XYZ16(V,NUM)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       real
+     .   V(3,*)
+       INTEGER NUM
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),MSGOFF
+      INTEGER SIZ,MSGTYP,I
+
+      DATA MSGOFF/7033/
+
+C   Table used by Pro 0
+       REAL
+     .   XGLOB(3,NUM)
+         
+       IF (ISPMD/=0) THEN
+         MSGTYP = MSGOFF 
+         CALL spmd_send(V(1:3,1:2*NUMELS16),6*NUMELS16,
+     .                  IT_SPMD(1),MSGTYP)
+
+       ELSE
+
+          CALL WRITE_R_C(V,6*NUMELS16)
+
+          DO I=2,NSPMD
+
+C   Reception of the entire buffer of NODGLOB addresses
+            MSGTYP = MSGOFF 
+
+            CALL spmd_probe(IT_SPMD(I),MSGTYP,STATUS)
+              CALL spmd_get_count_real(STATUS,SIZ)
+
+            CALL spmd_recv(XGLOB(1:3,1:NUM),SIZ,IT_SPMD(I),MSGTYP)
+
+            CALL WRITE_R_C(XGLOB,SIZ)
+          ENDDO
+
+       ENDIF
+
+#endif
+       RETURN
+       END

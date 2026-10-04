@@ -1,0 +1,78 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    multi_check_psh        ../starter/source/multifluid/multi_check_psh.F
+!||--- called by ------------------------------------------------------
+!||    read_material_models   ../starter/source/materials/read_material_models.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                 ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod            ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE MULTI_CHECK_PSH(MULTI_FVM, NUMMAT, NPROPMI, NPROPM, IPM, PM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE MULTI_FVM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(MULTI_FVM_STRUCT), INTENT(INOUT) :: MULTI_FVM
+      INTEGER, INTENT(IN) :: NUMMAT, NPROPM, NPROPMI, 
+     .     IPM(NPROPMI, *)
+      my_real, INTENT(IN) :: PM(NPROPM, *)
+C-----------------------------------------------
+C     L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I, II, J, MATID
+
+      DO I = 1, NUMMAT
+         IF (IPM(2, I) == 151) THEN
+            MATID = IPM(21, I)
+            DO J = 1, NUMMAT
+               IF (IPM(1, J) == MATID) EXIT
+            ENDDO
+            MULTI_FVM%PRES_SHIFT = PM(88, J)
+            DO II = 2, IPM(20, I)
+               MATID = IPM(20 + II, I)
+               DO J = 1, NUMMAT
+                  IF (IPM(1, J) == MATID) EXIT
+               ENDDO
+               IF (MULTI_FVM%PRES_SHIFT /= PM(88, J)) THEN
+                  CALL ANCMSG(MSGID = 1626, ANMODE = ANINFO, MSGTYPE = MSGERROR,
+     .                        I1=IPM(1, I),
+     .                        I2=II,
+     .                        I3=IPM(20, I),
+     .                        R1=PM(88, J),
+     .                        R2=MULTI_FVM%PRES_SHIFT)
+               ENDIF
+            ENDDO
+         ENDIF
+      ENDDO
+      END SUBROUTINE MULTI_CHECK_PSH

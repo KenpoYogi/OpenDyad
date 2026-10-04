@@ -1,0 +1,71 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    s8lagr3   ../engine/source/elements/solid/solide8/s8lagr3.F
+!||--- called by ------------------------------------------------------
+!||    s8forc3   ../engine/source/elements/solid/solide8/s8forc3.F
+!||====================================================================
+      SUBROUTINE S8LAGR3(
+     1   PM,      VOL0,    RHO,     EINT,
+     2   MXT,     VOLN,    RHO0,    DVOL,
+     3   VD2,     NEL)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN) :: NEL
+      my_real PM(NPROPM,*), VOL0(*), RHO(*), EINT(*)
+      my_real VOLN(MVSIZ), RHO0(MVSIZ), DVOL(MVSIZ), VD2(MVSIZ)
+      INTEGER MXT(MVSIZ)
+C-----------------------------------------------
+      INTEGER I, MX
+C-----------------------------------------------
+      MX = MXT(1)
+      DO I=1,NEL
+        RHO0(I)=PM(1,MX)
+      ENDDO
+C
+      DO I=1,NEL
+        DVOL(I)=VOLN(I)-(RHO0(1)/RHO(I))*VOL0(I)
+      ENDDO
+C
+      DO I=1,NEL
+        VD2(I)=ZERO
+        RHO(I)=RHO0(1)*(VOL0(I)/VOLN(I))
+        EINT(I)=EINT(I)*VOL0(I)
+      ENDDO
+C
+      RETURN
+      END

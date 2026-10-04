@@ -1,0 +1,255 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    flow0              ../engine/source/fluid/flow0.F
+!||--- called by ------------------------------------------------------
+!||    resol              ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    daasolv            ../engine/source/fluid/daasolv.F
+!||    daasolvp           ../engine/source/fluid/daasolvp.F
+!||    incpflow           ../engine/source/fluid/incpflow.F
+!||--- uses       -----------------------------------------------------
+!||    output_mod         ../common_source/modules/output/output_mod.F90
+!||    python_funct_mod   ../common_source/modules/python_mod.F90
+!||    sensor_mod         ../common_source/modules/sensor_mod.F90
+!||====================================================================
+      SUBROUTINE FLOW0(OUTPUT,IFLOW  , RFLOW  , WIFLOW , WRFLOW, X      ,
+     .                 V      , A      , NPC    , TF    , SENSOR_TAB,
+     .                 NBGAUGE, LGAUGE , GAUGE  , NSENSOR, IGRV   ,
+     .                 AGRV   , NFUNCT , NUMNOD , PYTHON, WFEXT,
+     .                 S_NODA_FEXT, NODA_FEXT, NODA_SURF, NODA_PEXT)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------  
+      USE SENSOR_MOD
+      USE OUTPUT_MOD
+      USE PYTHON_FUNCT_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com08_c.inc"
+#include      "param_c.inc"
+#include      "scr07_c.inc"
+#include      "flowcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE(OUTPUT_), INTENT(INOUT) :: OUTPUT
+      INTEGER ,INTENT(IN) :: NSENSOR,NBGAUGE,NFUNCT,NUMNOD,S_NODA_FEXT
+      INTEGER IFLOW(*), WIFLOW(*), NPC(*),LGAUGE(3,*)
+      INTEGER IGRV(NIGRV,*)
+      my_real RFLOW(*), WRFLOW(*), X(3,*), V(3,*), A(3,*), TF(*), GAUGE(LLGAUGE,*), AGRV(LFACGRV,*)
+      my_real,INTENT(INOUT) :: NODA_FEXT(3,S_NODA_FEXT), NODA_SURF(NUMNOD), NODA_PEXT(NUMNOD)
+      TYPE (SENSOR_STR_) ,DIMENSION(NSENSOR) :: SENSOR_TAB
+      TYPE (PYTHON_), INTENT(INOUT) :: PYTHON
+      DOUBLE PRECISION,INTENT(INOUT) :: WFEXT
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IADI, IADR, I, ITYP, NINOUT, NNO, NEL, NNN, NEL_LOC,
+     .        II1, II2, II3, II4, II5, II6, II7, IR1, IR2, IR3, IR4, 
+     .        IR5, IR6, IR7, IR8, IR9, IR10, IR11, II8, II9, II10, II11, IADIP, IADH, IADG, 
+     .        II12, II13, II14, IPINT, NDIM, JFORM, FREESURF
+C-----------------------------------------------------------------------------------
+C Description of arrays ITYP=1
+C     II1 -> IFLOW: integer parameters
+C     II2  -> IBUF    : local-global surface node correspondences
+C     II3 -> Elem: Local Connectivitis of the Triangles
+C     II4  -> IINOUT  : integer variables for inlet-outlet surfaces
+C     II5  -> IBUFI   : local-global internal node correspondences
+C     II6  -> ITAGEL  : tag of elements on inlet-outlet surfaces
+C---- SPMD tables
+C     II7  -> IBUFR   : local node row index (0 if not on this proc)
+C     II8  -> IBUFC   : local node column index (0 if not on this proc)
+C     II9 -> IBUFL: List Noes surface on current processor for x, v, a
+C     II10 -> CNP: Procedure processor for nodes surface for x, v, a
+C     II11 -> Ibufil: Internal noded list on current processor for x, v, a
+C     II12 -> CNPI: Award processor for internal nodes for x, v, a
+C     II13 -> IBUFELR : local elem row index (0 if not on this proc)
+C     II14 -> IBUFELC : local elem column index (0 if not on this proc)
+C
+C     IR1  -> RFLOW  : parametres reels
+C     IR2  -> PHI    : potentiel
+C     IR3  -> PRES   : pression
+C     IR4 -> U: velocity
+C     IR5  -> RINOUT : real variables for inlet-outlet surfaces
+C-----------------------------------------------------------------------------------
+C Description of arrays ITYP=3
+C     II1 -> IFLOW: integer parameters
+C     II2  -> IBUF    : local-global surface node correspondences
+C     II3 -> Elem: Local connectivitis of triangles/quadrangles+flag
+C     II4  -> IBUF_L  : local-global surface node correspondences (to be removed in SPMD)
+C     II5  -> SHELL_GA: local shell-gauge correspondences
+C     II6  -> CNP     : SPMD number of processors for each node
+C engine
+C     II7  -> IPIV    : lapack resolution nel > nelmax
+C     II8  -> IBUFELR : SPMD
+C     II9  -> IBUFELC : SPMD
+C
+C     IR1  -> RFLOW  : real parameters
+C     IR2  -> NORMAL : normal
+C     IR3  -> TA     : arrival time
+C     IR4  -> AREA   : element area
+C     IR5  -> COSG   : direction cosine
+C     IR6  -> DIST   : distance charge
+C     IR7  -> MFLE   : fluide mass matrix (inverse) nel < nelmax
+C     IR7  -> MFLE   : C**t B + B**t C  nel >= nelmax
+C     IR8  -> ACCF   : acceleration point fluide
+C     IR9  -> PS     : scattered pressure
+C     IR10 -> PTI    : incident pressure time integral
+C     IR11 -> CMAT   : Matrice C (nel >= nelmax)
+C-----------------------------------------------------------------------------------
+      II1 = 1
+      II2 = 1
+      II3 = 1
+      II4 = 1
+      II5 = 1
+      II6 = 1
+      II7 = 1
+      II8 = 1
+      II9 = 1
+      II10= 1
+      IPINT=0
+      IF ((TT>=OUTPUT%TANIM .AND. TT<=OUTPUT%TANIM_STOP).OR.
+     .   MANIM==4 .OR.MANIM==5 .OR.MANIM==6 .OR.MANIM==7.OR.
+     .   MANIM==12.OR.MANIM==13.OR.MANIM==14.OR.MANIM==15) 
+     .   IPINT=1
+      IADI=0
+      IADR=0
+      DO I=1,NFLOW
+         ITYP=IFLOW(IADI+2)
+         NNO=IFLOW(IADI+5)
+         NEL=IFLOW(IADI+6)
+         II1=IADI+1
+         II2=II1+NIFLOW
+         II3=II2+NNO
+         IR1=IADR+1
+         IR2=IR1+NRFLOW
+         IF (ITYP==1) THEN
+            NINOUT=IFLOW(IADI+4)
+            NNN=IFLOW(IADI+7)
+            II4=II3+3*NEL
+            II5=II4+NINOUT*NIIOFLOW
+            II6=II5+NNN
+            IF (NSPMD > 1) THEN
+               II7=II6+NEL   
+               II8=II7+NNO   
+               II9=II8+NNO
+               II10=II9+NNO  
+               II11=II10+NNO
+               II12=II11+NNN
+               II13=II12+NNN 
+               II14=II13+NEL 
+            ELSE
+               II7=II6+NEL
+               II8=II7
+               II9=II8
+               II10=II9+NNO
+               II11=II10
+               II12=II11+NNN
+               II13=II12
+               II14=II13
+            ENDIF
+            IR3=IR2+NNO+NNN
+            IR4=IR3+NNO+NNN
+            IR5=IR4+3*(NNO+NNN)
+
+            IADIP=IFLOW(IADI+10)
+            IADH=IFLOW(IADI+11)
+            IADG=IFLOW(IADI+20)
+
+            CALL INCPFLOW(
+     .      NNO,         NEL,         NINOUT,      NNN,         IFLOW(II1),
+     .      IFLOW(II2),  IFLOW(II3),  IFLOW(II4),  IFLOW(II5),  IFLOW(II7),
+     .      IFLOW(II8),  IFLOW(II9),  RFLOW(IR1),  RFLOW(IR2),  RFLOW(IR3),
+     .      RFLOW(IR4),  RFLOW(IR5),  X,           V,           A,        
+     .      NPC,         TF        ,  NSENSOR    , SENSOR_TAB ,
+     .      IFLOW(II10), IFLOW(II6),  IFLOW(II13), IFLOW(II14), WIFLOW(IADIP), 
+     .      WRFLOW(IADH),WRFLOW(IADG),IFLOW(II11), IFLOW(II12), IPINT,
+     .      PYTHON      ,WFEXT,
+     .      S_NODA_FEXT,NODA_FEXT, NODA_SURF, NODA_PEXT, OUTPUT)
+
+         ELSEIF(ITYP == 3) THEN
+            JFORM    = IFLOW(IADI+4)
+            FREESURF = IFLOW(IADI+25)
+            IF(JFORM==1) THEN
+               II4=II3+3*NEL
+               II5=II4+NNO
+               II6=II5
+               NDIM=3
+            ELSEIF(JFORM==2) THEN
+               II4=II3+5*NEL
+               II5=II4+NNO
+               II6=II5+NBGAUGE
+               NDIM=5
+            ENDIF
+
+            IR3 = IR2+NEL*3
+            IR4 = IR3+NEL*FREESURF
+            IR5 = IR4+NEL
+            IR6 = IR5+NEL*FREESURF
+            IR7 = IR6+NEL*FREESURF
+            IR8 = IR7+NEL*NEL
+            IR9 = IR8+NEL
+            IR10= IR9+NEL
+            IR11= IR10+NEL
+
+            IF(NSPMD == 1) THEN
+              II7=II6
+              CALL DAASOLV(NDIM, NNO, NEL, NUMNOD,
+     .                     IFLOW(II1), IFLOW(II2), IFLOW(II3), IFLOW(II5), 
+     .                     RFLOW(IR1), RFLOW(IR2), RFLOW(IR3), RFLOW(IR4), RFLOW(IR5), RFLOW(IR6), 
+     .                     RFLOW(IR7), RFLOW(IR8), RFLOW(IR9), RFLOW(IR10),X, V, A, NPC, TF,  
+     .                     NBGAUGE, LGAUGE, GAUGE, NSENSOR, SENSOR_TAB, IGRV, AGRV,
+     .                     RFLOW(IR11),IFLOW(II7), NFUNCT, PYTHON, WFEXT,
+     .                     S_NODA_FEXT, NODA_FEXT, NODA_SURF, NODA_PEXT, OUTPUT)
+            ELSE
+              II7=II6+NNO
+              II8=II7+NEL
+              II9=II8+NEL
+              NEL_LOC =IFLOW(IADI+20)
+              IADIP =IFLOW(IADI+10)
+              IADH  =IFLOW(IADI+11)
+              CALL DAASOLVP(NDIM, NNO, NEL, NEL_LOC, NUMNOD,
+     .                      IFLOW(II1), IFLOW(II2), IFLOW(II3), IFLOW(II4), IFLOW(II5), IFLOW(II6), 
+     .                      RFLOW(IR1), RFLOW(IR2), RFLOW(IR3), RFLOW(IR4), RFLOW(IR5), RFLOW(IR6), 
+     .                      RFLOW(IR7), RFLOW(IR8), RFLOW(IR9), RFLOW(IR10),X, V, A, NPC, TF,  
+     .                      NBGAUGE, LGAUGE, GAUGE, NSENSOR, SENSOR_TAB, IGRV, AGRV,
+     .                      RFLOW(IR11),WIFLOW(IADIP), WRFLOW(IADH), IFLOW(II8), IFLOW(II9),
+     .                      NFUNCT, PYTHON, WFEXT,
+     .                      S_NODA_FEXT, NODA_FEXT, NODA_SURF, NODA_PEXT, OUTPUT)
+            ENDIF
+         ENDIF
+         IADR=IADR+IFLOW(IADI+15)
+         IADI=IADI+IFLOW(IADI+14)
+      ENDDO
+
+      RETURN
+      END
+      

@@ -1,0 +1,190 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    fail_param_mod            ../common_source/modules/mat_elem/fail_param_mod.F90
+!||--- called by ------------------------------------------------------
+!||    biquad_tab                ../starter/source/materials/fail/biquad/biquad_tab.F90
+!||    biquad_upd                ../starter/source/materials/fail/biquad/biquad_upd.F90
+!||    brokmann_random           ../starter/source/materials/fail/windshield_alter/brokmann_random.F90
+!||    check_swift_failure       ../starter/source/materials/fail/check_swift_failure.F90
+!||    dam_fld_sol               ../engine/source/output/h3d/h3d_results/h3d_sol_skin_scalar.F
+!||    delm01law                 ../engine/source/properties/composite_options/stack/delm01law.F
+!||    delm02law                 ../engine/source/properties/composite_options/stack/delm02law.F
+!||    delm24law                 ../engine/source/properties/composite_options/stack/delm24law.F
+!||    fail_biquad_b             ../engine/source/materials/fail/biquad/fail_biquad_b.F
+!||    fail_biquad_c             ../engine/source/materials/fail/biquad/fail_biquad_c.F
+!||    fail_biquad_ib            ../engine/source/materials/fail/biquad/fail_biquad_ib.F
+!||    fail_biquad_s             ../engine/source/materials/fail/biquad/fail_biquad_s.F
+!||    fail_composite_c          ../engine/source/materials/fail/composite/fail_composite_c.F90
+!||    fail_composite_s          ../engine/source/materials/fail/composite/fail_composite_s.F90
+!||    fail_connect              ../engine/source/materials/fail/connect/fail_connect.F
+!||    fail_energy_b             ../engine/source/materials/fail/energy/fail_energy_b.F
+!||    fail_energy_c             ../engine/source/materials/fail/energy/fail_energy_c.F
+!||    fail_energy_ib            ../engine/source/materials/fail/energy/fail_energy_ib.F
+!||    fail_energy_s             ../engine/source/materials/fail/energy/fail_energy_s.F
+!||    fail_f                    ../engine/source/materials/fail/fld/fail_fld_c.F
+!||    fail_fabric_c             ../engine/source/materials/fail/fabric/fail_fabric_c.F
+!||    fail_fld_tsh              ../engine/source/materials/fail/fld/fail_fld_tsh.F
+!||    fail_fld_xfem             ../engine/source/materials/fail/fld/fail_fld_xfem.F
+!||    fail_fun2sys              ../starter/source/materials/tools/fail_fun2sys.F
+!||    fail_gene1_b              ../engine/source/materials/fail/gene1/fail_gene1_b.F90
+!||    fail_gene1_c              ../engine/source/materials/fail/gene1/fail_gene1_c.F
+!||    fail_gene1_ib             ../engine/source/materials/fail/gene1/fail_gene1_ib.F90
+!||    fail_gene1_s              ../engine/source/materials/fail/gene1/fail_gene1_s.F
+!||    fail_nxt_c                ../engine/source/materials/fail/nxt/fail_nxt_c.F
+!||    fail_orthbiquad_c         ../engine/source/materials/fail/orthbiquad/fail_orthbiquad_c.F
+!||    fail_orthbiquad_s         ../engine/source/materials/fail/orthbiquad/fail_orthbiquad_s.F
+!||    fail_orthstrain           ../engine/source/materials/fail/orthstrain/fail_orthstrain_s.F
+!||    fail_orthstrain_c         ../engine/source/materials/fail/orthstrain/fail_orthstrain_c.F
+!||    fail_sahraei_s            ../engine/source/materials/fail/sahraei/fail_sahraei_s.F
+!||    fail_snconnect            ../engine/source/materials/fail/snconnect/fail_snconnect.F
+!||    fail_tab2_b               ../engine/source/materials/fail/tabulated/fail_tab2_b.F90
+!||    fail_tab2_c               ../engine/source/materials/fail/tabulated/fail_tab2_c.F
+!||    fail_tab2_ib              ../engine/source/materials/fail/tabulated/fail_tab2_ib.F90
+!||    fail_tab2_s               ../engine/source/materials/fail/tabulated/fail_tab2_s.F
+!||    fail_tab2sys              ../starter/source/materials/tools/fail_tab2sys.F
+!||    fail_tensstrain_b         ../engine/source/materials/fail/tensstrain/fail_tensstrain_b.F
+!||    fail_tensstrain_c         ../engine/source/materials/fail/tensstrain/fail_tensstrain_c.F
+!||    fail_tensstrain_ib        ../engine/source/materials/fail/tensstrain/fail_tensstrain_ib.F
+!||    fail_tensstrain_s         ../engine/source/materials/fail/tensstrain/fail_tensstrain_s.F
+!||    h3d_fld_tsh               ../engine/source/output/h3d/h3d_results/h3d_fld_tsh.F
+!||    hm_read_fail_alter        ../starter/source/materials/fail/windshield_alter/hm_read_fail_alter.F
+!||    hm_read_fail_biquad       ../starter/source/materials/fail/biquad/hm_read_fail_biquad.F
+!||    hm_read_fail_chang        ../starter/source/materials/fail/changchang/hm_read_fail_chang.F90
+!||    hm_read_fail_cockcroft    ../starter/source/materials/fail/cockroft_latham/hm_read_fail_cockcroft.F
+!||    hm_read_fail_composite    ../starter/source/materials/fail/composite/hm_read_fail_composite.F90
+!||    hm_read_fail_connect      ../starter/source/materials/fail/connect/hm_read_fail_connect.F
+!||    hm_read_fail_emc          ../starter/source/materials/fail/emc/hm_read_fail_emc.F
+!||    hm_read_fail_energy       ../starter/source/materials/fail/energy/hm_read_fail_energy.F
+!||    hm_read_fail_fabric       ../starter/source/materials/fail/fabric/hm_read_fail_fabric.F
+!||    hm_read_fail_fld          ../starter/source/materials/fail/fld/hm_read_fail_fld.F
+!||    hm_read_fail_gene1        ../starter/source/materials/fail/gene1/hm_read_fail_gene1.F
+!||    hm_read_fail_gurson       ../starter/source/materials/fail/gurson/hm_read_fail_gurson.F
+!||    hm_read_fail_hashin       ../starter/source/materials/fail/hashin/hm_read_fail_hashin.F90
+!||    hm_read_fail_hc_dsse      ../starter/source/materials/fail/hc_dsse/hm_read_fail_hc_dsse.F
+!||    hm_read_fail_hoffman      ../starter/source/materials/fail/hoffman/hm_read_fail_hoffman.F
+!||    hm_read_fail_inievo       ../starter/source/materials/fail/inievo/hm_read_fail_inievo.F
+!||    hm_read_fail_johnson      ../starter/source/materials/fail/johnson_cook/hm_read_fail_johnson.F
+!||    hm_read_fail_ladeveze     ../starter/source/materials/fail/ladeveze/hm_read_fail_ladeveze.F
+!||    hm_read_fail_lemaitre     ../starter/source/materials/fail/lemaitre/hm_read_fail_lemaitre.F90
+!||    hm_read_fail_maxstrain    ../starter/source/materials/fail/max_strain/hm_read_fail_maxstrain.F
+!||    hm_read_fail_nxt          ../starter/source/materials/fail/nxt/hm_read_fail_nxt.F
+!||    hm_read_fail_orthbiquad   ../starter/source/materials/fail/orthbiquad/hm_read_fail_orthbiquad.F
+!||    hm_read_fail_orthenerg    ../starter/source/materials/fail/orthenerg/hm_read_fail_orthenerg.F
+!||    hm_read_fail_orthstrain   ../starter/source/materials/fail/orthstrain/hm_read_fail_orthstrain.F
+!||    hm_read_fail_puck         ../starter/source/materials/fail/puck/hm_read_fail_puck.F90
+!||    hm_read_fail_rtcl         ../starter/source/materials/fail/rtcl/hm_read_fail_rtcl.F
+!||    hm_read_fail_sahraei      ../starter/source/materials/fail/sahraei/hm_read_fail_sahraei.F
+!||    hm_read_fail_snconnect    ../starter/source/materials/fail/snconnect/hm_read_fail_snconnect.F
+!||    hm_read_fail_spalling     ../starter/source/materials/fail/spalling/hm_read_fail_spalling.F90
+!||    hm_read_fail_syazwan      ../starter/source/materials/fail/syazwan/hm_read_fail_syazwan.F
+!||    hm_read_fail_tab1         ../starter/source/materials/fail/tabulated/hm_read_fail_tab1.F
+!||    hm_read_fail_tab2         ../starter/source/materials/fail/tabulated/hm_read_fail_tab2.F
+!||    hm_read_fail_tab_old      ../starter/source/materials/fail/tabulated/hm_read_fail_tab_old.F
+!||    hm_read_fail_tbutcher     ../starter/source/materials/fail/tuler_butcher/hm_read_fail_tbutcher.F
+!||    hm_read_fail_tensstrain   ../starter/source/materials/fail/tensstrain/hm_read_fail_tensstrain.F
+!||    hm_read_fail_tsaihill     ../starter/source/materials/fail/tsaihill/hm_read_fail_tsaihill.F
+!||    hm_read_fail_tsaiwu       ../starter/source/materials/fail/tsaiwu/hm_read_fail_tsaiwu.F
+!||    hm_read_fail_user         ../starter/source/materials/fail/failuser/hm_read_fail_user.F
+!||    hm_read_fail_visual       ../starter/source/materials/fail/visual/hm_read_fail_visual.F
+!||    hm_read_fail_wierzbicki   ../starter/source/materials/fail/wierzbicki/hm_read_fail_wierzbicki.F
+!||    hm_read_fail_wilkins      ../starter/source/materials/fail/wilkins/hm_read_fail_wilkins.F
+!||    hm_read_fractal_dmg       ../starter/source/materials/fail/fractal/hm_read_fractal_dmg.F90
+!||    hm_read_mullins_or        ../starter/source/materials/fail/mullins_or/hm_read_fail_mullins_or.F
+!||    idx_fld_sol               ../engine/source/output/h3d/h3d_results/h3d_sol_skin_scalar.F
+!||    mat_hardening_to_fail     ../starter/source/materials/mat/mat_hardening_to_fail.F90
+!||    matparam_def_mod          ../common_source/modules/mat_elem/matparam_def_mod.F90
+!||    mmain                     ../engine/source/materials/mat_share/mmain.F90
+!||    mulaw                     ../engine/source/materials/mat_share/mulaw.F90
+!||    mulawc                    ../engine/source/materials/mat_share/mulawc.F90
+!||    random_walk_dmg           ../starter/source/materials/fail/fractal/random_walk_dmg.F90
+!||    read_failparam            ../engine/source/output/restart/read_failparam.F
+!||    usermat_shell             ../engine/source/materials/mat_share/usermat_shell.F
+!||    usermat_solid             ../engine/source/materials/mat_share/usermat_solid.F
+!||    write_failparam           ../engine/source/output/restart/write_failparam.F
+!||--- uses       -----------------------------------------------------
+!||    names_and_titles_mod      ../common_source/modules/names_and_titles_mod.F
+!||    precision_mod             ../common_source/modules/precision_mod.F90
+!||    table4d_mod               ../common_source/modules/table4d_mod.F
+!||====================================================================
+      module fail_param_mod
+!
+! ==================================================================================
+!! \brief  to define data structure for failure and damage material model parameters
+!! \details
+
+
+        use table4d_mod
+        use names_and_titles_mod
+        use precision_mod , only : WP
+
+        implicit none
+        private :: WP
+!
+!=======================================================================
+
+        type fail_param_
+          character(len=nchartitle) :: keyword  !< failure model name
+          integer       :: irupt                !< failure model type (number)
+          integer       :: fail_id              !< failure model Id
+          integer       :: nuparam              !< number of real value paraameters
+          integer       :: niparam              !< number of int value parameters
+          integer       :: nuvar                !< number of internal state variables
+          integer       :: nvartmp              !< number of internal temporary variables
+          integer       :: nfunc                !< number of functions
+          integer       :: ntable               !< number of function tables
+          integer       :: ntable4d             !< number of local function tables
+          integer       :: nmod                 !< number of rupture/damage modes
+          integer       :: fail_ip              !< ruputure criterion (integration point based)
+          real(kind=WP) :: pthk                 !< ruputure criterion (layer thickness based)
+
+          character(len=nchartitle) ,dimension(:) ,allocatable :: mode   !< damage mode table
+          real(kind=WP) ,dimension(:) ,allocatable :: uparam  !< real value failure parameter table
+          integer ,dimension(:) ,allocatable :: iparam  !< int  value failure parameter table
+          integer ,dimension(:) ,allocatable :: ifunc   !< functions in failure models
+          integer ,dimension(:) ,allocatable :: table   !< function tables in failure models
+          type (table_4d_),dimension(:) ,allocatable :: table4d  !< local function tables
+
+        contains
+          procedure :: destruct => destruct_fail_param
+
+        end type fail_param_
+
+      contains
+
+!||====================================================================
+!||    destruct_fail_param   ../common_source/modules/mat_elem/fail_param_mod.F90
+!||====================================================================
+        subroutine destruct_fail_param(this)
+          implicit none
+          class(fail_param_) ,intent(inout) :: this
+          if(allocated(this%mode))   deallocate(this%mode)
+          if(allocated(this%uparam)) deallocate(this%uparam)
+          if(allocated(this%iparam)) deallocate(this%iparam)
+          if(allocated(this%ifunc))  deallocate(this%ifunc)
+          if(allocated(this%table))  deallocate(this%table)
+        end subroutine destruct_fail_param
+!
+!---------------
+      end module fail_param_mod

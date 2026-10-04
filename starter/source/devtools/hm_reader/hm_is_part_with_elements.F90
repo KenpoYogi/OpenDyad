@@ -1,0 +1,81 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_is_part_with_elements_mod   ../starter/source/devtools/hm_reader/hm_is_part_with_elements.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_part                   ../starter/source/model/assembling/hm_read_part.F
+!||====================================================================
+        module hm_is_part_with_elements_mod
+         use, intrinsic :: iso_c_binding, only : c_bool
+         implicit none
+      contains
+! ======================================================================================================================
+!                                                   procedures
+! ======================================================================================================================
+!! \brief check if a /PART has elements
+!! \details This routine checks if a /PART has elements.
+!||====================================================================
+!||    hm_is_part_with_elements    ../starter/source/devtools/hm_reader/hm_is_part_with_elements.F90
+!||--- called by ------------------------------------------------------
+!||    hm_read_part                ../starter/source/model/assembling/hm_read_part.F
+!||--- calls      -----------------------------------------------------
+!||====================================================================
+        subroutine hm_is_part_with_elements(part_id, is_part_with_elements)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, intent(in) :: part_id
+          logical(c_bool), intent(inout) :: is_part_with_elements
+#ifdef HM_READER_LEGACY_PART_API
+          integer :: element_count, current_id, sub_id, value_type
+          logical(c_bool) :: available
+#endif
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+#ifdef HM_READER_LEGACY_PART_API
+          ! HM_READ_PART has already selected PART_ID before calling this routine.
+          ! Counting that part's elements preserves the reader selection iterator.
+          current_id = 0
+          call cpp_get_intv('id', 2, current_id, sub_id, available, value_type)
+          if (.not. available .or. current_id /= part_id) then
+            error stop 'Legacy reader: selected part does not match requested part'
+          endif
+          element_count = 0
+          call cpp_count_elements_in_part(element_count)
+          is_part_with_elements = element_count > 0
+#else
+          call cpp_is_part_with_elements(part_id, is_part_with_elements)
+#endif
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine hm_is_part_with_elements
+      end module hm_is_part_with_elements_mod

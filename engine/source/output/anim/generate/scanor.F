@@ -1,0 +1,83 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    scanor         ../engine/source/output/anim/generate/scanor.F
+!||--- called by ------------------------------------------------------
+!||    genani         ../engine/source/output/anim/generate/genani.F
+!||    genh3d         ../engine/source/output/h3d/h3d_results/genh3d.F
+!||--- calls      -----------------------------------------------------
+!||    spmd_min_max   ../engine/source/mpi/anim/spmd_min_max.F
+!||====================================================================
+      SUBROUTINE SCANOR(X,D,CDG,XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX,SCALE,
+     .                  WEIGHT)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER WEIGHT(*)
+      my_real :: X(3,*),D(3,*),CDG(*),XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX, SCALE
+      my_real :: DX,DY,DZ
+      INTEGER  N
+C-----------------------------------------------
+      XMIN = EP30
+      YMIN = EP30
+      ZMIN = EP30
+      XMAX = -EP30
+      YMAX = -EP30
+      ZMAX = -EP30      
+
+       DO N=1,NUMNOD
+         IF (WEIGHT(N)==1) THEN
+          XMIN = MIN(XMIN,(X(1,N)-D(1,N)))
+          YMIN = MIN(YMIN,(X(2,N)-D(2,N)))
+          ZMIN = MIN(ZMIN,(X(3,N)-D(3,N)))
+          XMAX = MAX(XMAX,(X(1,N)-D(1,N)))
+          YMAX = MAX(YMAX,(X(2,N)-D(2,N)))
+          ZMAX = MAX(ZMAX,(X(3,N)-D(3,N)))
+         END IF
+       END DO
+       IF(NSPMD > 1) CALL SPMD_MIN_MAX(XMIN,YMIN,ZMIN,XMAX,YMAX,ZMAX)
+
+      CDG(1) = HALF * (XMAX + XMIN)
+      CDG(2) = HALF * (YMAX + YMIN)
+      CDG(3) = HALF * (ZMAX + ZMIN)      
+
+      DX = XMAX - XMIN      
+      DY = YMAX - YMIN      
+      DZ = ZMAX - ZMIN
+
+      SCALE = MAX(DX,DY,DZ)
+
+      SCALE = ONE/SCALE
+
+      RETURN
+      END

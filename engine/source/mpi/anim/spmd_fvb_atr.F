@@ -1,0 +1,201 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_fvb_atr   ../engine/source/mpi/anim/spmd_fvb_atr.F
+!||--- called by ------------------------------------------------------
+!||    genani         ../engine/source/output/anim/generate/genani.F
+!||--- calls      -----------------------------------------------------
+!||    write_i_c      ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod      ../engine/share/modules/fvbag_mod.F
+!||    spmd_mod       ../engine/source/mpi/spmd_mod.F90
+!||====================================================================
+      SUBROUTINE SPMD_FVB_ATR(NBID1, NBID2, NBID3, FVEL2FA, FVINUM,
+     .                        FVOFF)
+C-----------------------------------------------
+C   M o d u l e s 
+C-----------------------------------------------
+      USE FVBAG_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NBID1, NBID2, NBID3, FVEL2FA(*), FVINUM(*), FVOFF(2,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER ELOFF, I, PMAIN, II, J, K, KK, N, NN, INOD(4), NND,
+     .        ITAG, MSGOFF, LEN, JJ, IAD, IADE, IADF, NNTR
+      INTEGER, DIMENSION(:), ALLOCATABLE :: ITAGT, IBUF
+C-----------------------------------------------
+      DATA MSGOFF/7040/
+C-----------------------------------------------
+C
+      ELOFF=0
+      DO I=1,NFVBAG
+         PMAIN=FVSPMD(I)%PMAIN
+         IF (ISPMD==0) THEN
+            IF (ISPMD==PMAIN-1) THEN
+               ALLOCATE(ITAGT(FVDATA(I)%NNTR))
+               II=0
+               DO J=1,FVDATA(I)%NNTR
+                  ITAGT(J)=0
+               ENDDO
+C
+               DO J=1,FVDATA(I)%NPOLH_ANIM
+                  DO K=FVDATA(I)%IFVPADR_ANIM(J),
+     .                      FVDATA(I)%IFVPADR_ANIM(J+1)-1
+                     KK=FVDATA(I)%IFVPOLH_ANIM(K)
+                     DO N=FVDATA(I)%IFVTADR_ANIM(KK),
+     .                         FVDATA(I)%IFVTADR_ANIM(KK+1)-1
+                        NN=FVDATA(I)%IFVPOLY_ANIM(N)
+                        IF (ITAGT(NN)==1) CYCLE
+                        INOD(1)=FVOFF(1,I)+FVDATA(I)%IFVTRI_ANIM(1,NN)-1
+                        INOD(2)=FVOFF(1,I)+FVDATA(I)%IFVTRI_ANIM(2,NN)-1
+                        INOD(3)=FVOFF(1,I)+FVDATA(I)%IFVTRI_ANIM(3,NN)-1
+                        INOD(4)=INOD(3)
+                        II=II+1
+C Number of distinct nodes of the shell (after merging in FVMESH)
+                        NND=1
+                        IF (INOD(2)/=INOD(1)) NND=NND+1
+                        IF (INOD(3)/=INOD(1).AND.
+     .                      INOD(3)/=INOD(2)) NND=NND+1
+                        IF (NND/=3) THEN
+                           INOD(1)=NBID1-1
+                           INOD(2)=NBID2-1
+                           INOD(3)=NBID3-1
+                           INOD(4)=INOD(3)
+                        ENDIF
+C 
+                        CALL WRITE_I_C(INOD,4)
+                        ITAGT(NN)=1
+                        FVEL2FA(ELOFF+NN)=ELOFF+II
+                        FVINUM(ELOFF+II)=ELOFF+NN
+                     ENDDO
+                  ENDDO
+               ENDDO
+               ELOFF=ELOFF+FVDATA(I)%NNTR
+               DEALLOCATE(ITAGT)
+            ELSE
+               ITAG=MSGOFF
+               CALL SPMD_RECV(NNTR, 1, IT_SPMD(PMAIN), ITAG)
+C
+               LEN=6*NNTR
+               ALLOCATE(IBUF(LEN))
+               ITAG=MSGOFF+1
+               CALL SPMD_RECV(IBUF(1:LEN), LEN, IT_SPMD(PMAIN), ITAG)
+C
+               JJ=0
+               DO J=1,NNTR
+                  INOD(1)=FVOFF(1,I)+IBUF(JJ+1)
+                  INOD(2)=FVOFF(1,I)+IBUF(JJ+2)
+                  INOD(3)=FVOFF(1,I)+IBUF(JJ+3)
+                  INOD(4)=FVOFF(1,I)+IBUF(JJ+4)
+C
+C Number of distinct nodes of the shell (after merging in FVMESH)
+                  NND=1
+                  IF (INOD(2)/=INOD(1)) NND=NND+1
+                  IF (INOD(3)/=INOD(1).AND.
+     .                INOD(3)/=INOD(2)) NND=NND+1
+                  IF (NND/=3) THEN
+                     INOD(1)=NBID1-1
+                     INOD(2)=NBID2-1
+                     INOD(3)=NBID3-1
+                     INOD(4)=INOD(3)
+                  ENDIF
+C
+                  CALL WRITE_I_C(INOD,4)
+                  JJ=JJ+4
+C
+                  FVEL2FA(ELOFF+J)=ELOFF+IBUF(4*NNTR+J)
+                  FVINUM(ELOFF+J)=ELOFF+IBUF(5*NNTR+J)
+               ENDDO
+               ELOFF=ELOFF+NNTR
+               DEALLOCATE(IBUF)
+            ENDIF
+         ELSE
+            IF (ISPMD==PMAIN-1) THEN
+               ITAG=MSGOFF
+               CALL SPMD_SEND(FVDATA(I)%NNTR, 1, IT_SPMD(1), ITAG)
+C
+               LEN=6*FVDATA(I)%NNTR
+               ALLOCATE(IBUF(LEN), ITAGT(FVDATA(I)%NNTR))
+               II=0
+               IAD=0
+               IADE=4*FVDATA(I)%NNTR
+               IADF=IADE+FVDATA(I)%NNTR
+C
+               DO J=1,FVDATA(I)%NNTR
+                  ITAGT(J)=0
+               ENDDO
+C
+               DO J=1,FVDATA(I)%NPOLH_ANIM
+                  DO K=FVDATA(I)%IFVPADR_ANIM(J),
+     .                      FVDATA(I)%IFVPADR_ANIM(J+1)-1
+                     KK=FVDATA(I)%IFVPOLH_ANIM(K)
+                     DO N=FVDATA(I)%IFVTADR_ANIM(KK),
+     .                         FVDATA(I)%IFVTADR_ANIM(KK+1)-1
+                        NN=FVDATA(I)%IFVPOLY_ANIM(N)
+                        IF (ITAGT(NN)==1) CYCLE
+                        INOD(1)=FVDATA(I)%IFVTRI_ANIM(1,NN)-1
+                        INOD(2)=FVDATA(I)%IFVTRI_ANIM(2,NN)-1
+                        INOD(3)=FVDATA(I)%IFVTRI_ANIM(3,NN)-1
+                        INOD(4)=INOD(3)
+                        II=II+1
+C 
+                        IBUF(IAD+1)=INOD(1)
+                        IBUF(IAD+2)=INOD(2)
+                        IBUF(IAD+3)=INOD(3)
+                        IBUF(IAD+4)=INOD(4)
+                        IAD=IAD+4
+                        ITAGT(NN)=1
+                        IBUF(IADE+NN)=II
+                        IBUF(IADF+II)=NN
+                     ENDDO
+                  ENDDO
+               ENDDO
+               ITAG=MSGOFF+1
+               CALL SPMD_SEND(IBUF(1:LEN), LEN, IT_SPMD(1), ITAG)
+C
+               DEALLOCATE(IBUF, ITAGT)
+            ENDIF
+         ENDIF
+      ENDDO
+C
+#endif
+      RETURN
+      END      

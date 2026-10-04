@@ -1,0 +1,121 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    write_mat_table   ../engine/source/materials/tools/write_mat_table.F
+!||--- called by ------------------------------------------------------
+!||    write_eosparam    ../engine/source/output/restart/write_eosparam.F90
+!||    write_failparam   ../engine/source/output/restart/write_failparam.F
+!||    write_matparam    ../engine/source/output/restart/write_matparam.F
+!||    write_viscparam   ../engine/source/output/restart/write_viscparam.F
+!||--- calls      -----------------------------------------------------
+!||    write_db          ../common_source/tools/input_output/write_db.F
+!||    write_i_c         ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    my_alloc_mod      ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod    ../common_source/tools/memory/my_dealloc.F90
+!||    table4d_mod       ../common_source/modules/table4d_mod.F
+!||====================================================================
+      SUBROUTINE WRITE_MAT_TABLE(TABLE, NUMTABL)
+C-----------------------------------------------
+      USE TABLE4D_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ,INTENT(IN)    :: NUMTABL
+      TYPE(TABLE_4D_) ,INTENT(IN) :: TABLE(NUMTABL)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,K,L,M,N,LEN,NPT,NDIM
+      INTEGER LDIM(4)
+      my_real, DIMENSION(:) ,ALLOCATABLE :: YTMP
+c===============================================
+      DO N=1,NUMTABL
+        LEN  = 1
+        CALL WRITE_I_C(TABLE(N)%NOTABLE,LEN)
+        IF (TABLE(N)%NOTABLE <= 0) CYCLE
+        NDIM = TABLE(N)%NDIM
+        CALL WRITE_I_C(NDIM,LEN)
+        DO I=1,NDIM
+          NPT = SIZE(TABLE(N)%X(I)%VALUES)
+          CALL WRITE_I_C(NPT , LEN)
+          CALL WRITE_DB(TABLE(N)%X(I)%VALUES,NPT)
+          LDIM(I) = NPT 
+        END DO
+c
+        NPT = LDIM(1)
+        IF (NDIM == 1) THEN
+          CALL WRITE_DB(TABLE(N)%Y1D,NPT)
+          LEN = NPT
+        ELSE IF (NDIM == 2) THEN
+          LEN = LDIM(1)*LDIM(2)
+          call my_alloc(YTMP, LEN, "YTMP")
+          M = 0
+          DO J=1,LDIM(2)
+            DO I=1,NPT
+              M = M+1
+              YTMP(M) = TABLE(N)%Y2D(I,J)
+            END DO
+          END DO
+          CALL WRITE_DB(YTMP, LEN)
+        ELSE IF (NDIM == 3) THEN
+          LEN = LDIM(1)*LDIM(2)*LDIM(3)
+          call my_alloc(YTMP, LEN, "YTMP")
+          M = 0
+          DO K=1,LDIM(3)
+            DO J=1,LDIM(2)
+              DO I=1,NPT
+                M = M+1
+                YTMP(M) = TABLE(N)%Y3D(I,J,K)
+              END DO
+            END DO
+          END DO
+          CALL WRITE_DB(YTMP, LEN)
+        ELSE IF (NDIM == 4) THEN
+          LEN = LDIM(1)*LDIM(2)*LDIM(3)*LDIM(4)
+          call my_alloc(YTMP, LEN, "YTMP")
+          M = 0
+          DO L=1,LDIM(4)
+            DO K=1,LDIM(3)
+              DO J=1,LDIM(2)
+                DO I=1,NPT
+                  M = M+1
+                  YTMP(M) = TABLE(N)%Y4D(I,J,K,L)
+                END DO
+              END DO
+            END DO
+          END DO
+          CALL WRITE_DB(YTMP, LEN)
+        END IF
+        IF (ALLOCATED(YTMP)) call my_dealloc(YTMP)
+      END DO
+c-----------
+      RETURN
+      END SUBROUTINE WRITE_MAT_TABLE

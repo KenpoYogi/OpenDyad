@@ -1,0 +1,69 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    fxfluxwrest      ../engine/source/constraints/thermic/fxfluxwrest.F
+!||--- called by ------------------------------------------------------
+!||    wrrestp          ../engine/source/output/restart/wrrestp.F
+!||--- calls      -----------------------------------------------------
+!||    write_db         ../common_source/tools/input_output/write_db.F
+!||    write_i_c        ../common_source/tools/input_output/write_routines.c
+!||    wrtsqi           ../engine/source/output/tools/wrtsqi.F
+!||    wrtsqr           ../engine/source/output/tools/wrtsqr.F
+!||--- uses       -----------------------------------------------------
+!||    glob_therm_mod   ../common_source/modules/mat_elem/glob_therm_mod.F90
+!||====================================================================
+      SUBROUTINE FXFLUXWREST(IBFFLUX, FBFFLUX, GLOB_THERM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      use glob_therm_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "scr05_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IBFFLUX(*)
+      my_real FBFFLUX(*)
+      type (glob_therm_) ,intent(in) :: GLOB_THERM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+C
+      IF (IRFORM/5<=1) THEN
+        CALL WRTSQR (FBFFLUX,GLOB_THERM%LFACTHER*GLOB_THERM%NFXFLUX,IRFORM)
+        CALL WRTSQI (IBFFLUX,GLOB_THERM%NITFLUX*GLOB_THERM%NFXFLUX,IRFORM)
+      ELSE
+        CALL WRITE_DB(FBFFLUX,GLOB_THERM%LFACTHER*GLOB_THERM%NFXFLUX)
+        CALL WRITE_I_C(IBFFLUX,GLOB_THERM%NITFLUX*GLOB_THERM%NFXFLUX)
+      ENDIF
+C
+      RETURN
+      END

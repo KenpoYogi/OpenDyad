@@ -1,0 +1,154 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    setlenwa   ../starter/source/restart/ddsplit/setlenwa.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit    ../starter/source/restart/ddsplit/ddsplit.F
+!||    lectur     ../starter/source/starter/lectur.F
+!||====================================================================
+      SUBROUTINE SETLENWA(
+     1      LENWA0 ,NTHWA0  ,NAIRWA0   ,NUMELS0  ,NUMELQ0,
+     2      NUMELC0,NUMELTG0,NUMELT0   ,NUMELP0  ,NUMELR0,
+     3      NUMNOD0,NMNT0   ,L_MUL_LAG1,L_MUL_LAG,MAXNX0 ,
+     4      LWASPH0,NUMSPH0   ,LWASPIO  , NRCVVOIS0 ,NGROUP_L,
+     5      LWAMP_L, LWANMP_L ,ITHERM   )
+C Please note the dummy can be either local or global following appeal
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com09_c.inc"
+#include      "sphcom.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(INOUT) :: LWAMP_L
+      INTEGER, INTENT(INOUT) :: LWANMP_L
+      INTEGER, INTENT(IN)    :: ITHERM
+      INTEGER, INTENT(IN)    :: NGROUP_L
+      INTEGER LENWA0,NTHWA0,NAIRWA0,
+     .        NUMELS0,NUMELQ0,NUMELC0,NUMELTG0,NUMELT0,NUMELP0,
+     .        NUMELR0,NUMNOD0,NMNT0,L_MUL_LAG1,L_MUL_LAG,MAXNX0,
+     .        LWASPH0,NUMSPH0,LWASPIO,NRCVVOIS0
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NFLUWA, NBHOLWA, NAIRWA, NINTWA, NXELWA, NSPHWA,
+     .        NASSNMP, NASSMP, NIDELWA, MSPR,
+     .        IUN,LENVOISWA
+C-----------------------------------------------
+      IUN = 1
+C---------------------------------------------------------------------
+C SPH
+      NSPHWA = MAX(2*KVOISPH,4*KVOISPH,
+     .             16*NUMSPH0,LWASPIO)   ! 19*NUMSPH0 enleve (tri en auto)
+C work array WASPH, prive au SPH.
+      LWASPH0=17*NUMSPH0+MIN(IUN,NSPHIO)*3*NUMSPH0
+     .                            +MIN(IUN,NSPHSOL)*NUMSPH0
+C---------------------------------------------------------------------
+C ALE / CFD
+      NFLUWA  = MAX(IALE,ITHERM,IEULER) * MAX(1,NMULT) * 
+     .          MAX(7 * (NUMELS0+NUMELQ0),3 * NUMNOD0)
+      NBHOLWA = MAX(IALE,ITHERM,IEULER) * NMULT * NUMELQ0
+      LENVOISWA = 3 * ( NUMNOD0 + NRCVVOIS0 ) 
+C AirBag 
+      NAIRWA  = MAX(NAIRWA0, 4 * (NUMELC0 + NUMELTG0 + IBAGSURF))   ! In all nairwa0 and local Ibagsurf
+C Interface
+      NINTWA  = NMNT0+L_MUL_LAG1                                    ! Rigorously local nmnt
+C
+C SPMD assembly: all in dynamics
+      NASSNMP = 0
+      NASSMP  = 0
+C shooting nodes
+      NIDELWA = 3*NUMNOD0
+C lenwa non parallele
+      LWANMP_L   = MAX(NTHWA0,NASSNMP,L_MUL_LAG)
+C---------------------------------------------------------------------
+      NXELWA   = 22*MAXNX0                                         ! Rigorously Maxnx Local
+C lenwa parallele
+      LWAMP_L    = MAX(NAIRWA,NINTWA,NFLUWA+NBHOLWA,NASSMP,NXELWA,NSPHWA,
+     +               NIDELWA,LENVOISWA)
+C MSPR used in the starter
+      MSPR    = MAX(4*NUMELR0,NPARG*NGROUP_L)
+C
+      LENWA0  = MAX(LWAMP_L,LWANMP_L,MSPR)
+C
+      RETURN
+      END
+C
+!||====================================================================
+!||    setmulti   ../starter/source/restart/ddsplit/setlenwa.F
+!||--- called by ------------------------------------------------------
+!||    lectur     ../starter/source/starter/lectur.F
+!||====================================================================
+      SUBROUTINE SETMULTI(IPARI)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "spmd_c.inc"
+#include      "param_c.inc"
+#include      "sphcom.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IPARI(NPARI,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, MULTIMP, ICONT, ITY
+C-----------------------------------------------
+C
+C MultiMAX: parameter used to allocate the Buffer of Comm Engine (SPMD)
+C
+      MULTIMAX = 0
+      ICONT = 0
+      DO I = 1, NINTER
+        MULTIMP = IPARI(23,I)
+          IF(MULTIMP<=4) THEN
+            MULTIMAX = MAX(MULTIMAX,4*MULTIMP)
+          ELSEIF(MULTIMP<=12)THEN
+            MULTIMAX= MAX(MULTIMAX,3*MULTIMP)
+          ELSEIF(MULTIMP>12)THEN
+            MULTIMAX= MAX(MULTIMAX,2*MULTIMP)
+          END IF
+        ITY = IPARI(7,I)
+        IF(ITY==7.OR.ITY==10.OR.ITY==11.OR. ITY==22)ICONT=1
+      END DO
+      IF(NUMSPH/=0.AND.MULTIMAX==0)MULTIMAX=1
+      IF(NUMELX/=0.AND.MULTIMAX==0)MULTIMAX=4
+      IF(NINTER>0.AND.ICONT==0)MULTIMAX=100
+
+C
+      RETURN
+      END

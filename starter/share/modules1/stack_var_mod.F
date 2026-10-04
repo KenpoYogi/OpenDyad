@@ -1,0 +1,48 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    stack_var_mod           ../starter/share/modules1/stack_var_mod.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit                 ../starter/source/restart/ddsplit/ddsplit.F
+!||    hm_preread_properties   ../starter/source/properties/hm_preread_properties.F
+!||    lectur                  ../starter/source/starter/lectur.F
+!||    r2r_void                ../starter/source/coupling/rad2rad/r2r_void.F
+!||--- uses       -----------------------------------------------------
+!||    stack_mod               ../starter/share/modules1/stack_mod.F
+!||====================================================================
+      MODULE STACK_VAR_MOD
+C
+       USE STACK_MOD
+C-----------------------------------------------
+C   m y _ r e a l
+C-----------------------------------------------
+#include      "my_real.inc"
+C---------------------------------------------   
+       TYPE(STACK_INFO_ ) , DIMENSION(:), POINTER :: STACK_INFO  
+       INTEGER, DIMENSION (:), ALLOCATABLE :: NUMGEOSTACK  
+       INTEGER, DIMENSION (:,:), ALLOCATABLE :: PLY_INFO  
+       INTEGER NPROP_STACK      
+C      
+      END MODULE STACK_VAR_MOD
+

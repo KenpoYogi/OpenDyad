@@ -1,0 +1,84 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    law129_upd_mod   ../starter/source/materials/mat/mat129/law129_upd.F90
+!||--- called by ------------------------------------------------------
+!||    updmat           ../starter/source/materials/updmat.F
+!||====================================================================
+      module law129_upd_mod
+      implicit none
+      contains
+        ! ======================================================================================================================
+        ! \brief Updating material parameters of /MAT/law129
+        ! \details converting sensor_id to internal sensor number
+        ! ======================================================================================================================
+!||====================================================================
+!||    law129_upd         ../starter/source/materials/mat/mat129/law129_upd.F90
+!||--- called by ------------------------------------------------------
+!||    updmat             ../starter/source/materials/updmat.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg             ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod        ../starter/share/message_module/message_mod.F
+!||====================================================================
+        subroutine law129_upd(mat_param,sensors)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                        Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use matparam_def_mod
+          use sensor_mod
+          use message_mod
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                 implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          type(matparam_struct_) ,intent(inout) :: mat_param !< Material parameters data structure
+          type(sensors_)         ,intent(in)    :: sensors   !< sensor structure
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,sens_id,isens
+! ======================================================================================================================
+          isens   = 0
+          sens_id = mat_param%iparam(2)
+          if (sens_id > 0) then
+            do i=1,sensors%nsensor
+              if (sens_id == sensors%sensor_tab(i)%sens_id) then
+                isens = i
+                exit
+              end if
+            end do
+            if (isens == 0) then
+              call ancmsg(MSGID=1240,ANMODE=ANINFO,MSGTYPE=MSGWARNING,    &
+                I1=mat_param%mat_id,C1=mat_param%title,I2=sens_id)
+            end if
+          end if
+
+          mat_param%iparam(2) = isens
+! ----------------------------------------------------------------------------------------------------------------------
+        end subroutine law129_upd
+      end module law129_upd_mod

@@ -1,0 +1,418 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    c_front            ../starter/source/restart/ddsplit/c_front.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit            ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    c_ifront           ../starter/source/spmd/node/ddtools.F
+!||    nlocal             ../starter/source/spmd/node/ddtools.F
+!||--- uses       -----------------------------------------------------
+!||    front_mod          ../starter/share/modules1/front_mod.F
+!||====================================================================
+      SUBROUTINE C_FRONT(PROC     ,NBDDACC,NBDDKIN,NBDDNRB,
+     2                   NPBY     ,NRBYKIN_L,LJOINT ,NBDDNCJ,IBVEL  ,
+     3                   NBDDNRBM ,IADLL    ,LLL    ,NLAGF_L,FRONT_RM,
+     4                   NRBYMK_L ,NBDDNRBYM, 
+     5                   SDD_R2R_ELEM,ADDCSRECT,CSRECT,NBDDNORT,NBDDNOR_MAX,
+     6                   NBCCNOR,NBCCFR25,NBDDEDGT  ,NBDDEDG_MAX,NRTMX25   ,
+     7                   IPARI  ,INTBUF_TAB,INTERCEP,NODGLOB    ,NODLOCAL  ,
+     8                   NUMNOD_L,NLOC_DMG)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE FRONT_MOD
+      USE INTBUFDEF_MOD
+      USE USER_WINDOWS_MOD  
+      USE NLOCAL_REG_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "lagmult.inc"
+#include      "r2r_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       INTEGER  PROC, NBDDACC, NBDDKIN, NBDDNRB,NRBYKIN_L, NBDDNCJ,
+     .          NBDDNRBM, NLAGF_L,NRBYMK_L ,NBDDNRBYM, NBDDNORT, 
+     .          NBDDNOR_MAX, NBCCNOR, NBCCFR25, NBDDEDGT,NBDDEDG_MAX,NRTMX25,
+     .          NPBY(NNPBY,*), LJOINT(*),
+     .          IBVEL(NBVELP,*) , IADLL(*), LLL(*),FRONT_RM(NRBYM,*),
+     .          SDD_R2R_ELEM,
+     .          ADDCSRECT(*), CSRECT(*), IPARI(NPARI,*)
+       INTEGER, INTENT(IN) :: NUMNOD_L
+       INTEGER, DIMENSION(NUMNOD_L), INTENT(IN) :: NODGLOB
+       INTEGER, DIMENSION(NUMNOD), INTENT(IN) :: NODLOCAL
+       TYPE(INTBUF_STRUCT_) INTBUF_TAB(*)
+       TYPE(INTERSURFP) :: INTERCEP(3,NINTER)
+       TYPE (NLOCAL_STR_), TARGET, INTENT(IN)  :: NLOC_DMG
+!       -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*
+!       NODGLOB   : integer, dimension=NUMNOD_L
+!                   gives the global ID of a local element
+!                   NODGLOB( local_id) = global_id
+!       NODLOCAL  : integer, dimension=NUMNOD
+!                   gives the local ID of a global element
+!                   NODLOCAL( global_id) = local_id
+!                   --> used here to avoid NLOCAL call (the NLOCAL perf is bad)
+!                       NODLOCAL /= 0 if the element is on the current domain/processor
+!                       and =0 if the element is not on the current domain
+!       -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*
+C-----------------------------------------------
+C   F u n c t i o n
+C-----------------------------------------------     
+      INTEGER  NLOCAL
+      EXTERNAL NLOCAL   
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, P, N, M, NSN, K, J,
+     .        IC, IK0, IKN, IK,
+     .        IFRLAG(NSPMD),CPT,
+     .        NADMSR, NADMSR_L, NI, NTY, NI25, NBDDNOR, NRTM, ISHIFT,
+     .        N1, N2, N3, N4, ISBOUND,
+     .        NRTM_L, NBDDEDG, II, NB
+      INTEGER, DIMENSION(:), ALLOCATABLE :: TAG_SM, TAG_MS, ITAG
+      INTEGER TAGP(NSPMD)
+! ------------------------------------------------------------
+!     allocate 1d array
+      call my_alloc(ITAG, NUMNOD, "ITAG")
+! ------------------------------
+C
+C Pure Domdec boundary
+C
+      NBDDACC = 0
+      NBDDKIN = 0
+      CPT = 0
+
+      DO II = 1,NUMNOD_L
+        I = NODGLOB(II)        
+          CALL C_IFRONT(I,CPT)
+          !returns in CPT the number of procs on which node I is sticked  
+          IF(FLAGKIN(I)==0)THEN
+           !FLAGKIN array identities boundary nodes with kinematic constraints
+           !(FLAGKIN(N)=1 <=> old FRONT TAG=10)  
+           !FLAGKIN(N) can be set to one only for first SPMD domain       
+           !Add CPT-1 in order to don't take into account current proc himself
+            NBDDACC = NBDDACC + (CPT - 1)
+          ELSE
+            IF(PROC/=1)THEN
+              !add only one time when PROC ne 1 and FLAGKIN(I)=1
+              NBDDKIN = NBDDKIN + 1
+              !do not count proc itself and proc 1
+              NBDDACC = NBDDACC + (CPT - 2)
+            ELSE
+              !Add CPT-1 in order to don't take into account current proc himself 
+              NBDDKIN = NBDDKIN + (CPT - 1)
+            ENDIF
+          ENDIF
+      ENDDO
+C
+C Multidoman boundary
+C      
+      SDD_R2R_ELEM = 0       
+      IF ((NSUBDOM>0).AND.(IDDOM==0)) THEN
+        IF (NLOC_DMG%IMOD > 0) THEN
+          SDD_R2R_ELEM = 4*(NBDDKIN + NBDDACC)
+        ELSE
+          SDD_R2R_ELEM = 2*(NBDDKIN + NBDDACC)
+        ENDIF       
+      ENDIF     
+C
+C RBY boundary (main nodes)
+C
+      NBDDNRB = 0
+      NRBYKIN_L = 0
+      DO N = 1, NRBYKIN
+        M=NPBY(1,N)
+        IF(NODLOCAL(M)/=0.AND.NODLOCAL(M)<=NUMNOD_L)THEN
+          NRBYKIN_L = NRBYKIN_L + 1
+          DO P = 1, NSPMD
+            IF(P/=PROC) THEN
+              IF(NLOCAL(M,P)==1) THEN
+                NBDDNRB = NBDDNRB + 1
+              ENDIF
+            ENDIF
+          ENDDO
+        ENDIF
+      ENDDO
+C
+C CYL front.Joint (PROC0)
+C
+      NBDDNCJ = 0
+      K = 1
+      DO N = 1, NJOINT
+        NSN=LJOINT(K)
+        DO J = 1, NSN
+          M = LJOINT(K+J)
+          IF(PROC/=1) THEN
+C proc <> 0, boundary if node is on the processor
+             IF(NODLOCAL(M)/=0.AND.NODLOCAL(M)<=NUMNOD_L)THEN
+              NBDDNCJ = NBDDNCJ + 1
+            END IF
+          ELSE
+C proc = 0, search for other processors having the node
+            DO P = 2, NSPMD
+              IF(NLOCAL(M,P)==1) THEN
+                NBDDNCJ = NBDDNCJ + 1
+              ENDIF
+            END DO
+          END IF
+        END DO
+        K = K + NSN + 1
+      END DO
+C
+C MOU RBY Frontier (Nodes)
+C
+      NBDDNRBM = 0
+      DO N = 1, NIBVEL
+        M=IBVEL(4,N)
+        IF(NODLOCAL(M)/=0.AND.NODLOCAL(M)<=NUMNOD_L)THEN
+          DO P = 1, NSPMD
+            IF(P/=PROC) THEN
+              IF(NLOCAL(M,P)==1) THEN         
+                NBDDNRBM = NBDDNRBM + 1
+              ENDIF
+            ENDIF
+          ENDDO
+        ENDIF
+      ENDDO
+C
+C Frontiere Rigid material (effectif main nodes)
+C
+      NBDDNRBYM = 0
+      NRBYMK_L = 0
+      DO N = 1, NRBYM
+        IF(MOD(FRONT_RM(N,PROC),10)==1)THEN
+          NRBYMK_L = NRBYMK_L + 1
+          DO P = 1, NSPMD
+            IF(P/=PROC) THEN
+              IF(MOD(FRONT_RM(N,P),10)==1) THEN
+                NBDDNRBYM = NBDDNRBYM + 1
+              ENDIF
+            ENDIF
+          ENDDO
+        ENDIF
+      ENDDO
+C
+C Lag Mult boundary
+C
+      IF(LAG_NCF>0) THEN
+        DO N = 1, NUMNOD
+          ITAG(N) = 0
+        END DO
+        DO P = 1, NSPMD
+          IFRLAG(P) = 0
+        END DO
+        DO IC = 1, LAG_NCF
+         IK0 = IADLL(IC)
+         IKN = IADLL(IC+1)-1
+         DO IK = IK0,IKN
+          N = LLL(IK)
+          IF(ITAG(N)==0) THEN
+            ITAG(N) = 1
+            DO P = 1, NSPMD
+              IF(NLOCAL(N,P)==1)THEN          
+                IFRLAG(P) = IFRLAG(P) + 1
+                GOTO 100
+              END IF
+            END DO
+  100       CONTINUE
+          END IF
+         END DO
+        END DO
+        NLAGF_L = IFRLAG(PROC)
+      END IF
+! ------------------------------
+!     deallocate 1d array
+      call my_dealloc(ITAG)
+! ------------------------------
+C ---------------------
+C     Interfaces TYPE25, Max nb of frontiers wrt vertices overall interfaces
+C ---------------------
+      NBCCFR25  = 0
+      NBCCNOR   = 0
+
+      NBDDNOR_MAX = 0
+      NBDDNORT    = 0
+      IF(NINTER25/=0)THEN
+   
+        NI25=0
+        ISHIFT = 0
+
+        DO NI=1,NINTER 
+          NTY=IPARI(7,NI)
+          IF(NTY/=25) CYCLE
+
+          NBDDNOR = 0
+
+          NI25=NI25+1
+
+          NRTM  =IPARI(4,NI)
+          NADMSR=IPARI(67,NI)
+
+          call my_alloc(TAG_SM, NADMSR, "TAG_SM")
+          call my_alloc(TAG_MS, NADMSR, "TAG_MS")
+          TAG_SM(1:NADMSR)=0
+
+          NADMSR_L=0
+          DO K=1,NRTM
+            N1 = INTBUF_TAB(NI)%ADMSR(4*(K-1)+1)
+            N2 = INTBUF_TAB(NI)%ADMSR(4*(K-1)+2)
+            N3 = INTBUF_TAB(NI)%ADMSR(4*(K-1)+3)
+            N4 = INTBUF_TAB(NI)%ADMSR(4*(K-1)+4) 
+            IF(INTERCEP(1,NI)%P(K)==PROC)THEN
+              IF(TAG_SM(N1)==0)THEN
+                NADMSR_L=NADMSR_L+1
+                TAG_SM(N1)=NADMSR_L
+              END IF
+              IF(TAG_SM(N2)==0)THEN
+                NADMSR_L=NADMSR_L+1
+                TAG_SM(N2)=NADMSR_L
+              END IF
+              IF(TAG_SM(N3)==0)THEN
+                NADMSR_L=NADMSR_L+1
+                TAG_SM(N3)=NADMSR_L
+              END IF
+              IF(TAG_SM(N4)==0)THEN
+                NADMSR_L=NADMSR_L+1
+                TAG_SM(N4)=NADMSR_L
+              END IF
+            ENDIF            
+          ENDDO 
+          
+          DO I = 1, NADMSR  
+            K = TAG_SM(I)        
+            IF(K/=0)THEN
+               TAG_MS(K)=I
+            END IF
+          END DO
+          DO I = 1, NADMSR_L         
+            N = TAG_MS(I) + ISHIFT
+            ISBOUND=0
+            TAGP(1:NSPMD)=0
+            NB = 0
+            DO J = ADDCSRECT(N), ADDCSRECT(N+1)-1
+               K = CSRECT(J)
+               P = INTERCEP(1,NI)%P(K)
+               NB = NB+1
+               IF(P /= PROC.AND.TAGP(P)==0) THEN
+                 NBDDNOR = NBDDNOR + 1
+                 ISBOUND = 1
+                 TAGP(P) = 1
+               ENDIF
+            ENDDO
+            NBCCFR25 = NBCCFR25 + NB*ISBOUND
+            NBCCNOR  = NBCCNOR + NB
+          ENDDO
+          ISHIFT=ISHIFT+NADMSR
+
+          NBDDNOR_MAX = MAX(NBDDNOR_MAX,NBDDNOR)
+          NBDDNORT    = NBDDNORT+NBDDNOR
+
+
+          CALL MY_DEALLOC(TAG_SM)
+          CALL MY_DEALLOC(TAG_MS)
+
+        END DO
+
+      END IF ! NINTER25/=0
+
+C ---------------------
+C     Interfaces TYPE25, Max nb of frontiers wrt edges overall interfaces
+C ---------------------
+      NBDDEDG_MAX = 0
+      NBDDEDGT    = 0
+
+      NRTMX25=0
+      IF(NINTER25/=0)THEN
+   
+        NI25=0
+
+        DO NI=1,NINTER 
+          NTY=IPARI(7,NI)
+          IF(NTY/=25) CYCLE
+
+          NBDDEDG = 0
+
+          NI25=NI25+1
+
+          NRTM  =IPARI(4,NI)
+
+          call my_alloc(TAG_SM, NRTM, "TAG_SM")
+          call my_alloc(TAG_MS, NRTM, "TAG_MS")
+          TAG_SM(1:NRTM)=0
+
+          NRTM_L=0
+          DO K=1,NRTM
+            IF(INTERCEP(1,NI)%P(K)==PROC)THEN
+              NRTM_L=NRTM_L+1
+              TAG_SM(K)=NRTM_L
+            ENDIF
+          ENDDO 
+
+          NRTMX25 = MAX(NRTMX25,NRTM_L) 
+                   
+          DO I = 1, NRTM 
+            K = TAG_SM(I)        
+            IF(K/=0)THEN
+               TAG_MS(K)=I
+            END IF
+          END DO
+
+          DO I = 1, NRTM_L         
+            N = TAG_MS(I)
+
+            DO J = 1,4
+               K = INTBUF_TAB(NI)%MVOISIN(4*(N-1)+J)
+               IF(K/=0)THEN
+                 P = INTERCEP(1,NI)%P(K)
+                 IF(P /= PROC) THEN
+                   NBDDEDG = NBDDEDG + 1
+                 ENDIF
+               ENDIF
+            ENDDO
+          ENDDO
+
+          NBDDEDG_MAX = MAX(NBDDEDG_MAX,NBDDEDG)
+          NBDDEDGT    = NBDDEDGT+NBDDEDG
+
+          CALL MY_DEALLOC(TAG_SM)
+          CALL MY_DEALLOC(TAG_MS)
+
+        END DO
+
+      END IF ! NINTER25/=0
+C
+      RETURN
+      END

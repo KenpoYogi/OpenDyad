@@ -1,0 +1,81 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    initwg_ressort   ../starter/source/spmd/domain_decomposition/initwg_ressort.F
+!||--- called by ------------------------------------------------------
+!||    initwg           ../starter/source/spmd/domain_decomposition/initwg.F
+!||--- uses       -----------------------------------------------------
+!||    ddweights_mod    ../starter/share/modules1/ddweights_mod.F
+!||====================================================================
+      SUBROUTINE INITWG_RESSORT(WD,PM,GEO,IXR,IGEO,
+     .            NUMELR,IPM,NUMMAT,NUMGEO,OFF)
+C-----------------------------------------------
+C            M o d u l e s
+C-----------------------------------------------
+      USE DDWEIGHTS_MOD
+      use element_mod , only : nixr
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "tablen_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER  NUMELR,OFF,
+     .  NUMMAT,NUMGEO,  IXR(NIXR,*), IGEO(NPROPGI,*),IPM(NPROPMI,*)
+C     REAL OR REAL*8
+      my_real
+     .    PM(NPROPM,*), GEO(NPROPG,*)
+      REAL WD(*)
+C-----------------------------------------------
+      INTEGER  PID,
+     .    ISSN, MTN, I,
+     .    ITY
+
+      REAL
+     .   WTYPE(3),
+     .   POIDS
+       DATA WTYPE /0.5 ,1.4 , 1.4/
+!      different spring kind : wtype(1) = type 4    /SPRING
+!                              wtype(2) = type 13   /SPR_BEAM
+!                              wtype(3) = default   
+C-----------------------------------------------
+      DO I = 1, NUMELR
+        PID= IXR(1,I)
+        MTN= NINT(GEO(8,PID))
+        ISSN = 0
+        ITY = IGEO(11,PID)
+         POIDS = WTYPE(3)
+        IF(GEO(5,PID)/=ZERO) ISSN=1
+C   test elem delete
+        IF (WD(I+OFF)==0.)
+     .    WD(I+OFF) = POIDS
+      ENDDO
+      RETURN
+      END

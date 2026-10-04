@@ -1,0 +1,230 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    test_support_fct   ../starter/source/elements/ige3d/test_support_fct.F
+!||--- called by ------------------------------------------------------
+!||    prerafig3d         ../starter/source/elements/ige3d/prerafig3d.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE TEST_SUPPORT_FCT(IXIG3D, KXIG3D, KNOTLOCPC, DEGTANG1, DEGTANG2, DIR,
+     .                            TAB_ELCUT, L_TAB_ELCUT,
+     .                            TAB_COINKNOT,L_TAB_COINKNOT,
+     .                            TAB_FCTCUT,L_TAB_FCTCUT,DECALGEO,FLAG)
+C----------------------------------------------------------------------
+C   ------------------------>   case of quads  <-----------------------c
+C   ENSEMBLE D'ELEMENTS DU PATCH QUI VONT POTENTIELLEMENT ETRE MODIFIEES 
+C   by inserting the knot of the meshsurf
+C   this routine uses an inclusion detection algorithm
+C   of segments in a surface (slightly modified)
+C----------------------------------------------------------------------
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "ige3d_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IXIG3D(*),KXIG3D(NIXIG3D,*),DEGTANG1,DEGTANG2,DIR,DECALGEO,
+     .        TAB_ELCUT(L_TAB_ELCUT),L_TAB_ELCUT,L_TAB_COINKNOT,
+     .        TAB_FCTCUT(L_TAB_FCTCUT),L_TAB_FCTCUT,FLAG
+      my_real KNOTLOCPC(DEG_MAX,3,*),TAB_COINKNOT(2,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,K,DIRTANG1,DIRTANG2,
+     .        IEL,INTERSEC,
+     .        WORK(70000),SIZ_LIST_FCTTOT,IDFCT,IOUT
+      my_real DET, T1, T2, XA(5),YA(5),COIN(2,2),
+     .        XB, YB, XC, YC, XD, YD, TOL
+      INTEGER, DIMENSION(:), ALLOCATABLE :: INDEX, LIST_FCTTOT, LIST_FCTTRI
+C-----------------------------------------------
+c
+      L_TAB_FCTCUT = 0
+      TOL = EM06
+c
+      IF(DIR==1) THEN
+        DIRTANG1 = 2
+        DIRTANG2 = 3
+      ELSEIF(DIR==2) THEN
+        DIRTANG1 = 3
+        DIRTANG2 = 1
+      ELSEIF(DIR==3) THEN
+        DIRTANG1 = 1
+        DIRTANG2 = 2
+      ELSE
+        DIRTANG1 = -HUGE(DIRTANG1)
+        DIRTANG2 = -HUGE(DIRTANG2)
+      ENDIF
+c
+C----------------------------------------------------------------------
+c  all functions to be processed are listed and sorted for
+c  Do not treat the same function twice
+C----------------------------------------------------------------------
+c
+      SIZ_LIST_FCTTOT = L_TAB_ELCUT*KXIG3D(3,TAB_ELCUT(1))
+      call my_alloc(LIST_FCTTOT, SIZ_LIST_FCTTOT, "LIST_FCTTOT")
+      call my_alloc(LIST_FCTTRI, SIZ_LIST_FCTTOT, "LIST_FCTTRI")
+      LIST_FCTTOT(:) = EP06
+c
+      DO I=1,L_TAB_ELCUT
+        IEL=TAB_ELCUT(I)
+        DO J=1,KXIG3D(3,IEL)
+          LIST_FCTTOT((I-1)*KXIG3D(3,IEL)+J) = IXIG3D(KXIG3D(4,IEL)+J-1)
+        ENDDO
+      ENDDO
+c
+      call my_alloc(INDEX, 2*SIZ_LIST_FCTTOT, "INDEX")
+      CALL MY_ORDERS(0, WORK, LIST_FCTTOT, INDEX, SIZ_LIST_FCTTOT , 1)
+c
+      DO I=1,SIZ_LIST_FCTTOT
+        LIST_FCTTRI(I)=LIST_FCTTOT(INDEX(I))
+      ENDDO
+c
+      CALL MY_DEALLOC(LIST_FCTTOT)
+      CALL MY_DEALLOC(INDEX)
+c
+      COIN(1,1) = MINVAL(TAB_COINKNOT(1,1:(L_TAB_COINKNOT)))
+      COIN(2,1) = MINVAL(TAB_COINKNOT(2,1:(L_TAB_COINKNOT)))
+      COIN(1,2) = MAXVAL(TAB_COINKNOT(1,1:(L_TAB_COINKNOT)))
+      COIN(2,2) = MAXVAL(TAB_COINKNOT(2,1:(L_TAB_COINKNOT)))
+c
+      DO I=1,SIZ_LIST_FCTTOT
+c
+        IF(I/=1) THEN
+          IF(LIST_FCTTRI(I-1)==LIST_FCTTRI(I)) CYCLE
+        ENDIF
+c
+        IDFCT = LIST_FCTTRI(I)
+        IOUT=0
+c
+C----------------------------------------------------------------------
+c  creation of working variables: corner of the knot extents of the function
+c  A TESTER
+C----------------------------------------------------------------------
+c
+        XA(1) = KNOTLOCPC(1,DIRTANG1,DECALGEO+IDFCT) + TOL
+        XA(2) = KNOTLOCPC(DEGTANG1+1,DIRTANG1,DECALGEO+IDFCT) - TOL
+        XA(3) = KNOTLOCPC(DEGTANG1+1,DIRTANG1,DECALGEO+IDFCT) - TOL
+        XA(4) = KNOTLOCPC(1,DIRTANG1,DECALGEO+IDFCT) + TOL
+        XA(5) = XA(1)
+c
+        YA(1) = KNOTLOCPC(1,DIRTANG2,DECALGEO+IDFCT) + TOL
+        YA(2) = KNOTLOCPC(1,DIRTANG2,DECALGEO+IDFCT) + TOL
+        YA(3) = KNOTLOCPC(DEGTANG2+1,DIRTANG2,DECALGEO+IDFCT) - TOL
+        YA(4) = KNOTLOCPC(DEGTANG2+1,DIRTANG2,DECALGEO+IDFCT) - TOL
+        YA(5) = YA(1)
+c
+C----------------------------------------------------------------------
+c  1st test: test of the 4 points according to the 4 convex corners of the meshsurf
+C----------------------------------------------------------------------
+c
+        IF(XA(1)<COIN(1,1).OR.YA(1)<COIN(2,1)) CYCLE
+        IF(XA(3)>COIN(1,2).OR.YA(3)>COIN(2,2)) CYCLE
+c
+C----------------------------------------------------------------------
+c2nd test: test if the segment formed with a distant point intersects a side of the polygon
+C----------------------------------------------------------------------
+c
+        XB=COIN(1,1)-1000  ! a point far enough from the meshsurf is taken
+        YB=COIN(2,1)-2000
+        DO J=1,4  ! loop over the 4 corners of the extent
+          INTERSEC=0
+          DO K=1,L_TAB_COINKNOT-1
+            XC=TAB_COINKNOT(1,K)
+            YC=TAB_COINKNOT(2,K)
+            XD=TAB_COINKNOT(1,K+1)
+            YD=TAB_COINKNOT(2,K+1)
+            DET = (XB-XA(J))*(YC-YD) - (XC-XD)*(YB-YA(J))
+            IF(DET==0) THEN
+c             parallel or collinear segments
+            ELSE
+              T1 = ((XC-XA(J))*(YC-YD)-(XC-XD)*(YC-YA(J)))/DET
+              T2 = ((XB-XA(J))*(YC-YA(J))-(XC-XA(J))*(YB-YA(J)))/DET
+              IF(T1>1.OR.T1<0.OR.T2>1.OR.T2<=0) THEN ! pas d'intersection
+c                ! pas d'intersection
+              ELSE
+                INTERSEC = INTERSEC + 1 
+c                intersection: increment the counter by 1
+              ENDIF
+            ENDIF
+          ENDDO
+          IF(MOD(INTERSEC,2)==0) IOUT=1 ! even number of intersections, the point is outside the meshsurf
+        ENDDO
+c
+        IF(IOUT==1) CYCLE
+c
+C----------------------------------------------------------------------
+c  3rd test: to handle concave polygons, the segments formed by the extents must be tested
+C----------------------------------------------------------------------
+c
+        DO J=1,4  ! loop over the 4 corners of the extent
+          DO K=1,L_TAB_COINKNOT-1
+            XC=TAB_COINKNOT(1,K)
+            YC=TAB_COINKNOT(2,K)
+            XD=TAB_COINKNOT(1,K+1)
+            YD=TAB_COINKNOT(2,K+1)
+            DET = (XA(J+1)-XA(J))*(YC-YD) - (XC-XD)*(YA(J+1)-YA(J))
+            IF(DET==0) THEN
+c             parallel or collinear segments, so loop over another segment of the polygon
+            ELSE
+              T1 = ((XC-XA(J))*(YC-YD)-(XC-XD)*(YC-YA(J)))/DET
+              T2 = ((XA(J+1)-XA(J))*(YC-YA(J))-(XC-XA(J))*(YA(J+1)-YA(J)))/DET
+              IF(T1>1.OR.T1<0.OR.T2>1.OR.T2<=0) THEN ! pas d'intersection
+c                ! pas d'intersection
+              ELSE
+                IOUT=1 ! intersection : fonction a exclure
+                CYCLE
+              ENDIF
+            ENDIF
+          ENDDO
+        ENDDO
+C
+C----------------------------------------------------------------------
+C  sizing and storage of the array of functions to be refined
+C----------------------------------------------------------------------
+C
+        IF(IOUT==0) THEN
+          IF(FLAG==0) THEN
+            L_TAB_FCTCUT = L_TAB_FCTCUT + 1
+          ELSE
+            L_TAB_FCTCUT = L_TAB_FCTCUT + 1 
+            TAB_FCTCUT(L_TAB_FCTCUT) = IDFCT
+          ENDIF
+        ENDIF
+c
+      ENDDO
+c
+      CALL MY_DEALLOC(LIST_FCTTRI)
+C
+      RETURN
+      END
+c
+

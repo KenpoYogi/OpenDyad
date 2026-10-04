@@ -1,0 +1,131 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    thrnur   ../engine/source/output/th/thrnur.F
+!||--- called by ------------------------------------------------------
+!||    hist2    ../engine/source/output/th/hist2.F
+!||====================================================================
+      SUBROUTINE THRNUR(IAD,NN,IADV,NVAR,IPARG,
+     .                 ITHBUF,BUFEL,    WA )
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "task_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IAD,NN,IADV,NVAR,
+     .   IPARG(NPARG,*),ITHBUF(*)
+      my_real
+     .   BUFEL(*),WA(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER II, I, N, IH, NG, ITY, MTE, NB1, NB2, NB3,
+     .   NB4, NB5, NB6, K, M1, M2, M3,
+     .           IP,
+     .         
+     .         
+     .   LWA,NEL,NFT
+      my_real
+     .   WWA(100),XFN
+      II=0
+      IH=IAD
+C   SPECIFIC SPMD
+      LWA = NN*NVAR
+      DO I = 1, LWA
+        WA(I) = ZERO
+      ENDDO
+C decalage IH
+      DO WHILE((ITHBUF(IH+NN)/=ISPMD).AND.(IH<IAD+NN))
+        IH = IH + 1
+      ENDDO
+      IF (IH>=IAD+NN) RETURN 
+C
+      DO NG=1,NGROUP
+        ITY=IPARG(5,NG)
+        IF(ITY==50) THEN
+          MTE=IPARG(1,NG)
+          NEL=IPARG(2,NG)
+          NFT=IPARG(3,NG)
+          NB1=IPARG(4,NG)
+          NB2=NB1+NEL*11
+          NB3=NB2+NEL*12
+          NB4=NB3+NEL
+          NB5=NB4+NEL*13
+          NB6=NB5+NEL*3
+C
+          DO I=1,NEL
+            N=I+NFT
+            K=ITHBUF(IH)
+            IP=ITHBUF(IH+NN)
+C
+            IF (K==N)THEN
+              IH=IH+1
+C   SPECT SPMD treatment
+
+C search for the correct ii
+              II = ((IH-1) - IAD)*NVAR
+              DO WHILE((ITHBUF(IH+NN)/=ISPMD).AND.(IH<IAD+NN))
+                IH = IH + 1
+              ENDDO
+C
+              IF(IH>IAD+NN) RETURN
+C             IF (IP==ISPMD)THEN
+C
+              M1=NB2+3*I-3
+              M2=NB5+3*I-3
+              M3=NB6+3*I-3
+              XFN=BUFEL(M1)*BUFEL(M2)+BUFEL(M1+1)*BUFEL(M2+1)
+     .           +BUFEL(M1+2)*BUFEL(M2+2)
+              WWA(1)=BUFEL(NB1+I)
+              WWA(2)=BUFEL(NB3+I)
+              WWA(3)=BUFEL(NB4+I)
+              WWA(4)=XFN*BUFEL(M1)
+              WWA(5)=XFN*BUFEL(M1+1)
+              WWA(6)=XFN*BUFEL(M1+2)
+              WWA(7)=BUFEL(M2)  -XFN*BUFEL(M1)
+              WWA(8)=BUFEL(M2+1)-XFN*BUFEL(M1+1)
+              WWA(9)=BUFEL(M2+2)-XFN*BUFEL(M1+2)
+              WWA(10)=BUFEL(M3)
+              WWA(11)=BUFEL(M3+1)
+              WWA(12)=BUFEL(M3+2)
+              DO K=1,12
+                II=II+1
+                WA(II)=WWA(K)
+              ENDDO
+C             ENDIF
+            ENDIF
+          ENDDO 
+        ENDIF
+      ENDDO
+C
+      RETURN
+      END

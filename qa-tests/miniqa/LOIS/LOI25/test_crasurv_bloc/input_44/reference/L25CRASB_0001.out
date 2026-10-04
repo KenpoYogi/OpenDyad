@@ -1,0 +1,310 @@
+ L25CRASB_0001.out
+************************************************************************
+**                                                                    **
+**                                                                    **
+**                         OpenRadioss Engine                         **
+**                                                                    **
+**            Non-linear Finite Element Analysis Software             **
+**                                                                    **
+**                                                                    **
+**                                                                    **
+**                Linux 64 bits, GNU compiler, OpenMPI                **
+**                                                                    **
+**                                                                    **
+**                                                                    **
+** CommitID: 440deeba848d606665f88afb8302e85b1ecf72bf                 **
+************************************************************************
+** OpenRadioss Software                                               **
+** COPYRIGHT (C) 2026 Siemens                                         **
+** Licensed under GNU Affero General Public License.                  **
+** See License file.                                                  **
+************************************************************************
+ 
+ NUMBER OF SPMD DOMAINS           4
+ NUMBER OF THREADS PER DOMAIN     2
+ NUMBER OF HMPP PROCESSES         8
+  
+ COMPUTATION HARDWARE DESCRIPTION
+  
+ CPU#  HOSTNAME     CPU TYPE, FREQUENCY AND MEMORY
+   1   fr-shady   Intel(R) Xeon(R) CPU           X5680  @ 3.33GHz (x86_64), 1596 MHz,  20012 MB RAM,  49126 MB swap
+   2   fr-shady   Intel(R) Xeon(R) CPU           X5680  @ 3.33GHz (x86_64), 1596 MHz,  20012 MB RAM,  49126 MB swap
+   3   fr-shady   Intel(R) Xeon(R) CPU           X5680  @ 3.33GHz (x86_64), 1596 MHz,  20012 MB RAM,  49126 MB swap
+   4   fr-shady   Intel(R) Xeon(R) CPU           X5680  @ 3.33GHz (x86_64), 1596 MHz,  20012 MB RAM,  49126 MB swap
+  
+************************************************************************
+
+
+ L25CRASBD01                                                                     
+
+
+ FINAL TIME . . . . . . . . . . . . . . . . . . .   2.000000    
+
+ TIME INTERVAL FOR TIME HISTORY PLOTS . . . . . .  0.1000000E-01
+
+ TIME STEP SCALE FACTOR . . . . . . . . . . . . .  0.9000000    
+
+ MINIMUM TIME STEP  . . . . . . . . . . . . . . .   0.000000    
+
+
+ BRICK TIME STEP SCALE FACTOR . . . . . . . . . .  0.9000000    
+ BRICK MINIMUM TIME STEP. . . . . . . . . . . . .   0.000000    
+ MIN. TIME STEP FLAG (1:STOP RUN, 2:DELETE BRICK)     1
+
+ QUAD TIME STEP SCALE FACTOR. . . . . . . . . . .  0.9000000    
+ QUAD MINIMUM TIME STEP . . . . . . . . . . . . .   0.000000    
+ MIN. TIME STEP FLAG (1:STOP RUN, 2:DELETE QUAD).     1
+
+ SHELL TIME STEP SCALE FACTOR . . . . . . . . . .  0.5000000    
+ SHELL MINIMUM TIME STEP. . . . . . . . . . . . .  0.1000000E-04
+ MIN. TIME FLAG (1:STOP, 2:DELETE, 3:SMALL STRAIN)    2
+
+ TRUSS TIME STEP SCALE FACTOR . . . . . . . . . .  0.9000000    
+ TRUSS MINIMUM TIME STEP. . . . . . . . . . . . .   0.000000    
+ MIN. TIME FLAG (1:STOP, 2:DELETE). . . . . . . .     0
+
+ BEAM TIME STEP SCALE FACTOR. . . . . . . . . . .  0.9000000    
+ BEAM MINIMUM TIME STEP . . . . . . . . . . . . .   0.000000    
+ MIN. TIME FLAG (1:STOP, 2:DELETE). . . . . . . .     0
+
+ SPRING TIME STEP SCALE FACTOR. . . . . . . . . .  0.9000000    
+ SPRING MINIMUM TIME STEP . . . . . . . . . . . .   0.000000    
+ MIN. TIME FLAG (1:STOP, 2:DELETE). . . . . . . .     0
+
+ AIRBAG TIME STEP SCALE FACTOR. . . . . . . . . .  0.9000000    
+ AIRBAG MINIMUM TIME STEP . . . . . . . . . . . .   0.000000    
+ MIN. TIME FLAG (1:STOP). . . . . . . . . . . . .     0
+
+ CONTACT TIME STEP SCALE FACTOR . . . . . . . . .  0.9000000    
+ CONTACT MINIMUM TIME STEP. . . . . . . . . . . .   0.000000    
+ MIN. TIME FLAG(1:STOP, 2:REMOVE NODE FROM INTERF)    0
+
+ PRINTOUT CYCLE FREQUENCY . . . . . . . . . . . .  -100
+
+ RESTART CYCLE FREQUENCY. . . . . . . . . . . . .   10000000
+
+ MAXIMUM RESTART WRITE BEFORE OVERWRITE . . . . .     0
+
+ INVERS: INPUT DECK VERSION . . . . . . . . . . .  2018
+ ITTYP : FLAG FOR TYPE OF T-FILE. . . . . . . . .     4
+
+
+ TIME FOR FIRST ANIMATION-FILE PLOT . . . . . . .   0.000000    
+ TIME INTERVAL FOR ANIMATION-FILE PLOTS . . . . .   1.000000    
+ SENSOR FOR ANIMATION-FILE PLOTS. . . . . . . . .          0
+ TIME INTERVAL FOR SENSOR ANIMATION-FILE PLOTS. .   0.000000    
+
+ VARIABLE SAVED ON ANIMATION FILES (1: YES) :
+      PLASTIC STRAIN. . . . . .     0
+      DENSITY     (SOLID ONLY).     0
+      SPECIFIC ENERGY . . . . .     1
+      HOURGLASS ENERGY. . . . .     0
+      TEMPERATURE (SOLID ONLY).     0
+      THICKNESS   (SHELL ONLY).     0
+      PRESSURE    (SOLID ONLY).     0
+      VON MISES . . . . . . . .     0
+      TURBULENT ENERGY (FLUID).     0
+      TURBULENT VISCOSITY(FLUID)    0
+      VORTICITY (FLUID) . . . .     0
+ NODAL VALUES SAVED ON ANIMATION FILES (1: YES) :
+      PRESSURE. . . . . . . . .     0
+      DENSITY . . . . . . . . .     0
+      TEMPERATURE . . . . . . .     0
+ VECTOR SAVED ON ANIMATION FILES (1: YES) :
+      VELOCITY VECTOR . . . . .     1
+      DISPLACEMENT VECTOR . . .     0
+      ACCELERATION VECTOR . . .     0
+      CONTACT FORCES. . . . . .     0
+      INTERNAL FORCES . . . . .     0
+      EXTERNAL FORCES . . . . .     0
+      SECTION RBY RWALL FORCES.     0
+      ROTATIONAL VELOCITY VECTOR    0
+      CONTACT PRESSURE (VECTORS)    0
+ SHELL TENSOR SAVED ON ANIMATION FILES (1: YES) :
+      MEMBRANE STRESS . . . . .     0
+      BENDING STRESS(MOMENT/T^2)    0
+      UPPER LAYER STRESS. . . .     0
+      LOWER LAYER STRESS. . . .     0
+      MEMBRANE STRAIN . . . . .     0
+      CURVATURE . . . . . . . .     0
+      UPPER LAYER STRAIN. . . .     0
+      LOWER LAYER STRAIN. . . .     0
+ NODAL MASS SAVED ON ANIMATION FILES (1: YES) :    0
+ KEEP DELETED ELEMENT (1: YES) :    0
+
+
+ INITIAL TIME STEP. . . . . . . . . . . . . . . .   0.000000    
+ MAXIMUM TIME STEP. . . . . . . . . . . . . . . .  0.1000000E+31
+
+ PARALLEL ARITHMETIC ON
+ NUMBER OF INTERFACES TO BE ELIMINATED. . . . . .        0
+
+ NUMBER OF SOLID  ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF QUAD   ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF SHELL  ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF TRUSS  ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF BEAM   ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF SPRING ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF SH_3N  ELEMENT BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF  SPH PARTICLES BLOCKS TO BE ELIMINATED        0
+
+ NUMBER OF RIGID LINKS. . . . . . . . . . . . . .        1
+
+ NUMBER OF NEW BOUNDARY CONDITIONS. . . . . . . .        0
+
+
+ RIGID LINK:    1 TRANSLATION X,Y,Z 0 0 1 ROTATION    X,Y,Z 0 0 0 SKEW             0
+ ----------           2 NODES :
+        30        40
+ 23/11/2022
+   CYCLE    TIME      TIME-STEP  ELEMENT          ERROR  I-ENERGY    K-ENERGY T  K-ENERGY R  EXT-WORK     MAS.ERR     TOTAL MASS  MASS ADDED
+       0   0.000      0.7013E-03 SHELL        100   0.0%   0.000       0.000       0.000       0.000       0.000       51.23       0.000    
+     ANIMATION FILE: L25CRASBA001 WRITTEN
+     100  0.7012E-01  0.7012E-03 SHELL        100  -0.0%   330.0       12.81       18.74       361.6       0.000       51.23       0.000    
+     200  0.1402      0.7012E-03 SHELL        100  -0.0%   1294.       12.81      0.2659E-02   1307.       0.000       51.23       0.000    
+     300  0.2104      0.7012E-03 SHELL        100  -0.0%   2933.       12.81       13.25       2959.       0.000       51.23       0.000    
+     400  0.2805      0.7011E-03 SHELL        100  -0.0%   5265.       12.81      0.6569       5278.       0.000       51.23       0.000    
+     500  0.3506      0.7011E-03 SHELL        100  -0.0%   8301.       12.81       8.283       8322.       0.000       51.23       0.000    
+     600  0.4207      0.7011E-03 SHELL        100  -0.0%  0.1205E+05   12.81       2.649      0.1206E+05   0.000       51.23       0.000    
+     700  0.4908      0.7010E-03 SHELL        100  -0.0%  0.1651E+05   12.81       4.601      0.1653E+05   0.000       51.23       0.000    
+     800  0.5609      0.7010E-03 SHELL        100  -0.0%  0.2170E+05   12.81       5.560      0.2172E+05   0.000       51.23       0.000    
+     900  0.6310      0.7010E-03 SHELL        100  -0.0%  0.2760E+05   12.81       2.347      0.2762E+05   0.000       51.23       0.000    
+    1000  0.7011      0.7010E-03 SHELL        100  -0.0%  0.3423E+05   12.81       8.537      0.3425E+05   0.000       51.23       0.000    
+    1100  0.7712      0.7009E-03 SHELL        100  -0.0%  0.4159E+05   12.81       1.210      0.4160E+05   0.000       51.23       0.000    
+    1200  0.8413      0.7009E-03 SHELL        100  -0.0%  0.4966E+05   12.81       10.80      0.4969E+05   0.000       51.23       0.000    
+    1300  0.9114      0.7008E-03 SHELL        100  -0.0%  0.5846E+05   12.82      0.7220      0.5847E+05   0.000       51.23       0.000    
+    1400  0.9814      0.7008E-03 SHELL        100  -0.0%  0.6795E+05   12.81       13.19      0.6797E+05   0.000       51.23       0.000    
+     ANIMATION FILE: L25CRASBA002 WRITTEN
+    1500   1.052      0.7007E-03 SHELL        100  -0.0%  0.7811E+05   12.82      0.7341      0.7813E+05   0.000       51.23       0.000    
+    1600   1.122      0.7007E-03 SHELL        100  -0.0%  0.8894E+05   12.81       18.92      0.8897E+05   0.000       51.23       0.000    
+    1700   1.192      0.7007E-03 SHELL        100  -0.0%  0.1003E+06   12.81       9.701      0.1003E+06   0.000       51.23       0.000    
+    1800   1.262      0.7007E-03 SHELL        100  -0.0%  0.1115E+06   12.83       83.33      0.1115E+06   0.000       51.23       0.000    
+ FAILURE-2 ELEMENT #       102, LAYER #  1, INTEGRATION POINT #  1, TIME= 1.2722E+00
+ FAILURE-2 ELEMENT #       102, LAYER #  2, INTEGRATION POINT #  1, TIME= 1.2722E+00
+    1900   1.332      0.7009E-03 SHELL        100  -0.0%  0.1184E+06   12.84       77.71      0.1185E+06   0.000       51.23       0.000    
+ FAILURE-2 ELEMENT #       100, LAYER #  1, INTEGRATION POINT #  1, TIME= 1.3437E+00
+ FAILURE-2 ELEMENT #       100, LAYER #  2, INTEGRATION POINT #  1, TIME= 1.3437E+00
+ FAILURE-1 ELEMENT #       101, LAYER #  1, INTEGRATION POINT #  1, TIME= 1.3886E+00
+ FAILURE-1 ELEMENT #       101, LAYER #  2, INTEGRATION POINT #  1, TIME= 1.3886E+00
+    2000   1.402      0.7010E-03 SHELL        100  -0.0%  0.1201E+06   12.81       4.233      0.1201E+06   0.000       51.23       0.000    
+    2100   1.472      0.7009E-03 SHELL        100  -0.0%  0.1201E+06   12.81       5.770      0.1201E+06   0.000       51.23       0.000    
+    2200   1.542      0.7010E-03 SHELL        100  -0.0%  0.1201E+06   12.81       25.22      0.1201E+06   0.000       51.23       0.000    
+    2300   1.612      0.7009E-03 SHELL        100  -0.0%  0.1201E+06   12.82      0.3346E-02  0.1201E+06   0.000       51.23       0.000    
+    2400   1.682      0.7009E-03 SHELL        100  -0.0%  0.1201E+06   12.82       40.36      0.1202E+06   0.000       51.23       0.000    
+    2500   1.752      0.7010E-03 SHELL        100  -0.0%  0.1202E+06   12.82      0.5697E-02  0.1202E+06   0.000       51.23       0.000    
+    2600   1.822      0.7009E-03 SHELL        100  -0.0%  0.1202E+06   12.81       26.04      0.1202E+06   0.000       51.23       0.000    
+    2700   1.893      0.7010E-03 SHELL        100  -0.0%  0.1202E+06   12.81       4.929      0.1203E+06   0.000       51.23       0.000    
+    2800   1.963      0.7009E-03 SHELL        100  -0.0%  0.1203E+06   12.81       5.375      0.1203E+06   0.000       51.23       0.000    
+
+     RESTART FILES: L25CRASB_0001_[0001-0004].rst WRITTEN
+     -------------
+
+     ANIMATION FILE: L25CRASBA003 WRITTEN
+  
+                           ** CPU USER TIME **
+  
+  
+                        ** SUMMARY **
+  
+ #PROC  ELEMENT   KINCOND   INTEG     IO        T0        ASM       RESOL    
+   1   .3885E-01 .5111E-01 .3600E-01 .1042E+00 .2500E+00 .1841E-01 .7138E+00
+   2   .9889E-01 .8875E-01 .3400E-01 .9799E-01 .1241E+00 .1924E-01 .6982E+00
+   3   .9905E-01 .8160E-01 .3308E-01 .9397E-01 .1268E+00 .1870E-01 .6887E+00
+   4   .9625E-01 .8748E-01 .3290E-01 .9375E-01 .1231E+00 .1792E-01 .6809E+00
+  
+                 ** SPMD COM. TIME **
+  
+ #PROC  FORCES    RBYFOR    RBYVEL    VEL       TOT       %        
+   1   .1108E-01 .0000E+00 .0000E+00 .1130E-01 .2238E-01 .3136E+01
+   2   .4191E-01 .0000E+00 .0000E+00 .1163E-01 .5354E-01 .7669E+01
+   3   .5097E-01 .0000E+00 .0000E+00 .1134E-01 .6230E-01 .9047E+01
+   4   .4039E-01 .0000E+00 .0000E+00 .1148E-01 .5188E-01 .7619E+01
+  
+ 
+                   ** CUMULATIVE CPU TIME SUMMARY **
+  
+ CONTACT SORTING.............: .0000E+00     0.00 % 
+ CONTACT FORCES..............: .1627E-01     0.58 % 
+ ELEMENT FORCES..............: .3330E+00    11.97 % 
+ KINEMATIC COND..............: .3089E+00    11.11 % 
+ INTEGRATION.................: .1360E+00     4.89 % 
+ ASSEMBLING..................: .7427E-01     2.67 % 
+ OTHERS (including I/O)......: .1913E+01    68.78 % 
+ TOTAL.......................: .2782E+01   100.00 % 
+  
+  
+                           ** ELAPSED TIME **
+  
+  
+                        ** SUMMARY **
+  
+ #PROC  ELEMENT   KINCOND   INTEG     IO        T0        ASM       RESOL    
+   1   .2434E-01 .3182E-01 .2214E-01 .6626E-01 .1534E+00 .1149E-01 .4443E+00
+   2   .6327E-01 .5689E-01 .2158E-01 .6203E-01 .7900E-01 .1230E-01 .4444E+00
+   3   .6327E-01 .5311E-01 .2127E-01 .6074E-01 .8156E-01 .1210E-01 .4443E+00
+   4   .6319E-01 .5753E-01 .2152E-01 .6113E-01 .8031E-01 .1181E-01 .4444E+00
+  
+        ELEMENT   KINCOND   INTEG     IO        T0        ASM       RESOL    
+ MIN   .2434E-01 .3182E-01 .2127E-01 .6074E-01 .7900E-01 .1149E-01 .4443E+00
+ MAX   .6327E-01 .5753E-01 .2214E-01 .6626E-01 .1534E+00 .1230E-01 .4444E+00
+ AVG   .5352E-01 .4983E-01 .2163E-01 .6254E-01 .9858E-01 .1192E-01 .4444E+00
+  
+                 ** SPMD COM. TIME **
+  
+ #PROC  FORCES    RBYFOR    RBYVEL    VEL       TOT       %        
+   1   .6918E-02 .0000E+00 .0000E+00 .7070E-02 .1399E-01 .3149E+01
+   2   .2759E-01 .0000E+00 .0000E+00 .7512E-02 .3510E-01 .7899E+01
+   3   .3340E-01 .0000E+00 .0000E+00 .7399E-02 .4080E-01 .9183E+01
+   4   .2697E-01 .0000E+00 .0000E+00 .7610E-02 .3458E-01 .7780E+01
+  
+        FORCES    RBYFOR    RBYVEL    VEL       TOT       %        
+ MIN   .6918E-02 .0000E+00 .0000E+00 .7070E-02 .1399E-01 .3149E+01
+ MAX   .3340E-01 .0000E+00 .0000E+00 .7610E-02 .4080E-01 .9183E+01
+ AVG   .2372E-01 .0000E+00 .0000E+00 .7398E-02 .3112E-01 .7003E+01
+  
+                   ** MEMORY USAGE STATISTICS **
+  
+ TOTAL MEMORY USED .........................:      228 MB
+ MAXIMUM MEMORY PER PROCESSOR...............:       57 MB
+ MINIMUM MEMORY PER PROCESSOR...............:       57 MB
+ AVERAGE MEMORY PER PROCESSOR...............:       57 MB
+  
+                   ** DISK USAGE STATISTICS **
+  
+ TOTAL DISK SPACE USED .....................:          1 MB
+ ANIMATION/H3D/TH/OUTP SIZE ................:          0 MB
+ RESTART FILE SIZE .........................:          1 MB
+  
+                   ** COMPUTE TIME INFORMATION **
+                        ** CURRENT ENGINE **
+  
+ EXECUTION STARTED .........................:      2022/11/23  16:21:51
+ EXECUTION COMPLETED .......................:      2022/11/23  16:21:51
+  
+ ELAPSED TIME     =          0.54 s
+                          0:00:00
+ ESTIMATED SPEEDUP=          5.16
+
+
+
+     NORMAL TERMINATION      
+
+
+
+     TOTAL NUMBER OF CYCLES  :    2855
+
+  
+                   ** COMPUTE RUNTIME INFORMATION SUMMARY **
+  
+        STARTER RUNTIME =          0.60s (00:00:00)
+ # 001   ENGINE RUNTIME =          0.54s (00:00:00)
+ ------------------------------ 
+ STARTER+ENGINE RUNTIME =          1.14s (00:00:01)
+  

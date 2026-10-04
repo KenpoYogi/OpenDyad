@@ -1,0 +1,91 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_convert_inter_type19    ../starter/source/devtools/hm_reader/hm_convert_inter_type19.F
+!||--- called by ------------------------------------------------------
+!||    starter0                   ../starter/source/starter/starter0.F
+!||--- calls      -----------------------------------------------------
+!||    hm_option_count            ../starter/source/devtools/hm_reader/hm_option_count.F
+!||    hm_option_next             ../starter/source/devtools/hm_reader/hm_option_next.F
+!||    hm_option_start            ../starter/source/devtools/hm_reader/hm_option_start.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod                ../starter/share/message_module/message_mod.F
+!||    submodel_mod               ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_CONVERT_INTER_TYPE19(IDMAX_INTER,IDMAX_GRNOD,IDMAX_LINE,LSUBMODEL)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   ROUTINE TO CONVERT /INTER/TYPE19 -> /INTER/TYPE11 + /GRNOD  + LINE
+C-----------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C    
+C     IDMAX_INTER   MAX ID INTERFACES
+C     IDMAX_GRNOD   MAX ID GRNODES
+C     IDMAX_LINE    MAX ID LINES
+C     LSUBMODEL     SUBMODEL STRUCTURE    
+C============================================================================
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD       
+      USE SUBMODEL_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+C INPUT ARGUMENTS
+      INTEGER,INTENT(IN)::IDMAX_INTER,IDMAX_GRNOD,IDMAX_LINE
+      TYPE(SUBMODEL_DATA),INTENT(IN)::LSUBMODEL(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,NBINTER19,OFFSET,ISFIRST
+C-----------------------------------------------
+      CALL HM_OPTION_COUNT('/INTER/TYPE19', NBINTER19)
+      CALL HM_OPTION_START('/INTER/TYPE19')
+      DO I=1,NBINTER19
+        ISFIRST = 1
+        CALL HM_OPTION_NEXT()
+        OFFSET = 0
+        CALL CPP_CONVERT_INTER_TYPE19(IDMAX_INTER,IDMAX_GRNOD,IDMAX_LINE,OFFSET,ISFIRST)
+      ENDDO
+C--------------------------------------------------
+C DELETE TYPE19 INTERFACES
+C--------------------------------------------------
+      DO I=1,NBINTER19
+        CALL HM_OPTION_START('/INTER/TYPE19') 
+        CALL HM_OPTION_NEXT()
+        CALL CPP_DELETE_ENTITY()
+      ENDDO
+C--------------------------------------------------
+      RETURN
+C
+      END
+

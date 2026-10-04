@@ -1,0 +1,219 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    shrink_array_mod   ../common_source/tools/memory/shrink_array.F90
+!||--- called by ------------------------------------------------------
+!||    inint3             ../starter/source/interfaces/inter3d1/inint3.F
+!||====================================================================
+      module shrink_array_mod
+        implicit none
+        integer, parameter :: len_error_message = 100
+        private :: shrink_array_integer_1d
+        private :: shrink_array_real_1d
+        private :: shrink_array_double_1d
+        private :: shrink_check
+        public :: shrink_array
+
+        !\shrink the array, copy the values
+        interface shrink_array
+          module procedure shrink_array_integer_1d
+          module procedure shrink_array_real_1d
+          module procedure shrink_array_double_1d
+        end interface shrink_array
+
+      contains
+
+
+!||====================================================================
+!||    shrink_check              ../common_source/tools/memory/shrink_array.F90
+!||--- called by ------------------------------------------------------
+!||    shrink_array_double_1d    ../common_source/tools/memory/shrink_array.F90
+!||    shrink_array_integer_1d   ../common_source/tools/memory/shrink_array.F90
+!||    shrink_array_real_1d      ../common_source/tools/memory/shrink_array.F90
+!||--- calls      -----------------------------------------------------
+!||    arret                     ../engine/source/system/arret.F
+!||====================================================================
+        subroutine shrink_check(stat,msg)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                     Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, intent(in) :: stat
+          character(len=len_error_message), optional,  intent(in) :: msg
+
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                      Body
+! ----------------------------------------------------------------------------------------------------------------------
+          if (stat /= 0) then
+            write(6, "(a,i10,a)") "Error in memory allocation"
+            if(present(msg)) then
+              write(6, "(a)") msg
+            end if
+            call arret(2)
+          end if
+        end subroutine shrink_check
+
+
+!! \brief resize a 1D array of integer, copy the values
+!||====================================================================
+!||    shrink_array_integer_1d   ../common_source/tools/memory/shrink_array.F90
+!||--- calls      -----------------------------------------------------
+!||    shrink_check              ../common_source/tools/memory/shrink_array.F90
+!||====================================================================
+        subroutine shrink_array_integer_1d(a,  newsize, msg, stat)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                     Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer, dimension(:), allocatable, intent(inout) :: a !< The allocated array
+          integer, intent(in) :: newsize !< The new size of the array
+          character(len=len_error_message), optional, intent(in) :: msg !< The error message to print if the allocation fails
+          integer, optional, intent(out) :: stat !< The error code returned by the allocation
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: ierr
+          integer, allocatable :: temp(:)
+          integer :: copy_size
+          integer :: oldsize
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                      Body
+! ----------------------------------------------------------------------------------------------------------------------
+          if(allocated(a)) then
+            oldsize = size(a)
+          else
+            oldsize = 0
+          end if
+
+          if(newsize < oldsize) then
+            allocate(temp(newsize), stat=ierr)
+            if(.not. present(stat)) then
+              if(present(msg)) then
+                call shrink_check(ierr, msg=msg)
+              else
+                call shrink_check(ierr)
+              end if
+            end if
+            if(present(stat)) stat = ierr
+            copy_size = newsize
+            if(copy_size >0) temp(1:copy_size) = a(1:copy_size)
+            call move_alloc(temp, a)
+          else if(newsize == oldsize .and. newsize == 0 .and. .not. allocated(a)) then
+            allocate(a(1), stat=ierr)
+            if(present(stat)) stat = ierr
+          end if
+        end subroutine shrink_array_integer_1d
+
+!||====================================================================
+!||    shrink_array_real_1d   ../common_source/tools/memory/shrink_array.F90
+!||--- calls      -----------------------------------------------------
+!||    shrink_check           ../common_source/tools/memory/shrink_array.F90
+!||====================================================================
+        subroutine shrink_array_real_1d(a,  newsize, msg, stat)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                     Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          real, dimension(:), allocatable, intent(inout) :: a !< The allocated array
+          integer, intent(in) :: newsize !< The new size of the array
+          character(len=len_error_message), optional, intent(in) :: msg !< The error message to print if the allocation fails
+          integer, optional, intent(out) :: stat !< The error code returned by the allocation
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: ierr
+          real, allocatable :: temp(:)
+          integer :: copy_size
+          integer :: oldsize
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                      Body
+! ----------------------------------------------------------------------------------------------------------------------
+          if(allocated(a)) then
+            oldsize = size(a)
+          else
+            oldsize = 0
+          end if
+
+          if(newsize < oldsize) then
+            allocate(temp(newsize), stat=ierr)
+            if(.not. present(stat)) then
+              if(present(msg)) then
+                call shrink_check(ierr, msg=msg)
+              else
+                call shrink_check(ierr)
+              end if
+            end if
+            if(present(stat)) stat = ierr
+            copy_size = newsize
+            if(copy_size >0) temp(1:copy_size) = a(1:copy_size)
+            call move_alloc(temp, a)
+          else if(newsize == oldsize .and. newsize == 0 .and. .not. allocated(a)) then
+            allocate(a(1), stat=ierr)
+            if(present(stat)) stat = ierr
+          end if
+        end subroutine shrink_array_real_1d
+!||====================================================================
+!||    shrink_array_double_1d   ../common_source/tools/memory/shrink_array.F90
+!||--- calls      -----------------------------------------------------
+!||    shrink_check             ../common_source/tools/memory/shrink_array.F90
+!||====================================================================
+        subroutine shrink_array_double_1d(a, newsize, msg, stat)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                     Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          double precision, dimension(:), allocatable, intent(inout) :: a !< The allocated array
+          integer, intent(in) :: newsize !< The new size of the array
+          character(len=len_error_message), optional, intent(in) :: msg !< The error message to print if the allocation fails
+          integer, optional, intent(out) :: stat !< The error code returned by the allocation
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: ierr
+          double precision, allocatable :: temp(:)
+          integer :: copy_size
+          integer :: oldsize
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                      Body
+! ----------------------------------------------------------------------------------------------------------------------
+          if(allocated(a)) then
+            oldsize = size(a)
+          else
+            oldsize = 0
+          end if
+          if(newsize < oldsize) then
+            allocate(temp(newsize), stat=ierr)
+            if(.not. present(stat)) then
+              if(present(msg)) then
+                call shrink_check(ierr, msg=msg)
+              else
+                call shrink_check(ierr)
+              end if
+            end if
+            if(present(stat)) stat = ierr
+            copy_size = newsize
+            if(copy_size >0) temp(1:copy_size) = a(1:copy_size)
+            call move_alloc(temp, a)
+          else if(newsize == oldsize .and. newsize == 0 .and. .not. allocated(a)) then
+            allocate(a(1), stat=ierr)
+            if(present(stat)) stat = ierr
+          end if
+        end subroutine shrink_array_double_1d
+      end module shrink_array_mod

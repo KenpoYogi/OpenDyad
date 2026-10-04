@@ -1,0 +1,133 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!Chd|====================================================================
+!Chd|  fractal_elem_renum          source/materials/fail/fractal/fractal_elem_renum.F
+!Chd|-- called by -----------
+!Chd|-- calls ---------------
+!Chd|====================================================================
+!||====================================================================
+!||    fractal_elem_renum_mod   ../starter/source/materials/fail/fractal/fractal_elem_spmd_renum.F90
+!||--- called by ------------------------------------------------------
+!||    lectur                   ../starter/source/starter/lectur.F
+!||====================================================================
+      module fractal_elem_renum_mod
+        implicit none
+      contains
+! ======================================================================================================================
+! \brief renumber local element numbers in damaged element list after domain decomposition
+! \details
+
+!||====================================================================
+!||    fractal_elem_renum    ../starter/source/materials/fail/fractal/fractal_elem_spmd_renum.F90
+!||--- called by ------------------------------------------------------
+!||    lectur                ../starter/source/starter/lectur.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    reorder_mod           ../starter/share/modules1/reorder_mod.F
+!||====================================================================
+        subroutine fractal_elem_renum(fail_fractal,numelc,numeltg)
+
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                        Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use random_walk_def_mod
+          use constant_mod ,only : zero,one
+          use reorder_mod
+          use precision_mod, only : WP
+          use MY_ALLOC_MOD, only : my_alloc
+          use my_dealloc_mod, only : my_dealloc
+! ----------------------------------------------------------------------------------------------------------------------
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                    Included files
+! ----------------------------------------------------------------------------------------------------------------------
+
+
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          type (fail_fractal_) ,intent(inout) :: fail_fractal !< fractal model structure
+          integer ,intent(in)                 :: numelc       !< total number of 4n shell elements
+          integer ,intent(in)                 :: numeltg      !< total number of 3n shell elements
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   local variables
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: i,ii,ifract
+          integer :: iel,iel_old,nix,id,nelem
+          integer ,dimension(:) ,allocatable :: tag_elem
+          integer ,dimension(:) ,allocatable :: tag_id
+          integer ,dimension(:) ,allocatable :: tag_nix
+          real(kind=WP) ,dimension(:) ,allocatable :: tag_dmg
+! ======================================================================================================================
+          do ifract = 1,fail_fractal%nfail
+            nelem = fail_fractal%fractal(ifract)%nelem
+            call my_alloc(tag_elem, nelem, "tag_elem")
+            call my_alloc(tag_nix, nelem, "tag_nix")
+            call my_alloc(tag_dmg, nelem, "tag_dmg")
+            call my_alloc(tag_id, nelem, "tag_id")
+            tag_dmg(:)  = zero
+            tag_elem(:) = 0
+            tag_nix(:)  = 0
+            tag_id(:)   = 0
+            ii = 0
+            do i=1,nelem
+              if (fail_fractal%fractal(ifract)%random_walk(i)%damage > zero) then
+                ii = ii + 1
+                id  = fail_fractal%fractal(ifract)%random_walk(i)%id
+                iel_old = fail_fractal%fractal(ifract)%random_walk(i)%elnum
+                nix = fail_fractal%fractal(ifract)%random_walk(i)%nix
+                if (nix == 4) then
+                  iel = permutation%shell(numelc + iel_old)
+                  tag_elem(ii) = iel
+                  tag_id(ii)   = id
+                  tag_nix(ii)  = nix
+                  tag_dmg(ii)  = fail_fractal%fractal(ifract)%random_walk(i)%damage
+                else if (nix == 3) then
+                  iel = permutation%shell(numeltg + iel_old)
+                  tag_elem(ii) = iel
+                  tag_id(ii)   = id
+                  tag_nix(ii)  = nix
+                  tag_dmg(ii)  = fail_fractal%fractal(ifract)%random_walk(i)%damage
+                end if
+              end if
+            end do
+!
+            nelem = ii
+            fail_fractal%fractal(ifract)%nelem = nelem
+            do i=1,nelem
+              fail_fractal%fractal(ifract)%random_walk(i)%damage = tag_dmg(i)
+              fail_fractal%fractal(ifract)%random_walk(i)%id     = tag_id(i)
+              fail_fractal%fractal(ifract)%random_walk(i)%elnum  = tag_elem(i)
+              fail_fractal%fractal(ifract)%random_walk(i)%nix    = tag_nix(i)
+            end do
+            call my_dealloc(tag_id)
+            call my_dealloc(tag_dmg)
+            call my_dealloc(tag_nix)
+            call my_dealloc(tag_elem)
+          end do
+! ----------------------------------------------------------------------------------------------------------------------
+          return
+        end subroutine fractal_elem_renum
+!
+      end module fractal_elem_renum_mod

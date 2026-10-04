@@ -1,0 +1,283 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    c_fvbag        ../starter/source/airbag/c_fvbag.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit        ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||    nlocal         ../starter/source/spmd/node/ddtools.F
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod      ../starter/share/modules1/fvbag_mod.F
+!||====================================================================
+      SUBROUTINE C_FVBAG(
+     .    MONVOL,   NODLOCAL,  IXS     , PROC, NB_NODE, FVMAIN)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE FVBAG_MOD
+      use element_mod , only : nixs
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER 
+     .   MONVOL(*), NODLOCAL(*), IXS(NIXS,*), PROC, NB_NODE,
+     .   FVMAIN(*)
+C-----------------------------------------------
+C   E x t e r n a l   F u n c t i o n s
+C-----------------------------------------------   
+      INTEGER  NLOCAL
+      EXTERNAL NLOCAL     
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER K1, K2, IFV, I, ITYP, NN, KI1, J, NMAX, PMAIN, P, NN_L,
+     .        PP, JJ, NTG, NBA, NNA, KIA1, NNA_L, 
+     .        K, KK, NNSA, NNSA_L, KI2,
+     .        NTGM, NNI, NTGI, NNI_L
+      INTEGER, DIMENSION(:), ALLOCATABLE :: IBUF, IBUFA,ITAG,REDIR,IBUFSA
+C-----------------------------------------------
+!     1d array
+      call my_alloc(ITAG, NB_NODE, "ITAG")
+      call my_alloc(REDIR, NB_NODE, "REDIR")
+      call my_alloc(IBUFSA, NB_NODE, "IBUFSA")
+
+!     and deallocated in fvwrestp
+      ALLOCATE( FVSPMD(NFVBAG) )
+! ---------------------------------
+C
+      IF (PROC==1)THEN
+        NTGM = 0
+        K1 = 1
+        DO I=1,NVOLU
+          ITYP=MONVOL(K1-1+2)
+          IF (ITYP==6.OR.ITYP==8) THEN
+            NTG=MONVOL(K1-1+33)
+          ELSE
+            NTG = 0
+          ENDIF
+          NTGM = MAX(NTGM,NTG)
+          K1=K1+NIMV
+        ENDDO
+      ENDIF
+C
+      K1=1
+      K2=1+NIMV*NVOLU+LICBAG+LIBAGJET+LIBAGHOL
+      IFV=0
+      DO I=1,NVOLU
+         ITYP=MONVOL(K1-1+2)
+         IF (ITYP==6.OR.ITYP==8) THEN
+            IFV=IFV+1
+            NN= MONVOL(K1-1+32)
+            NTG=MONVOL(K1-1+33)
+            NBA=MONVOL(K1-1+62)
+            NNA=MONVOL(K1-1+64)
+            NNI=MONVOL(K1-1+68)
+            NTGI=MONVOL(K1-1+69)
+            KI1 =K2+MONVOL(K1-1+31)
+            KIA1=K2+MONVOL(K1-1+20)-1
+C Nod
+            call my_alloc(IBUF, NN+NNI, "IBUF")
+            call my_alloc(IBUFA, NNA, "IBUFA")
+            DO J=1,NN+NNI
+               IBUF(J)=MONVOL(KI1-1+J)
+            ENDDO
+            DO J=1,NNA
+               IBUFA(J)=MONVOL(KIA1-1+J)
+            ENDDO
+C Identification of PMAIN
+            NMAX=0
+            PMAIN=1
+            DO P=1,NSPMD
+               NN_L=0
+               DO J=1,NN
+                  JJ=IBUF(J)
+                   IF(NLOCAL(JJ,P)==1)THEN
+                     DO PP = 1, P-1
+                        IF(NLOCAL(JJ,PP)==1)THEN
+                          GOTO 100
+                        ENDIF
+                     ENDDO
+                     NN_L=NN_L+1
+ 100                 CONTINUE
+                  ENDIF
+               ENDDO
+               NNI_L=0
+               DO J=NN+1,NN+NNI
+                  JJ=IBUF(J)
+                   IF(NLOCAL(JJ,P)==1)THEN
+                     DO PP = 1, P-1
+                        IF(NLOCAL(JJ,PP)==1)THEN
+                          GOTO 200
+                        ENDIF
+                     ENDDO
+                     NNI_L=NNI_L+1
+ 200                 CONTINUE
+                  ENDIF
+               ENDDO
+               IF(NN_L+NNI_L>NMAX)THEN
+                  PMAIN=P
+                  NMAX=NN_L+NNI_L
+               ENDIF
+            ENDDO
+
+
+            IF ((ITYP==6.OR.ITYP==8) .AND. FVMAIN(IFV) >= 0) THEN
+           !FVMAIN(IFV) > 0 : The main processor was computed during domain decomposition
+              PMAIN = FVMAIN(IFV)
+            ENDIF 
+            FVSPMD(IFV)%PMAIN=PMAIN
+C Local nodes
+            NN_L=0
+            DO J=1,NN
+               JJ=IBUF(J)
+               IF (NODLOCAL(JJ)/=0) NN_L=NN_L+1
+            ENDDO
+            NNI_L=0
+            DO J=NN+1,NN+NNI
+               JJ=IBUF(J)
+               IF (NODLOCAL(JJ)/=0) NNI_L=NNI_L+1
+            ENDDO
+            NNA_L=0
+            DO J=1,NNA
+               JJ=IBUFA(J)
+               IF (NODLOCAL(JJ)/=0) NNA_L=NNA_L+1
+            ENDDO
+            FVSPMD(IFV)%NN_L=NN_L
+            FVSPMD(IFV)%NNI_L=NNI_L
+            FVSPMD(IFV)%NNA_L=NNA_L
+
+            call my_alloc(FVSPMD(IFV)%IBUF_L, 2, NN_L+NNI_L, "FVSPMD(IFV)%IBUF_L")
+            call my_alloc(FVSPMD(IFV)%IBUFA_L, 2, NNA_L, "FVSPMD(IFV)%IBUFA_L")
+            NN_L=0
+            DO J=1,NN+NNI
+               JJ=IBUF(J)
+               IF (NODLOCAL(JJ)/=0) THEN
+                  NN_L=NN_L+1
+                  FVSPMD(IFV)%IBUF_L(1,NN_L)=J
+                  FVSPMD(IFV)%IBUF_L(2,NN_L)=NODLOCAL(JJ)
+               ENDIF
+            ENDDO
+            NNA_L=0
+            DO J=1,NNA
+               JJ=IBUFA(J)
+               IF (NODLOCAL(JJ)/=0) THEN
+                  NNA_L=NNA_L+1
+                  FVSPMD(IFV)%IBUFA_L(1,NNA_L)=J
+                  FVSPMD(IFV)%IBUFA_L(2,NNA_L)=NODLOCAL(JJ)
+               ENDIF
+            ENDDO
+            CALL MY_DEALLOC(IBUF)
+            CALL MY_DEALLOC(IBUFA)
+C Additional solids
+            FVSPMD(IFV)%NSA=NBA
+            FVSPMD(IFV)%NNSA=0
+            FVSPMD(IFV)%NNSA_L=0
+            FVSPMD(IFV)%NELSA=0
+            IF (NBA>0) THEN 
+               IF (PROC==PMAIN) ALLOCATE(FVSPMD(IFV)%IXSA(8,NBA))
+               KIA1=K2+MONVOL(K1-1+19)-1
+               DO J=1,NB_NODE
+                  ITAG(J)=0
+                  REDIR(J)=0
+               ENDDO
+               DO J=1,NBA
+                  JJ=MONVOL(KIA1-1+2*(J-1)+1)
+                  DO K=1,8
+                     KK=IXS(1+K,JJ)
+                     ITAG(KK)=1
+                  ENDDO
+               ENDDO
+               NNSA=0
+               DO J=1,NB_NODE
+                  IF (ITAG(J)==1) THEN
+                     NNSA=NNSA+1
+                     REDIR(J)=NNSA
+                     IBUFSA(NNSA)=J
+                  ENDIF
+               ENDDO
+               FVSPMD(IFV)%NNSA=NNSA
+               IF (PROC==PMAIN) THEN
+                  DO J=1,NBA                            
+                     JJ=MONVOL(KIA1-1+J)                
+                     DO K=1,8                           
+                        KK=IXS(1+K,JJ)                  
+                        FVSPMD(IFV)%IXSA(K,J)=REDIR(KK) 
+                     ENDDO                              
+                  ENDDO
+C
+                  FVSPMD(IFV)%NELSA=NTG
+                  call my_alloc(FVSPMD(IFV)%ELEMSA, 3, NTG, "FVSPMD(IFV)%ELEMSA")
+                  KI2=KI1+NN+NNI
+                  DO J=1,NTG
+                     DO K=1,3
+                        KK=MONVOL(KI2-1+3*(J-1)+K)
+                        FVSPMD(IFV)%ELEMSA(K,J)=REDIR(KK)
+                     ENDDO
+                  ENDDO
+                  DO J=1,FVDATA(IFV)%NNS
+                     IF (FVDATA(IFV)%IFVNOD(1,J)==2) THEN
+                        JJ=FVDATA(IFV)%IFVNOD(2,J)
+                        FVDATA(IFV)%IFVNOD(2,J)=REDIR(JJ)
+                     ENDIF
+                  ENDDO
+               ENDIF                                
+               NNSA_L=0
+               DO J=1,NNSA
+                  JJ=IBUFSA(J)
+                  IF (NODLOCAL(JJ)/=0) NNSA_L=NNSA_L+1
+               ENDDO
+               FVSPMD(IFV)%NNSA_L=NNSA_L
+               call my_alloc(FVSPMD(IFV)%IBUFSA_L, 2, NNSA_L, "FVSPMD(IFV)%IBUFSA_L")
+               NNSA_L=0
+               DO J=1,NNSA
+                  JJ=IBUFSA(J)
+                  IF (NODLOCAL(JJ)/=0) THEN
+                     NNSA_L=NNSA_L+1
+                     FVSPMD(IFV)%IBUFSA_L(1,NNSA_L)=J
+                     FVSPMD(IFV)%IBUFSA_L(2,NNSA_L)=NODLOCAL(JJ)
+                  ENDIF
+               ENDDO
+            ENDIF  
+         ENDIF
+         K1=K1+NIMV
+      ENDDO
+C
+!     1d array
+      CALL MY_DEALLOC(ITAG)
+      CALL MY_DEALLOC(REDIR)
+      CALL MY_DEALLOC(IBUFSA)
+! ---------------------------------
+      RETURN
+      END

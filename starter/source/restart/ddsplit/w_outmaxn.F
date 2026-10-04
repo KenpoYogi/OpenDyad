@@ -1,0 +1,67 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+C
+!||====================================================================
+!||    w_outmaxn        ../starter/source/restart/ddsplit/w_outmaxn.F
+!||--- called by ------------------------------------------------------
+!||    ddsplit          ../starter/source/restart/ddsplit/ddsplit.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||====================================================================
+      SUBROUTINE W_OUTMAXN(NUMNOD_L,LEN_AM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE OUTMAX_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER , INTENT(IN) :: NUMNOD_L
+      INTEGER , INTENT(INOUT) :: LEN_AM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER LW
+      my_real, DIMENSION(:), ALLOCATABLE :: RTMP
+C-----------------------------------------------
+C-----will take into account initial state later
+      LW = (2*(LMAX_NSIG+LMAX_NSTRA))*NUMNOD_L
+      IF (LW>0) THEN
+        call my_alloc(RTMP, LW, "RTMP")
+! --------------------------------
+        RTMP=ZERO
+C
+        CALL WRITE_DB(RTMP,LW)
+        LEN_AM = LEN_AM + LW
+        call my_dealloc(RTMP)
+      END IF 
+! --------------------------------
+      RETURN
+      END

@@ -1,0 +1,139 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    sfor_visn4     ../engine/source/elements/solid/solide4/sfor_visn4.F
+!||--- called by ------------------------------------------------------
+!||    s4for_distor   ../engine/source/elements/solid/solide4/s4for_distor.F
+!||====================================================================
+      SUBROUTINE SFOR_VISN4(VC ,    FLD,   TOL_V,    IFC1,
+     .                      VX1,    VX2,     VX3,     VX4,
+     .                      VY1,    VY2,     VY3,     VY4,
+     .                      VZ1,    VZ2,     VZ3,     VZ4,
+     .                   FOR_T1, FOR_T2,  FOR_T3,  FOR_T4,
+     .                    IFCTL, STIF  ,     MU ,   NEL  ,
+     .                   E_DISTOR,DT1)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   G l o b a l   P a r a m e t e r s
+C-----------------------------------------------
+#include      "mvsiz_p.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT (IN)  :: NEL
+      INTEGER, INTENT (OUT) :: IFCTL
+      INTEGER, DIMENSION(MVSIZ),INTENT (INOUT) :: IFC1
+      my_real, DIMENSION(MVSIZ), INTENT (INOUT) :: STIF
+      my_real, DIMENSION(MVSIZ), INTENT (IN) :: FLD ,
+     4                VX1,     VX2,     VX3,     VX4,
+     6                VY1,     VY2,     VY3,     VY4,
+     8                VZ1,     VZ2,     VZ3,     VZ4
+      my_real, DIMENSION(MVSIZ,3), INTENT (IN)  :: VC
+      my_real, DIMENSION(MVSIZ,3), INTENT (INOUT) :: 
+     .                     FOR_T1, FOR_T2, FOR_T3, FOR_T4
+      my_real, INTENT (IN) ::  TOL_V,MU,DT1
+      my_real, DIMENSION(NEL), INTENT (INOUT)  :: E_DISTOR
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I
+C                                                                     12
+      my_real
+     .   FAC,VNJ(4),VL,TOL_V2,
+     .   V2MAX,VC2,VREF(MVSIZ,3),VR2
+C----------------------------
+        TOL_V2 = TOL_V*TOL_V
+        IFCTL = 0
+         DO I=1,NEL
+           VC2 = VC(I,1)*VC(I,1)+VC(I,2)*VC(I,2)+VC(I,3)*VC(I,3)
+           IF (VC2 <EM20.OR.STIF(I)==ZERO) CYCLE
+           VL = TOL_V2*VC2
+           VNJ(1) = VX1(I)*VX1(I) + VY1(I)*VY1(I) + VZ1(I)*VZ1(I)
+           VNJ(2) = VX2(I)*VX2(I) + VY2(I)*VY2(I) + VZ2(I)*VZ2(I)
+           VNJ(3) = VX3(I)*VX3(I) + VY3(I)*VY3(I) + VZ3(I)*VZ3(I)
+           VNJ(4) = VX4(I)*VX4(I) + VY4(I)*VY4(I) + VZ4(I)*VZ4(I)
+           V2MAX = MAX(VNJ(1),VNJ(2),VNJ(3),VNJ(4))
+           VR2 = MIN(VNJ(1),VNJ(2),VNJ(3),VNJ(4))
+           VL = TOL_V2*VR2
+           IF (VR2 == VNJ(1)) THEN 
+              VREF(I,1) = VX1(I)
+              VREF(I,2) = VY1(I)
+              VREF(I,3) = VZ1(I) 
+            ELSE IF (VR2 == VNJ(2)) THEN
+              VREF(I,1) = VX2(I)
+              VREF(I,2) = VY2(I)
+              VREF(I,3) = VZ2(I) 
+            ELSE IF (VR2 == VNJ(3)) THEN
+              VREF(I,1) = VX3(I)
+              VREF(I,2) = VY3(I)
+              VREF(I,3) = VZ3(I) 
+            ELSE 
+              VREF(I,1) = VX4(I)
+              VREF(I,2) = VY4(I)
+              VREF(I,3) = VZ4(I)
+            END IF
+           IF (V2MAX > VL) IFC1(I) = 1
+           IF (IFC1(I) > 0)   IFCTL=1
+         END DO
+C
+       IF (IFCTL==1) THEN
+         FAC = ONE + TWO*MU
+         DO I=1,NEL
+           IF (IFC1(I)==0) CYCLE
+           FOR_T1(I,1) = FOR_T1(I,1) - FLD(I)*(VX1(I)-VREF(I,1))
+           FOR_T1(I,2) = FOR_T1(I,2) - FLD(I)*(VY1(I)-VREF(I,2))
+           FOR_T1(I,3) = FOR_T1(I,3) - FLD(I)*(VZ1(I)-VREF(I,3))
+           FOR_T2(I,1) = FOR_T2(I,1) - FLD(I)*(VX2(I)-VREF(I,1))
+           FOR_T2(I,2) = FOR_T2(I,2) - FLD(I)*(VY2(I)-VREF(I,2))
+           FOR_T2(I,3) = FOR_T2(I,3) - FLD(I)*(VZ2(I)-VREF(I,3))
+           FOR_T3(I,1) = FOR_T3(I,1) - FLD(I)*(VX3(I)-VREF(I,1))
+           FOR_T3(I,2) = FOR_T3(I,2) - FLD(I)*(VY3(I)-VREF(I,2))
+           FOR_T3(I,3) = FOR_T3(I,3) - FLD(I)*(VZ3(I)-VREF(I,3))
+           FOR_T4(I,1) = FOR_T4(I,1) - FLD(I)*(VX4(I)-VREF(I,1))
+           FOR_T4(I,2) = FOR_T4(I,2) - FLD(I)*(VY4(I)-VREF(I,2))
+           FOR_T4(I,3) = FOR_T4(I,3) - FLD(I)*(VZ4(I)-VREF(I,3))
+           STIF(I)      = FAC*STIF(I)
+           E_DISTOR(I)=E_DISTOR(I)- DT1*(FOR_T1(I,1)*(VX1(I)-VREF(I,1))+
+     .                                   FOR_T1(I,2)*(VY1(I)-VREF(I,2))+
+     .                                   FOR_T1(I,3)*(VZ1(I)-VREF(I,3))+
+     .                                   FOR_T2(I,1)*(VX2(I)-VREF(I,1))+
+     .                                   FOR_T2(I,2)*(VY2(I)-VREF(I,2))+
+     .                                   FOR_T2(I,3)*(VZ2(I)-VREF(I,3))+
+     .                                   FOR_T3(I,1)*(VX3(I)-VREF(I,1))+
+     .                                   FOR_T3(I,2)*(VY3(I)-VREF(I,2))+
+     .                                   FOR_T3(I,3)*(VZ3(I)-VREF(I,3))+
+     .                                   FOR_T4(I,1)*(VX4(I)-VREF(I,1))+
+     .                                   FOR_T4(I,2)*(VY4(I)-VREF(I,2))+
+     .                                   FOR_T4(I,3)*(VZ4(I)-VREF(I,3)))
+         ENDDO
+       END IF 
+C
+      RETURN
+      END

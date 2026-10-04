@@ -1,0 +1,22 @@
+# Copyright (C) 2026 SISW Siemens Industry Software Inc. ("Holder")
+# Model is licensed by Holder under CC BY-NC 4.0
+# (https://creativecommons.org/licenses/by-nc/4.0/legalcode).
+#
+/RUN/JOINT1/1
+20.01
+/VERS/44
+/TFILE
+ .02
+#/ABF
+#.02 1e30
+/RFILE
+20000 0 0
+/ANIM/DT
+ 0.  2
+/ANIM/VECT/DISP
+/ANIM/SPRING/FORC
+/PRINT/-200
+/DTIX
+0 1.475e-3
+/MON/ON
+/ANIM/GZIP

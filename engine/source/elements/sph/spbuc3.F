@@ -1,0 +1,455 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    mod_spbuc3   ../engine/source/elements/sph/spbuc3.F
+!||--- called by ------------------------------------------------------
+!||    spbuc3       ../engine/source/elements/sph/spbuc3.F
+!||====================================================================
+      MODULE MOD_SPBUC3
+      implicit none
+      INTEGER*8, DIMENSION(:), ALLOCATABLE ::  IV,IVS
+      INTEGER, DIMENSION(:), ALLOCATABLE ::  KV,NV,
+     .                                       IAUX,KXSPR
+      INTEGER, DIMENSION(:,:), ALLOCATABLE ::  IXSPR
+
+      END MODULE MOD_SPBUC3
+!||====================================================================
+!||    spbuc3           ../engine/source/elements/sph/spbuc3.F
+!||--- called by ------------------------------------------------------
+!||    sphtri           ../engine/source/elements/sph/sphtri.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg           ../engine/source/output/message/message.F
+!||    arret            ../engine/source/system/arret.F
+!||    my_barrier       ../engine/source/system/machine.F
+!||    myqsort          ../common_source/tools/sort/myqsort.F
+!||    sptrivox         ../engine/source/elements/sph/sptrivox.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod      ../engine/share/message_module/message_mod.F
+!||    mod_spbuc3       ../engine/source/elements/sph/spbuc3.F
+!||    sph_struct_mod   ../engine/share/modules/sph_struct_mod.F
+!||    sphbox           ../engine/share/modules/sphbox.F
+!||    tri7box          ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE SPBUC3(X     ,KXSP   ,IXSP  ,NOD2SP,NSN   ,
+     2                  SPBUF ,MA     ,JVOIS ,JSTOR ,JPERM ,
+     3                  DVOIS ,IREDUCE,BMINMA,NSNR  ,NSP2SORTF,
+     4                  NSP2SORTL,ITASK,KREDUCE,LGAUGE ,GAUGE ) 
+C============================================================================
+C   M o d u l e s
+C-----------------------------------------------
+        USE TRI7BOX
+        USE SPHBOX
+        USE MOD_SPBUC3
+        USE MESSAGE_MOD
+        USE SPH_STRUCT_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "sphcom.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NSN, NSNR,NSP2SORTF,NSP2SORTL
+C     REAL
+      INTEGER KXSP(NISP,*), IXSP(KVOISPH,*), NOD2SP(*),
+     .   MA(*), JVOIS(*), JSTOR(*), JPERM(*), IREDUCE,ITASK,
+     .   KREDUCE(*),LGAUGE(3,*)
+C     REAL
+      my_real
+     .   X(3,*),SPBUF(NSPBUF,*),DVOIS(*), BMINMA(12), GAUGE(LLGAUGE,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER :: I, N, INOD,JNOD,NVOIS,NVOIS1,NVOIS2,K,M,NN,NS,MS,JK,IERROR,JTASK,MY_ADRV,NVOISS
+      INTEGER(KIND=8) :: IAUX_SIZE
+      my_real :: MARGE, AAA, AAA2, XI,YI,ZI,XJ,YJ,ZJ, D2,D1X,D1Y,D1Z,DK
+      INTEGER NBX,NBY,NBZ
+      INTEGER (KIND=8) :: NBX8,NBY8,NBZ8,RES8,LVOXEL8
+C-----------------------------------------------
+c!!!!      MARGE = TZINF-MAX(GAP,PMAX_GAP)  ! il s agit bien de la marge
+
+      AAA = SQRT(NSN /
+     .           ((BMINMA(7)-BMINMA(10))*(BMINMA(8)-BMINMA(11))
+     .           +(BMINMA(8)-BMINMA(11))*(BMINMA(9)-BMINMA(12))
+     .           +(BMINMA(9)-BMINMA(12))*(BMINMA(7)-BMINMA(10))))
+
+      AAA = 0.75*AAA
+
+      NBX = NINT(AAA*(BMINMA(7)-BMINMA(10)))
+      NBY = NINT(AAA*(BMINMA(8)-BMINMA(11)))
+      NBZ = NINT(AAA*(BMINMA(9)-BMINMA(12)))
+      NBX = MAX(NBX,1)
+      NBY = MAX(NBY,1)
+      NBZ = MAX(NBZ,1)
+
+      NBX8=NBX
+      NBY8=NBY
+      NBZ8=NBZ
+      RES8=(NBX8+2)*(NBY8+2)*(NBZ8+2)
+      LVOXEL8 = LVOXEL      
+
+      IF(RES8 > LVOXEL8) THEN
+        AAA = LVOXEL
+        AAA = AAA/((NBX8+2)*(NBY8+2)*(NBZ8+2))
+        AAA = AAA**(THIRD)
+        NBX = INT((NBX+2)*AAA)-2
+        NBY = INT((NBY+2)*AAA)-2
+        NBZ = INT((NBZ+2)*AAA)-2
+        NBX = MAX(NBX,1)
+        NBY = MAX(NBY,1)
+        NBZ = MAX(NBZ,1)
+      ENDIF
+      
+      NBX8=NBX
+      NBY8=NBY
+      NBZ8=NBZ
+      RES8=(NBX8+2)*(NBY8+2)*(NBZ8+2)
+      
+      IF(RES8 > LVOXEL8) THEN
+        NBX = MIN(100,MAX(NBX8,1))
+        NBY = MIN(100,MAX(NBY8,1))
+        NBZ = MIN(100,MAX(NBZ8,1))
+      ENDIF
+
+C     complete initialization of VOXEL
+C (in // SMP there is possibility of processing redundancy but no pb)
+      DO I=INIVOXEL,(NBX+2)*(NBY+2)*(NBZ+2)
+        VOXEL1(I)=0
+      ENDDO
+      INIVOXEL = MAX(INIVOXEL,(NBX+2)*(NBY+2)*(NBZ+2)+1)
+
+      IF(ITASK==0)THEN
+        ALLOCATE(KXSPR(NSNR),IXSPR(KVOISPH,NSNR),STAT=IERROR)
+        IF(IERROR/=0)THEN
+          CALL ANCMSG(MSGID=248,ANMODE=ANINFO_BLIND)
+          CALL ARRET(2)
+        END IF
+        KXSPR(1:NSNR)=0
+      END IF
+C
+      CALL MY_BARRIER
+C--------------------------------------------------
+C     VOXEL SORT
+C--------------------------------------------------
+      CALL SPTRIVOX(
+     1      NSN     ,NSNR   ,X       ,BMINMA  ,NOD2SP ,
+     2      NBX     ,NBY    ,NBZ     ,MARGE   ,ITASK  ,
+     3      MA      ,SPBUF  ,JVOIS   ,JSTOR   ,JPERM  ,
+     4      DVOIS   ,IREDUCE,NSP2SORTF,NSP2SORTL,VOXEL1 ,
+     5      KXSP    ,IXSP   ,KREDUCE ,LGAUGE  ,GAUGE  ,
+     6      KXSPR   ,IXSPR  )
+
+C--------------------------------------------------
+C     SYMETRISE VOISINS
+C--------------------------------------------------
+c     CALL MY_BARRIER fait dans SPTRIVOX
+      IF(ITASK==0)THEN
+
+        ALLOCATE(NV(NUMSPH*NTHREAD))
+        ALLOCATE(IV(NUMSPH*NTHREAD))
+        ALLOCATE(IVS(NUMSPH))
+        ALLOCATE(KV(NUMSPH))
+      END IF
+C
+      CALL MY_BARRIER
+C
+      NV(ITASK*NUMSPH+1:(ITASK+1)*NUMSPH)=0
+
+      DO NS=NSP2SORTF,NSP2SORTL
+        N     =MA(NS)
+        KV(N) =NS
+      END DO
+C-------        
+C
+      CALL MY_BARRIER
+C
+C-------        
+      MY_ADRV=ITASK*NUMSPH
+      DO NS=NSP2SORTF,NSP2SORTL
+        N =MA(NS)
+        INOD=KXSP(3,N)
+        NVOIS=KXSP(5,N)
+        DO K=1,NVOIS
+          JNOD=IXSP(K,N)
+          IF(JNOD > 0) THEN
+            M=NOD2SP(JNOD)
+            IF(SPBUF(1,M) < SPBUF(1,N) .OR.
+     .        (SPBUF(1,M) == SPBUF(1,N) .AND. KXSP(8,M) < KXSP(8,N)) )THEN
+
+              MS=KV(M)
+              NV(MY_ADRV+MS)=NV(MY_ADRV+MS)+1
+
+            END IF
+          ELSE
+C we do nothing for the remote
+          ENDIF
+        END DO
+      END DO      
+
+      DO N=ITASK+1,NSNR,NTHREAD
+        NVOIS=KXSPR(N)
+        DO K=1,NVOIS
+          JNOD=IXSPR(K,N)
+          IF(JNOD > 0) THEN
+            M=NOD2SP(JNOD)
+          ELSE
+            print *,'internal error'
+          END IF
+
+          MS=KV(M)
+          NV(MY_ADRV+MS)=NV(MY_ADRV+MS)+1
+
+        END DO
+      END DO      
+C-------        
+C
+      CALL MY_BARRIER
+C
+C-------        
+      IF(ITASK==0)THEN
+
+        IV(1)=1
+        DO NS=1,NSP2SORT-1
+          IV(NS+1)=IV(NS)
+          DO JTASK=1,NTHREAD
+            IV(NS+1)=IV(NS+1)+NV((JTASK-1)*NUMSPH+NS)
+          END DO
+        END DO
+C
+C       Compute exact IAUX size from IV/NV and allocate
+        IAUX_SIZE = IV(NSP2SORT)
+        DO JTASK=1,NTHREAD
+          IAUX_SIZE = IAUX_SIZE + NV((JTASK-1)*NUMSPH+NSP2SORT)
+        END DO
+        ALLOCATE(IAUX(MAX(1_8,IAUX_SIZE)), STAT=IERROR)
+        IF(IERROR/=0)THEN
+          CALL ANCMSG(MSGID=20,ANMODE=ANINFO)
+          CALL ARRET(2)
+        END IF
+
+      END IF
+C-------        
+C
+      CALL MY_BARRIER
+C
+C-------        
+      DO NS=NSP2SORTF,NSP2SORTL
+        IVS(NS)=IV(NS)
+      END DO
+
+      DO JTASK=1,NTHREAD-1
+        DO NS=NSP2SORTF,NSP2SORTL
+          IV(JTASK*NUMSPH+NS)=IV((JTASK-1)*NUMSPH+NS)+NV((JTASK-1)*NUMSPH+NS)
+        END DO
+      END DO
+C-------        
+C
+      CALL MY_BARRIER
+C
+C-------        
+      DO NS=NSP2SORTF,NSP2SORTL
+        N =MA(NS)
+        INOD=KXSP(3,N)
+        NVOIS=KXSP(5,N)
+        DO K=1,NVOIS
+          JNOD=IXSP(K,N)
+          IF(JNOD > 0) THEN
+            M=NOD2SP(JNOD)
+            IF(SPBUF(1,M) < SPBUF(1,N) .OR.
+     .        (SPBUF(1,M) == SPBUF(1,N) .AND. KXSP(8,M) < KXSP(8,N)) )THEN
+
+              MS=KV(M)
+              IAUX(IV(ITASK*NUMSPH+MS))=INOD
+              IV(ITASK*NUMSPH+MS)=IV(ITASK*NUMSPH+MS)+1
+
+            END IF
+          ELSE
+C we do nothing for the remote
+          ENDIF
+        END DO
+      END DO      
+
+      DO N=ITASK+1,NSNR,NTHREAD
+        NVOIS=KXSPR(N)
+        DO K=1,NVOIS
+          JNOD=IXSPR(K,N)
+          IF(JNOD > 0) THEN
+            M=NOD2SP(JNOD)
+          ELSE
+            print *,'internal error'
+          END IF
+
+          MS=KV(M)
+          IAUX(IV(ITASK*NUMSPH+MS))=-N
+          IV(ITASK*NUMSPH+MS)=IV(ITASK*NUMSPH+MS)+1
+
+        END DO
+      END DO      
+C-------        
+C
+      CALL MY_BARRIER
+C
+C-------        
+      DO NS=NSP2SORTF,NSP2SORTL
+        N =MA(NS)
+
+        INOD=KXSP(3,N)
+        XI = X(1,INOD)
+        YI = X(2,INOD)
+        ZI = X(3,INOD)
+ 
+        NVOIS=KXSP(5,N)
+        DO K=1,NVOIS
+          JNOD=IXSP(K,N)
+          IF(JNOD > 0) THEN
+            M=NOD2SP(JNOD)
+            XJ = X(1,JNOD)
+            YJ = X(2,JNOD)
+            ZJ = X(3,JNOD)
+            AAA = SPBUF(1,N)+SPBUF(1,M)
+          ELSE
+            NN=-JNOD
+            XSPHR(1,NN) = -ABS(XSPHR(1,NN))
+            XJ = XSPHR(3,NN)
+            YJ = XSPHR(4,NN)
+            ZJ = XSPHR(5,NN)
+            AAA = SPBUF(1,N)+XSPHR(2,NN)
+          ENDIF
+
+          AAA2 = AAA*AAA
+
+C To do: Perfect symet <=> x (hmin) -x (hmax)
+          D1X = XI - XJ
+          D1Y = YI - YJ
+          D1Z = ZI - ZJ
+          D2 = D1X*D1X+D1Y*D1Y+D1Z*D1Z
+
+          JVOIS(K)=JNOD
+          DVOIS(K)=D2/AAA2
+       
+        END DO
+
+        NVOISS=0
+        DO JTASK=1,NTHREAD
+          NVOISS=NVOISS+NV((JTASK-1)*NUMSPH+NS)
+        END DO
+        NVOIS=NVOIS+NVOISS
+        IF(NVOIS>KVOISPH)THEN
+          IREDUCE=1
+          KREDUCE(N)=1
+        END IF
+
+        DO K=1,NVOISS
+          JNOD=IAUX(IVS(NS)+K-1)
+          IF(JNOD > 0) THEN
+            M=NOD2SP(JNOD)
+            XJ = X(1,JNOD)
+            YJ = X(2,JNOD)
+            ZJ = X(3,JNOD)
+            AAA = SPBUF(1,N)+SPBUF(1,M)
+          ELSEIF(JNOD < 0) THEN
+            NN=-JNOD
+            XSPHR(1,NN) = -ABS(XSPHR(1,NN)) ! flag remote cell as useful
+            XJ = XSPHR(3,NN)
+            YJ = XSPHR(4,NN)
+            ZJ = XSPHR(5,NN)
+            AAA = SPBUF(1,N)+XSPHR(2,NN)
+          ELSE
+C           JNOD==0: invalid entry, assign large distance for later filtering
+            JVOIS(KXSP(5,N)+K)=JNOD
+            DVOIS(KXSP(5,N)+K)=HUGE(AAA)
+            CYCLE
+          ENDIF
+
+          AAA2 = AAA*AAA
+
+C To do: Perfect symet <=> x (hmin) -x (hmax)
+          D1X = XI - XJ
+          D1Y = YI - YJ
+          D1Z = ZI - ZJ
+          D2 = D1X*D1X+D1Y*D1Y+D1Z*D1Z
+
+          JVOIS(KXSP(5,N)+K)=JNOD
+          DVOIS(KXSP(5,N)+K)=D2/AAA2
+       
+        END DO
+
+        BOOL_SPH_SORT(N) = .FALSE.
+        IF(KREDUCE(N)/=0 .AND. NVOIS > KVOISPH) THEN
+          BOOL_SPH_SORT(N) = .TRUE.
+
+          CALL MYQSORT(NVOIS,DVOIS,JPERM,IERROR)
+           DO K=1,NVOIS
+            JSTOR(K)=JVOIS(K)
+           ENDDO
+           DO K=1,KVOISPH
+            JVOIS(K)=JSTOR(JPERM(K))
+           ENDDO
+
+           DK=DVOIS(KVOISPH)
+C-----------------
+C Choice of cells to keep such that distance < DK to avoid parallelization problems
+           NVOIS=0
+           DO K=1,KVOISPH
+            IF(DVOIS(K)<DK)THEN
+              NVOIS=NVOIS+1
+            END IF
+           END DO
+        END IF
+
+        NVOIS=MIN(NVOIS,KVOISPH)
+        KXSP(5,N)=NVOIS
+
+        NVOIS1=0
+        NVOIS2=NVOIS+1
+        DO K=1,NVOIS
+         JK       =JVOIS(K)
+         DK       =DVOIS(K)
+
+         IF(DK < ONE)THEN
+           NVOIS1=NVOIS1+1
+           IXSP(NVOIS1,N)=JK
+         ELSE
+           NVOIS2=NVOIS2-1
+           IXSP(NVOIS2,N)=JK
+         END IF
+        ENDDO
+        KXSP(4,N)=NVOIS1
+        IF(NVOIS1>LVOISPH)IREDUCE=1
+
+      END DO      
+C-------        
+C
+      CALL MY_BARRIER
+C
+      IF(ITASK==0) DEALLOCATE(KXSPR,IXSPR,IV,IVS,KV,NV,IAUX)
+C--------------------------------------------------
+      RETURN
+      END

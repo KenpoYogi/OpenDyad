@@ -1,0 +1,123 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    w_gr_entity            ../engine/source/output/restart/w_gr_entity.F
+!||--- called by ------------------------------------------------------
+!||    w_group_str            ../engine/source/output/restart/w_group_str.F
+!||--- calls      -----------------------------------------------------
+!||    fretitl                ../engine/source/input/freform.F
+!||    write_i_c              ../common_source/tools/input_output/write_routines.c
+!||--- uses       -----------------------------------------------------
+!||    groupdef_mod           ../common_source/modules/groupdef_mod.F
+!||    my_alloc_mod           ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod         ../common_source/tools/memory/my_dealloc.F90
+!||    names_and_titles_mod   ../common_source/modules/names_and_titles_mod.F
+!||====================================================================
+      SUBROUTINE W_GR_ENTITY(IGR,NGR,LENIGR)
+C-----------------------------------------------
+C   M o d u l e s
+C----------------------------------------------- 
+      USE GROUPDEF_MOD
+      USE NAMES_AND_TITLES_MOD, ONLY: NCHARTITLE
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NGR,LENIGR
+!
+      TYPE (GROUP_) , DIMENSION(NGR) :: IGR
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER J,ID,IGU,NENTITY,GRTYPE,SORTED,GRPGRP,LEVEL,
+     .        ERR,R2R_ALL,R2R_SHARE,ENTITY,ITITLE(LTITR),L_GROUP
+      CHARACTER(LEN=NCHARTITLE) :: TITR
+      INTEGER, ALLOCATABLE, DIMENSION (:)  ::  IGROUP
+C-----------------------------------------------
+!       LTITR = 40
+C-----------------------------------------------
+      DO IGU=1,NGR
+        TITR    = IGR(IGU)%TITLE
+        CALL FRETITL(TITR,ITITLE,LTITR)
+        CALL WRITE_I_C(ITITLE,LTITR)
+      ENDDO ! DO IGU=1,NGR
+!
+      ERR = 0
+      call my_alloc(IGROUP, LENIGR, "IGROUP", stat=ERR)
+      IGROUP(1:LENIGR) = 0  
+      L_GROUP = 0
+!
+      DO IGU=1,NGR
+        ID        = IGR(IGU)%ID
+        NENTITY   = IGR(IGU)%NENTITY
+        GRTYPE    = IGR(IGU)%GRTYPE
+        SORTED    = IGR(IGU)%SORTED
+        GRPGRP    = IGR(IGU)%GRPGRP
+        LEVEL     = IGR(IGU)%LEVEL
+        TITR      = IGR(IGU)%TITLE  !!!- already written above loop
+        R2R_ALL   = IGR(IGU)%R2R_ALL
+        R2R_SHARE = IGR(IGU)%R2R_SHARE
+!
+        IGROUP(L_GROUP+1) = ID
+          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = NENTITY
+          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = GRTYPE
+          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = SORTED
+          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = GRPGRP
+          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = LEVEL
+          L_GROUP = L_GROUP+1
+!        IGROUP(L_GROUP+1) = TITR  -!!!- already written above loop
+!          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = R2R_ALL
+          L_GROUP = L_GROUP+1
+        IGROUP(L_GROUP+1) = R2R_SHARE
+          L_GROUP = L_GROUP+1
+! GROUP ENTITIES
+        DO J=1,NENTITY
+          ENTITY = IGR(IGU)%ENTITY(J)
+          IGROUP(L_GROUP+1) = ENTITY
+          L_GROUP = L_GROUP+1
+        ENDDO
+      ENDDO ! DO IGU=1,NGR
+!---------
+      CALL WRITE_I_C(IGROUP,L_GROUP)
+!---------
+      call my_dealloc(IGROUP)
+!---------
+      RETURN
+      END

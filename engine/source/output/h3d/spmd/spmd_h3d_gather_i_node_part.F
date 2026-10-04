@@ -1,0 +1,88 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_h3d_gather_i_node_part   ../engine/source/output/h3d/spmd/spmd_h3d_gather_i_node_part.F
+!||--- called by ------------------------------------------------------
+!||    genh3d                        ../engine/source/output/h3d/h3d_results/genh3d.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    spmd_comm_world_mod           ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+       SUBROUTINE SPMD_H3D_GATHER_I_NODE_PART(WEIGHT,TAGNOD,V,LEN,VP0,LENP0)
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+#include      "implicit_f.inc"
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+       INTEGER LEN,LENP0
+       INTEGER
+     .   V(LEN),VP0(LENP0),WEIGHT(*),TAGNOD(*)
+
+C-----------------------------------------------
+C   L O C A L   V A R I A B L E S
+C-----------------------------------------------
+       INTEGER IAD,J,LEN_TMP
+#ifdef MPI
+      INTEGER IERROR,
+     .        I,LENP(NSPMD),DISP(NSPMD),
+     .        V_TMP(LEN)
+
+        J = 0
+        DO I=1,LEN
+          IF(WEIGHT(I) == 0 .AND. TAGNOD(I) == 1) THEN
+            J = J + 1
+            V_TMP(J) = V(I)
+          ENDIF
+        ENDDO
+        LEN_TMP = J
+         
+        CALL MPI_GATHER(
+     S    LEN_TMP       ,1     ,MPI_INTEGER,
+     R    LENP          ,1     ,MPI_INTEGER,IT_SPMD(1),
+     G    SPMD_COMM_WORLD,IERROR)
+C
+        IAD=0
+        IF(ISPMD == 0)THEN
+          DO I=1,NSPMD
+            DISP(I) = IAD
+            IAD = IAD+LENP(I)
+          END DO
+        END IF
+C
+        CALL MPI_GATHERV(
+     S    V_TMP         ,LEN_TMP  ,MPI_INTEGER,
+     R    VP0           ,LENP     ,DISP,MPI_INTEGER,IT_SPMD(1),
+     G    SPMD_COMM_WORLD,IERROR)
+#endif
+       RETURN
+       END

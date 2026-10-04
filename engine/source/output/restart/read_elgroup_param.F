@@ -1,0 +1,72 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    read_elgroup_param   ../engine/source/output/restart/read_elgroup_param.F
+!||--- called by ------------------------------------------------------
+!||    rdresb               ../engine/source/output/restart/rdresb.F
+!||--- calls      -----------------------------------------------------
+!||    read_db              ../common_source/tools/input_output/read_db.F
+!||--- uses       -----------------------------------------------------
+!||    mat_elem_mod         ../common_source/modules/mat_elem/mat_elem_mod.F90
+!||    my_alloc_mod         ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod       ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE READ_ELGROUP_PARAM(MAT_ELEM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MAT_ELEM_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE (MAT_ELEM_) ,INTENT(INOUT) :: MAT_ELEM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NG,NGROUP,LEN
+      my_real, DIMENSION(:,:), ALLOCATABLE :: RBUF
+C=======================================================================
+c     allocation of element group parameters
+      NGROUP = MAT_ELEM%NGROUP
+      ALLOCATE (MAT_ELEM%GROUP_PARAM(NGROUP) )
+
+      LEN = 2
+      call my_alloc(RBUF, NGROUP, LEN, "RBUF")
+      CALL READ_DB(RBUF, LEN*NGROUP)
+c
+      DO NG = 1, NGROUP
+        MAT_ELEM%GROUP_PARAM(NG)%VISC_DM = RBUF(NG,1)
+        MAT_ELEM%GROUP_PARAM(NG)%VISC_DN = RBUF(NG,2)
+      ENDDO
+c
+      call my_dealloc(RBUF)
+c-----------
+      RETURN
+      END

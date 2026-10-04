@@ -1,0 +1,233 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    lecfvbag         ../engine/source/input/lecfvbag.F
+!||--- called by ------------------------------------------------------
+!||    lectur           ../engine/source/input/lectur.F
+!||--- calls      -----------------------------------------------------
+!||    arret            ../engine/source/system/arret.F
+!||    spmd_fvb_gath    ../engine/source/mpi/airbags/spmd_fvb_gath.F
+!||--- uses       -----------------------------------------------------
+!||    fvbag_mod        ../engine/share/modules/fvbag_mod.F
+!||    my_alloc_mod     ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod   ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE LECFVBAG(NFVMESH, MONVOL, VOLMON, X)
+C-----------------------------------------------
+C   M o d u l e s 
+C-----------------------------------------------
+      USE FVBAG_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_alloc_mod
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "units_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NFVMESH, MONVOL(*)
+      my_real
+     .        VOLMON(*), X(3,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I, ID, NBX, NBY, K1, K2, KIBJET, KIBHOL, KIBALE, KK1, N,
+     .        ITYP, NN, KI1, J, NSTEP, IFVI, NBZ, IFV
+      my_real
+     .        VX3, VY3, VZ3, VX1, VY1, VZ1, DX0, DY0, DZ0, LX, LY, NORM,
+     .        VVX3, VVY3, VVZ3, NORM2, SS, VVX1, VVY1, VVZ1, VVX2,
+     .        VVY2, VVZ2, LXMAX, LYMAX, XX, YY, ZZ, XL, YL, X0, Y0, Z0,
+     .        LZ, LZMAX, ZL, RBID
+      my_real
+     .       , DIMENSION(:,:), ALLOCATABLE :: XXX
+C
+      DO I=1,NFVMESH
+         READ(IIN,'(I10)') IFVI
+         IF (IFVI==1) THEN
+            READ(IIN,'(2I10)') ID, NSTEP
+            IF (NSTEP==0) NSTEP=20
+            READ(IIN,'(3F20.0)') VX3, VY3, VZ3
+            READ(IIN,'(3F20.0)') VX1, VY1, VZ1
+            READ(IIN,'(3F20.0)') DX0, DY0, DZ0
+            READ(IIN,'(3F20.0)') LX, LY, LZ
+            READ(IIN,'(3I10)') NBX, NBY, NBZ
+C
+            K1=1
+            K2=1+NIMV*NVOLU
+            KIBJET=K2+LICBAG
+            KIBHOL=KIBJET+LIBAGJET
+            KIBALE=KIBHOL+LIBAGHOL
+            KK1=1
+            DO N=1,NVOLU
+               IF (MONVOL(K1)==ID) THEN
+                  ITYP=MONVOL(K1-1+2)
+                  IF (ITYP/=6) THEN
+                     WRITE(IOUT,'(A33,I8,A38)') 
+     . ' /FVMBAG/REMESH : MON. VOLUME ID ',ID,' IS NOT OF TYPE FVMBAG'//
+     . ' - IT IS IGNORED'
+                     GOTO 100
+                  ENDIF
+C
+                  NORM=SQRT(VX3**2+VY3**2+VZ3**2)
+                  IF (NORM==ZERO) THEN
+                     VX3=VOLMON(KK1-1+35)
+                     VY3=VOLMON(KK1-1+36)
+                     VZ3=VOLMON(KK1-1+37)
+                     NORM=SQRT(VX3**2+VY3**2+VZ3**2)
+                  ENDIF
+                  VVX3=VX3/NORM
+                  VVY3=VY3/NORM
+                  VVZ3=VZ3/NORM
+                  NORM2=VX1**2+VY1**2+VZ1**2
+                  IF (NORM2==ZERO) THEN
+                     VX1=VOLMON(KK1-1+38)
+                     VY1=VOLMON(KK1-1+39)
+                     VZ1=VOLMON(KK1-1+40)
+                  ENDIF
+                  X0=VOLMON(KK1-1+41)+DX0
+                  Y0=VOLMON(KK1-1+42)+DY0
+                  Z0=VOLMON(KK1-1+43)+DZ0
+                  IF (LX==ZERO) LX=VOLMON(KK1-1+44)
+                  IF (LY==ZERO) LY=VOLMON(KK1-1+45)
+                  IF (LZ==ZERO) LZ=VOLMON(KK1-1+53)
+                  IF (NBX==0) NBX=MONVOL(K1-1+54)
+                  IF (NBY==0) NBY=MONVOL(K1-1+55)
+                  IF (NBZ==0) NBZ=MONVOL(K1-1+65)
+C Verifications
+                  SS=VX1*VVX3+VY1*VVY3+VZ1*VVZ3
+                  VVX1=VX1-SS*VVX3
+                  VVY1=VY1-SS*VVY3
+                  VVZ1=VZ1-SS*VVZ3
+                  NORM=SQRT(VVX1**2+VVY1**2+VVZ1**2)
+                  IF (NORM==ZERO) THEN
+                     WRITE(ISTDO,'(A)') 
+     .                       ' ** ERROR IN FVMBAG MESHING DATA '
+                     WRITE(IOUT,'(A)') 
+     .                       ' ** ERROR IN FVMBAG MESHING DATA '
+                     WRITE(IOUT,'(A14,I8)') '    MONVOL ID ',ID
+                     WRITE(IOUT,'(A)') 
+     .                    '    NEW CUT DIRECTIONS ARE COLINEAR'
+                     CALL ARRET(2)
+                  ENDIF
+                  VVX1=VVX1/NORM
+                  VVY1=VVY1/NORM
+                  VVZ1=VVZ1/NORM
+                  VVX2=VVY3*VVZ1-VVZ3*VVY1
+                  VVY2=VVZ3*VVX1-VVX3*VVZ1
+                  VVZ2=VVX3*VVY1-VVY3*VVX1
+C
+                  LXMAX=ZERO
+                  LYMAX=ZERO
+                  LZMAX=ZERO
+                  NN=MONVOL(K1-1+32)
+                  KI1=KIBALE+MONVOL(K1-1+31)
+C
+                  IFV=MONVOL(K1-1+45)
+                  call my_alloc(XXX, 3, NN, "XXX")
+                  CALL SPMD_FVB_GATH(IFV, X, XXX, RBID, RBID,
+     .                               1  )
+                  IF (ISPMD==FVSPMD(IFV)%PMAIN-1) THEN
+                     DO J=1,NN
+                        XX=XXX(1,J)
+                        YY=XXX(2,J)
+                        ZZ=XXX(3,J)
+                        XL=(XX-X0)*VVX1+(YY-Y0)*VVY1+(ZZ-Z0)*VVZ1
+                        YL=(XX-X0)*VVX2+(YY-Y0)*VVY2+(ZZ-Z0)*VVZ2
+                        ZL=(XX-X0)*VVX3+(YY-Y0)*VVY3+(ZZ-Z0)*VVZ3
+                        LXMAX=MAX(LXMAX,ABS(XL))
+                        LYMAX=MAX(LYMAX,ABS(YL))
+                        LZMAX=MAX(LZMAX,ABS(ZL))
+                     ENDDO
+                  ENDIF
+                  call my_dealloc(XXX)
+C
+                  IF (LXMAX>LX) THEN
+                     WRITE(IOUT,'(A14,I8,A9)') 
+     .                        ' ** MONVOL ID ',ID,' (FVMBAG)'
+                     WRITE(IOUT,'(A)') '    IN LOCAL FRAME DIRECTION 1'
+                     WRITE(IOUT,'(A18,G11.4,A33,G11.4,G11.4)') 
+     .    '    GIVEN LENGTH ',LX,
+     .    ' IS SMALLER THAN BOUNDING LENGTH ',LXMAX
+                     LX=LXMAX*ONEP01
+                     WRITE(IOUT,'(A20,G11.4)') '    IT IS RESET TO ',LX
+                  ENDIF
+                  IF (LYMAX>LY) THEN
+                     WRITE(IOUT,'(A14,I8,A9)') 
+     .                        ' ** MONVOL ID ',ID,' (FVMBAG)'
+                     WRITE(IOUT,'(A)') '    IN LOCAL FRAME DIRECTION 2'
+                     WRITE(IOUT,'(A18,G11.4,A33,G11.4,G11.4)') 
+     .    '    GIVEN LENGTH ',LY,
+     .    ' IS SMALLER THAN BOUNDING LENGTH ',LYMAX
+                     LY=LYMAX*ONEP01
+                     WRITE(IOUT,'(A20,G11.4)') '    IT IS RESET TO ',LY
+                  ENDIF
+C only horizontal splitting of a mesh band is allowed
+C                  IF (LZMAX>LZ) THEN
+C                     WRITE(IOUT,'(A14,I8,A9)') 
+C     .                        ' ** MONVOL ID ',ID,' (ALEBAG)'
+C                     WRITE(IOUT,'(A)') '    IN LOCAL FRAME DIRECTION 3'
+C                     WRITE(IOUT,'(A18,G11.4,A33,G11.4,G11.4)') 
+C     .    '    GIVEN LENGTH ',LZ,
+C     .    ' IS SMALLER THAN BOUNDING LENGTH ',LZMAX
+C                     Lz = Lzmax*ONEP01
+C                     WRITE(IOUT,'(A20,G11.4)') '    IT IS RESET TO ',LZ
+C                  ENDIF
+C
+                  VOLMON(KK1-1+35)=VX3
+                  VOLMON(KK1-1+36)=VY3
+                  VOLMON(KK1-1+37)=VZ3
+                  VOLMON(KK1-1+38)=VX1
+                  VOLMON(KK1-1+39)=VY1
+                  VOLMON(KK1-1+40)=VZ1
+                  VOLMON(KK1-1+41)=X0
+                  VOLMON(KK1-1+42)=Y0
+                  VOLMON(KK1-1+43)=Z0
+                  VOLMON(KK1-1+44)=LX
+                  VOLMON(KK1-1+45)=LY
+                  VOLMON(KK1-1+53)=LZ
+                  MONVOL(K1-1+54)=NBX
+                  MONVOL(K1-1+55)=NBY
+                  MONVOL(K1-1+65)=NBZ
+C
+                  MONVOL(K1-1+56)=1
+                  MONVOL(K1-1+58)=NSTEP
+               ENDIF
+               K1=K1+NIMV
+               KK1=KK1+NRVOLU
+            ENDDO
+         ENDIF
+  100 ENDDO
+C
+      RETURN
+      END
+      

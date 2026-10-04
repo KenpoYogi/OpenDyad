@@ -1,0 +1,148 @@
+!Copyright>        OpenRadioss
+!Copyright>        Copyright (C) 2026 Siemens
+!Copyright>
+!Copyright>        This program is free software: you can redistribute it and/or modify
+!Copyright>        it under the terms of the GNU Affero General Public License as published by
+!Copyright>        the Free Software Foundation, either version 3 of the License, or
+!Copyright>        (at your option) any later version.
+!Copyright>
+!Copyright>        This program is distributed in the hope that it will be useful,
+!Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+!Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!Copyright>        GNU Affero General Public License for more details.
+!Copyright>
+!Copyright>        You should have received a copy of the GNU Affero General Public License
+!Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+!Copyright>
+!Copyright>
+!Copyright>        Commercial Alternative: Simcenter Radioss Software
+!Copyright>
+!Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+!Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+!Copyright>        commercial version may interest you: 
+!Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+! ======================================================================================================================
+!||====================================================================
+!||    anim_nodal_ssp_elems_mod   ../engine/source/output/anim/generate/anim_nodal_ssp_elems.F90
+!||--- called by ------------------------------------------------------
+!||    nodalssp                   ../engine/source/output/anim/generate/nodalssp.F
+!||====================================================================
+      module anim_nodal_ssp_elems_mod
+        implicit none
+      contains
+! ======================================================================================================================
+!                                                   PROCEDURES
+! ======================================================================================================================
+!! \brief This subroutine is setting nodal sound speed requested by Engine keyword /ANIM/NODA/SSP & /H3D/NODA/SSP
+!! \details nodal value for fvmbag centroids is only available with H3D (automatic centroid generation)
+!||====================================================================
+!||    anim_nodal_ssp_elems   ../engine/source/output/anim/generate/anim_nodal_ssp_elems.F90
+!||--- called by ------------------------------------------------------
+!||    nodalssp               ../engine/source/output/anim/generate/nodalssp.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    constant_mod           ../common_source/modules/constant_mod.F
+!||    elbufdef_mod           ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    initbuf_mod            ../engine/share/resol/initbuf.F
+!||    multi_fvm_mod          ../common_source/modules/ale/multi_fvm_mod.F90
+!||    my_alloc_mod           ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod         ../common_source/tools/memory/my_dealloc.F90
+!||    precision_mod          ../common_source/modules/precision_mod.F90
+!||====================================================================
+        subroutine anim_nodal_ssp_elems( wa4, swa4, iparg, elbuf_tab, ix, nix, numel, is_written_node, &
+          multi_fvm, nparg, ngroup, numnod)
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Modules
+! ----------------------------------------------------------------------------------------------------------------------
+          use initbuf_mod
+          use elbufdef_mod
+          use multi_fvm_mod , only : multi_fvm_struct
+          use constant_mod , only : zero
+          use precision_mod, only : WP
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+          use my_alloc_mod
+          use my_dealloc_mod, only : my_dealloc
+          implicit none
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Included files
+! ----------------------------------------------------------------------------------------------------------------------
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer,intent(in) :: nparg, ngroup, numnod,swa4                          !< size for array definitions
+          integer, intent(in) :: iparg(nparg,ngroup)                                !< data buffer for group of elems
+          integer,intent(in) :: ix(nix,numel),nix,numel                             !< data buffer for elem definition
+          integer, intent(inout) :: is_written_node(numnod)                         !< tag specific to H3D output
+          real,intent(inout) :: wa4(swa4)                                           !< working array
+          type (elbuf_struct_),intent(in), dimension(ngroup), target :: elbuf_tab   !< data structure for elem buffer
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Arguments
+! ----------------------------------------------------------------------------------------------------------------------
+          integer :: ng,i,j,jj, mlw, nnod, nel, nft, ityp
+          type(g_bufel_)  ,pointer :: gbuf
+          type(l_bufel_)  ,pointer :: lbuf
+          real(kind=WP), allocatable, dimension(:) :: sum_weight
+          real(kind=WP) :: weight, ssp
+          type (multi_fvm_struct), intent(in) :: multi_fvm
+! ----------------------------------------------------------------------------------------------------------------------
+!                                                   Body
+! ----------------------------------------------------------------------------------------------------------------------
+          call my_alloc(sum_weight, numnod, "sum_weight")
+          sum_weight = 0
+          nnod = nix-3   !8-node brick or 4-node quad
+
+          !---------------------------------------------------------!
+          !         EXPAND SSP PRESSURE TO NODES                    !
+          !---------------------------------------------------------!
+          do ng = 1, ngroup
+            mlw   =iparg(1,ng)
+            nel   =iparg(2,ng)
+            nft   =iparg(3,ng)
+            ityp  =iparg(5,ng)
+            if(ityp/=1 .and. ityp/=2)cycle
+            gbuf => elbuf_tab(ng)%gbuf
+
+            if(mlw /=151)then
+              lbuf => elbuf_tab(ng)%bufly(1)%lbuf(1,1,1)
+              if(elbuf_tab(ng)%bufly(1)%l_ssp > 0)then    !this may not be allocated (example : /mat/void)
+                do i=1,nel
+                  ssp = lbuf%ssp(i)
+                  weight = gbuf%vol(i)
+                  do j=2,nnod+1
+                    jj=ix(j,nft+i)
+                    is_written_node(jj)=1
+                    wa4(jj)=wa4(jj)+ real(weight*ssp)
+                    sum_weight(jj) = sum_weight(jj) + weight !cumulated volume
+                  end do
+                end do!next i
+              end if
+            else
+              do i=1,nel
+                ssp = multi_fvm%sound_speed(i+nft)
+                weight = gbuf%vol(i)
+                do j=2,nnod+1
+                  jj=ix(j,nft+i)
+                  is_written_node(jj)=1
+                  wa4(jj)=wa4(jj)+real(weight*ssp)
+                  sum_weight(jj) = sum_weight(jj) + weight !cumulated volume
+                end do
+              end do!next i
+            end if
+          end do
+
+!-----------------------------------------------
+          !divinding by sum of weights to get finally weighting factors
+          do i=1,numnod
+            if(sum_weight(i)/=zero)then
+              wa4(i)=wa4(i)/real(sum_weight(i))
+            end if
+          end do
+
+          call my_dealloc(sum_weight)
+!-----------------------------------------------
+
+          return
+        end subroutine anim_nodal_ssp_elems
+      end module anim_nodal_ssp_elems_mod

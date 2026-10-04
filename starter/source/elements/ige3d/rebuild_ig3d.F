@@ -1,0 +1,210 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    rebuild_ig3d       ../starter/source/elements/ige3d/rebuild_ig3d.F
+!||--- called by ------------------------------------------------------
+!||    prerafig3d         ../starter/source/elements/ige3d/prerafig3d.F
+!||--- uses       -----------------------------------------------------
+!||    meshsurfig3d_mod   ../starter/source/elements/ige3d/meshsurfig3d_mod.F
+!||====================================================================
+      SUBROUTINE REBUILD_IG3D(IXIG3D, KXIG3D,DIR,DEG,DEGTANG1,
+     .                        DEGTANG2,KNOTLOCPC,KNOTLOCEL,
+     .                        TAB_ELCUT,L_TAB_ELCUT,
+     .                        TAB_NEWEL,L_TAB_NEWEL,
+     .                        TAB_FCTCUT,L_TAB_FCTCUT,
+     .                        TAB_REMOVE,TAB_NEWFCT,EL_CONNECT,
+     .                        TABCONPATCH,IDFILS,FLAG_PRE,FLAG_DEBUG)
+C----------------------------------------------------------------------
+C   routine that removes deleted points from connectivity tables
+C   and inserts the new points
+C   the routine does not put this connectivity back in the correct order:
+C   this is the role of REORDER_IG3D.F
+C----------------------------------------------------------------------
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESHSURFIG3D_MOD 
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "ige3d_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IXIG3D(*),KXIG3D(NIXIG3D,*),TAB_NEWFCT(*),TAB_REMOVE(*),
+     .        TAB_ELCUT(*),TAB_NEWEL(*),
+     .        TAB_FCTCUT(*),EL_CONNECT(*),
+     .        IDFILS(NBFILSMAX,*)
+      TYPE(TABCONPATCH_IG3D_) TABCONPATCH
+      INTEGER L_TAB_FCTCUT,L_TAB_NEWEL,L_TAB_ELCUT,
+     .        DEG,DEGTANG1,DEGTANG2,DIR,FLAG_PRE,FLAG_DEBUG
+      my_real KNOTLOCPC(DEG_MAX,3,*),KNOTLOCEL(2,3,*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,J,K,L,DIRTANG1,DIRTANG2,
+     .        INCTRL,DECALGEO,ITNCTRL,IEL,JEL,ITFILS
+      my_real TOL
+C=======================================================================
+c  
+      TOL = EM06
+c
+      IF(DIR==1) THEN
+        DIRTANG1 = 2
+        DIRTANG2 = 3
+      ELSEIF(DIR==2) THEN
+        DIRTANG1 = 3
+        DIRTANG2 = 1
+      ELSEIF(DIR==3) THEN
+        DIRTANG1 = 1
+        DIRTANG2 = 2
+      ENDIF
+cc
+CC----------------------------------------------------------------------------------------------
+cremoval of refined functions from the connectivity tables of the patch elements
+cand of the children that are refined: 0 instead
+CC----------------------------------------------------------------------------------------------
+cc
+      DO I= 1,L_TAB_FCTCUT
+        INCTRL=TAB_FCTCUT(I)
+        DO J=1,TABCONPATCH%L_TAB_IG3D
+          IEL=TABCONPATCH%TAB_IG3D(J)
+          DO ITNCTRL=1,KXIG3D(3,IEL)
+            IF(IXIG3D(KXIG3D(4,IEL)+ITNCTRL-1)==INCTRL) THEN
+              IXIG3D(KXIG3D(4,IEL)+ITNCTRL-1) = 0
+            ENDIF
+          ENDDO
+          DO K=1,IDFILS(1,IEL)
+            JEL=IDFILS(K+1,IEL)
+            DO ITNCTRL=1,KXIG3D(3,JEL)
+              IF(IXIG3D(KXIG3D(4,JEL)+ITNCTRL-1)==INCTRL) THEN
+                IXIG3D(KXIG3D(4,JEL)+ITNCTRL-1) = 0
+              ENDIF
+            ENDDO
+          ENDDO
+        ENDDO
+      ENDDO
+cc
+CC----------------------------------------------------------------------------------------------
+cprocessing of the connectivity tables of the patch elements:
+caddition of new functions created by the refinement
+cc   NB : POURRAIT ETRE LARGEMENT AMELIORE (BOUCLES DO WHILE)
+CC----------------------------------------------------------------------------------------------
+cc
+      DO I=1,TABCONPATCH%L_TAB_IG3D
+        IEL=TABCONPATCH%TAB_IG3D(I)
+        J=1
+        K=OFFSET_NEWFCT
+        DECALGEO=(TABCONPATCH%PID-1)*(NUMNOD+NBNEWX_TMP)
+        DO WHILE(J<=KXIG3D(3,IEL))
+          DO WHILE (IXIG3D(KXIG3D(4,IEL)+J-1)==0.AND.J<=KXIG3D(3,IEL))
+            DO WHILE (IXIG3D(KXIG3D(4,IEL)+J-1)==0.AND.K<=L_TAB_NEWFCT-1)
+c
+              EL_CONNECT(IEL)=1 ! the connectivity table of this element will need to be updated
+c
+1000          K=K+1
+c              IF(K>L_TAB_NEWFCT) CYCLE ! secures the loop
+              INCTRL = TAB_NEWFCT(K)
+              DO L=1,L_TAB_REMOVE
+                IF(TAB_REMOVE(L)==INCTRL) GOTO 1000
+              ENDDO
+              DO L=1,KXIG3D(3,IEL)
+                IF(IXIG3D(KXIG3D(4,IEL)+L-1)==INCTRL) GOTO 1000
+              ENDDO
+c
+              IF(KNOTLOCEL(1,DIR,IEL)<(KNOTLOCPC(1,DIR,DECALGEO+INCTRL)-TOL).OR.
+     .           KNOTLOCEL(2,DIR,IEL)>(KNOTLOCPC(DEG+1,DIR,DECALGEO+INCTRL)+TOL)) CYCLE
+              IF(KNOTLOCEL(1,DIRTANG1,IEL)<(KNOTLOCPC(1,DIRTANG1,DECALGEO+INCTRL)-TOL).OR.
+     .           KNOTLOCEL(2,DIRTANG1,IEL)>(KNOTLOCPC(DEGTANG1+1,DIRTANG1,DECALGEO+INCTRL)+TOL)) CYCLE
+              IF(KNOTLOCEL(1,DIRTANG2,IEL)<(KNOTLOCPC(1,DIRTANG2,DECALGEO+INCTRL)-TOL).OR.
+     .           KNOTLOCEL(2,DIRTANG2,IEL)>(KNOTLOCPC(DEGTANG2+1,DIRTANG2,DECALGEO+INCTRL)+TOL)) CYCLE
+              IXIG3D(KXIG3D(4,IEL)+J-1) = INCTRL
+            ENDDO
+            J=J+1
+          ENDDO
+          J=J+1
+        ENDDO
+cc
+CC----------------------------------------------------------------------------------------------
+cc    TRAITEMENT SIMILAIRE DES FILS DE CES ELEMENTS (ON POURRAIT COMPACTER LES TWO ENSEMBLES EN ONE)
+CC----------------------------------------------------------------------------------------------
+cc
+        DO ITFILS=1,IDFILS(1,IEL)
+          JEL=IDFILS(ITFILS+1,IEL)
+          J=1
+          K=OFFSET_NEWFCT
+          DECALGEO=(TABCONPATCH%PID-1)*(NUMNOD+NBNEWX_TMP)
+          DO WHILE(J<=KXIG3D(3,JEL))
+            DO WHILE (IXIG3D(KXIG3D(4,JEL)+J-1)==0.AND.J<=KXIG3D(3,JEL))
+              DO WHILE (IXIG3D(KXIG3D(4,JEL)+J-1)==0.AND.K<=L_TAB_NEWFCT-1)
+c
+                EL_CONNECT(JEL)=1 ! the connectivity table of this element will need to be updated
+c
+2000            K=K+1
+c                IF(K>L_TAB_NEWFCT) CYCLE ! secures the loop
+                INCTRL = TAB_NEWFCT(K)
+                DO L=1,L_TAB_REMOVE
+                  IF(TAB_REMOVE(L)==INCTRL) GOTO 2000
+                ENDDO
+                DO L=1,KXIG3D(3,JEL)
+                  IF(IXIG3D(KXIG3D(4,JEL)+L-1)==INCTRL) GOTO 2000
+                ENDDO
+c
+                IF(KNOTLOCEL(1,DIR,JEL)<(KNOTLOCPC(1,DIR,DECALGEO+INCTRL)-TOL).OR.
+     .             KNOTLOCEL(2,DIR,JEL)>(KNOTLOCPC(DEG+1,DIR,DECALGEO+INCTRL)+TOL)) CYCLE
+                IF(KNOTLOCEL(1,DIRTANG1,JEL)<(KNOTLOCPC(1,DIRTANG1,DECALGEO+INCTRL)-TOL).OR.
+     .             KNOTLOCEL(2,DIRTANG1,JEL)>(KNOTLOCPC(DEGTANG1+1,DIRTANG1,DECALGEO+INCTRL)+TOL)) CYCLE
+                IF(KNOTLOCEL(1,DIRTANG2,JEL)<(KNOTLOCPC(1,DIRTANG2,DECALGEO+INCTRL)-TOL).OR.
+     .             KNOTLOCEL(2,DIRTANG2,JEL)>(KNOTLOCPC(DEGTANG2+1,DIRTANG2,DECALGEO+INCTRL)+TOL)) CYCLE
+                IXIG3D(KXIG3D(4,JEL)+J-1) = INCTRL
+              ENDDO
+              J=J+1
+            ENDDO
+            J=J+1
+          ENDDO
+        ENDDO
+      ENDDO
+cc
+CC----------------------------------------------------------------------------------------------
+ccheck that there are no more zeros in the connectivity table
+cotherwise the refinement is not correct (risk of
+ctoo many functions per element)
+CC----------------------------------------------------------------------------------------------
+cc
+      IF(FLAG_DEBUG==1) THEN
+        DO I=1,SIXIG3D+ADDSIXIG3D
+          IF(IXIG3D(I)==0) PRINT*,'IL Y A ONE ZERO', IXIG3D(I), I
+        ENDDO
+      ENDIF
+c
+      RETURN
+      END
+
+

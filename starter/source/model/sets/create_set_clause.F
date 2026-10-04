@@ -1,0 +1,432 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_set_array     ../starter/source/model/sets/create_set_clause.F
+!||--- called by ------------------------------------------------------
+!||    hm_set               ../starter/source/model/sets/hm_set.F
+!||    sort_set             ../starter/source/model/sets/sort_sets.F
+!||--- calls      -----------------------------------------------------
+!||    create_set_list      ../starter/source/model/sets/create_set_clause.F
+!||    create_set_list_g    ../starter/source/model/sets/create_set_clause.F
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod   ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod          ../starter/share/message_module/message_mod.F
+!||    submodel_mod         ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_SET_ARRAY(SET_ARRAY ,ARRAY_SIZE, 
+     .                            ISETM  , NSET_GENERAL,
+     .                            JCLAUSE ,OPT_G ,IS_AVAILABLE ,
+     .                            LSUBMODEL,CLAUSE,FLAG)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Treat the PART Clause, read PARTs from HM_READER & fill clause
+C   Calls CREATE_PART_LIST (simple list)
+C   Calls CREATE_PART_LIST_G (PART_G : All parts from a MIN to MAX with increment)
+C------------------------------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     CLAUSE        (SET structure) Clause to be treated
+C     IPARTM1       MAP Table UID -> LocalID
+C     JCLAUSE       parameter with HM_READER (current clause read)
+C     Opt_G         Opt_G operator 1 if PART_G is set, 0 else
+C     IS_AVAILABLE  Bool / Result of HM_interface
+C     LSUBMODEL     SUBMODEL Structure.
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SETDEF_MOD
+      USE SUBMODEL_MOD
+      USE MESSAGE_MOD
+      USE HM_OPTION_READ_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER JCLAUSE,OPT_G,ARRAY_SIZE,NSET_GENERAL,FLAG
+      LOGICAL :: IS_AVAILABLE
+      INTEGER, INTENT(IN), DIMENSION(NSETS,2) :: ISETM
+C-----------------------------------------------
+      TYPE (SET_) ::  CLAUSE
+      INTEGER SET_ARRAY(*)
+      TYPE(SUBMODEL_DATA),INTENT(IN):: LSUBMODEL(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+!
+        IF (OPT_G == 1 ) THEN
+             CALL CREATE_SET_LIST_G(SET_ARRAY, ARRAY_SIZE ,ISETM ,NSET_GENERAL ,JCLAUSE ,IS_AVAILABLE ,LSUBMODEL)
+        ELSE
+             CALL CREATE_SET_LIST  (SET_ARRAY, ARRAY_SIZE ,ISETM ,NSET_GENERAL ,JCLAUSE ,IS_AVAILABLE ,LSUBMODEL,
+     .                              CLAUSE   ,FLAG)
+        ENDIF
+C-----------------------------------------------
+      END
+!||====================================================================
+!||    create_set_list             ../starter/source/model/sets/create_set_clause.F
+!||--- called by ------------------------------------------------------
+!||    create_set_array            ../starter/source/model/sets/create_set_clause.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                      ../starter/source/output/message/message.F
+!||    hm_get_int_array_2indexes   ../starter/source/devtools/hm_reader/hm_get_int_array_2indexes.F
+!||    hm_get_int_array_index      ../starter/source/devtools/hm_reader/hm_get_int_array_index.F
+!||    set_usrtos                  ../starter/source/model/sets/ipartm1.F
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod          ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod                 ../starter/share/message_module/message_mod.F
+!||    submodel_mod                ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_SET_LIST(
+     .               ARRAY, ARRAY_SIZE, ISETM ,NSET_GENERAL ,JCLAUSE ,IS_AVAILABLE ,LSUBMODEL,
+     .               CLAUSE,FLAG)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Create PART Clause from LIST
+C------------------------------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     CLAUSE        (SET structure) Clause to be treated
+C     IPARTM1       MAP Table UID -> LocalID
+C     JCLAUSE       parameter with HM_READER (current clause read)
+C     IS_AVAILABLE  Bool / Result of HM_interface
+C     LSUBMODEL     SUBMODEL Structure.
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SETDEF_MOD
+      USE SUBMODEL_MOD
+      USE MESSAGE_MOD
+      USE HM_OPTION_READ_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER JCLAUSE, ARRAY_SIZE,NSET_GENERAL,FLAG
+      LOGICAL :: IS_AVAILABLE
+      INTEGER, INTENT(IN), DIMENSION(NSET_GENERAL,2) :: ISETM
+      INTEGER ARRAY(*)
+      TYPE (SET_) ::  CLAUSE
+      TYPE(SUBMODEL_DATA),INTENT(IN):: LSUBMODEL(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,IDS,NINDX,LIST_SIZE,IDS_MAX,SETM
+      INTEGER IWORK(70000)
+!
+      INTEGER, ALLOCATABLE, DIMENSION(:) :: SET_READ_TMP,INDEX
+C
+      INTEGER SET_USRTOS
+      EXTERNAL SET_USRTOS
+C=======================================================================
+
+      ARRAY_SIZE=0
+
+      CALL HM_GET_INT_ARRAY_INDEX('idsmax' ,IDS_MAX ,JCLAUSE,IS_AVAILABLE,LSUBMODEL)
+
+      call my_alloc(SET_READ_TMP, IDS_MAX, "SET_READ_TMP")
+      SET_READ_TMP(1:IDS_MAX) = 0
+
+      call my_alloc(INDEX, 2*IDS_MAX, "INDEX")
+      INDEX = 0
+
+      NINDX = 0
+      LIST_SIZE = 0
+
+      ! Read & convert Part list
+      ! -------------------------
+      DO I=1,IDS_MAX
+         CALL HM_GET_INT_ARRAY_2INDEXES('ids',IDS,JCLAUSE,I,IS_AVAILABLE,LSUBMODEL)
+!
+         SETM = SET_USRTOS(IDS,ISETM,NSET_GENERAL)
+
+         IF(SETM > 0)THEN                 ! 0 if SET was not found
+           SETM=ISETM(SETM,2)
+           NINDX=NINDX+1                   !   nb of CLAUSE sets
+           SET_READ_TMP(NINDX) = SETM
+         ELSEIF (FLAG == 1) THEN
+           ! SET was not found. Issue a Warning & Skip.
+           CALL ANCMSG(MSGID=1902,ANMODE=ANINFO,
+     .                             MSGTYPE=MSGWARNING,
+     .                             I1 = CLAUSE%SET_ID,
+     .                             I2=IDS,
+     .                             C1=TRIM(CLAUSE%TITLE),
+     .                             C2='SET')
+         ENDIF
+      ENDDO ! DO K=1,IDS_MAX
+
+      ! Sort the Readed SETs and remove eventual duplicates
+      ! ---------------------------------------------------- 
+
+      DO I=1,NINDX
+        INDEX(I) = I
+      ENDDO
+      CALL MY_ORDERS(0,IWORK,SET_READ_TMP,INDEX,NINDX,1)
+
+      DO I=1,NINDX
+        ARRAY(I)=SET_READ_TMP(INDEX(I))
+      ENDDO
+
+      CALL REMOVE_DUPLICATES( ARRAY,NINDX,LIST_SIZE)
+
+      ! Copy in final SET
+      ! ------------------
+      ARRAY_SIZE = LIST_SIZE  
+      
+!---
+
+C-------------------------
+       CALL MY_DEALLOC(SET_READ_TMP)
+       CALL MY_DEALLOC(INDEX)
+C-------------------------
+      RETURN
+      END
+
+!||====================================================================
+!||    create_set_list_g           ../starter/source/model/sets/create_set_clause.F
+!||--- called by ------------------------------------------------------
+!||    create_set_array            ../starter/source/model/sets/create_set_clause.F
+!||--- calls      -----------------------------------------------------
+!||    hm_get_int_array_2indexes   ../starter/source/devtools/hm_reader/hm_get_int_array_2indexes.F
+!||    hm_get_int_array_index      ../starter/source/devtools/hm_reader/hm_get_int_array_index.F
+!||    set_usrtos_nearest          ../starter/source/model/sets/ipartm1.F
+!||--- uses       -----------------------------------------------------
+!||    hm_option_read_mod          ../starter/share/modules1/hm_option_read_mod.F
+!||    message_mod                 ../starter/share/message_module/message_mod.F
+!||    submodel_mod                ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_SET_LIST_G(
+     .               ARRAY, ARRAY_SIZE,  ISETM, NSET_GENERAL, JCLAUSE ,IS_AVAILABLE ,LSUBMODEL)
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Create PART Clause from Generation All parts from Min to Max with Increment (Opt_G)
+C--------------------------------------------------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     CLAUSE        (SET structure) Clause to be treated
+C     IPARTM1       MAP Table UID -> LocalID
+C     JCLAUSE       parameter with HM_READER (current clause read)
+C     IS_AVAILABLE  Bool / Result of HM_interface
+C     LSUBMODEL     SUBMODEL Structure.
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SETDEF_MOD
+      USE SUBMODEL_MOD
+      USE MESSAGE_MOD
+      USE HM_OPTION_READ_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER JCLAUSE,ARRAY_SIZE, NSET_GENERAL
+      INTEGER ARRAY(ARRAY_SIZE)
+      LOGICAL :: IS_AVAILABLE
+      INTEGER, INTENT(IN), DIMENSION(NSETS,2) :: ISETM
+!
+      
+      TYPE(SUBMODEL_DATA),INTENT(IN):: LSUBMODEL(*)
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER GENE_MAX,K,P,P1
+      INTEGER START_GENE,END_GENE,INCR_GENE,PSTART,PSTOP,STACK,STACK_ONE,NB_RESULT
+      INTEGER, ALLOCATABLE, DIMENSION(:) :: SET_READ_TMP,SET_READ_ONE,RESULT
+C
+      INTEGER  SET_USRTOS_NEAREST
+      EXTERNAL SET_USRTOS_NEAREST
+C=======================================================================
+      CALL HM_GET_INT_ARRAY_INDEX('genemax' ,GENE_MAX ,JCLAUSE,IS_AVAILABLE,LSUBMODEL)
+
+      call my_alloc(SET_READ_TMP, NSETS, "SET_READ_TMP")
+      call my_alloc(SET_READ_ONE, NSETS, "SET_READ_ONE")
+      call my_alloc(RESULT, NSETS, "RESULT")
+
+      STACK=0
+
+      DO K=1,GENE_MAX
+          CALL HM_GET_INT_ARRAY_2INDEXES('start'  ,START_GENE,JCLAUSE,K,IS_AVAILABLE,LSUBMODEL)
+          CALL HM_GET_INT_ARRAY_2INDEXES('end'    ,END_GENE  ,JCLAUSE,K,IS_AVAILABLE,LSUBMODEL)
+          CALL HM_GET_INT_ARRAY_2INDEXES('by'     ,INCR_GENE ,JCLAUSE,K,IS_AVAILABLE,LSUBMODEL)
+
+          ! set value by default for increment to 1
+          IF (INCR_GENE == 0) INCR_GENE = 1
+
+          PSTART = SET_USRTOS_NEAREST(START_GENE, ISETM, NSET_GENERAL,1)
+          PSTOP  = SET_USRTOS_NEAREST(END_GENE,   ISETM, NSET_GENERAL,2)
+     
+          STACK_ONE=0               ! assemble in SET_READ_ONE Stack_one
+          DO P=PSTART, PSTOP
+             P1 = ISETM(P,1)
+             IF ( MOD( P1-START_GENE , INCR_GENE) == 0)THEN
+                  STACK_ONE = STACK_ONE+1
+                  SET_READ_ONE(STACK_ONE) = ISETM(P,2)
+             ENDIF
+          ENDDO
+
+          IF(STACK==0) THEN
+
+             SET_READ_TMP(1:STACK_ONE) = SET_READ_ONE(1:STACK_ONE)
+             STACK=STACK_ONE
+
+          ELSE
+
+             ! This code will not go if  GENE_MAX == 1 / Result does not need to be allocated
+             CALL UNION_2_SORTED_SETS( SET_READ_TMP, STACK ,
+     *                                 SET_READ_ONE, STACK_ONE ,
+     *                                 RESULT,        NB_RESULT   )
+          SET_READ_TMP(1:NB_RESULT)=RESULT(1:NB_RESULT)
+          STACK = NB_RESULT
+
+          ENDIF
+
+
+      ENDDO
+
+      ARRAY_SIZE = STACK
+      ARRAY(1:STACK) = SET_READ_TMP(1:STACK)
+
+      CALL MY_DEALLOC(SET_READ_ONE)
+      CALL MY_DEALLOC(SET_READ_TMP)
+      CALL MY_DEALLOC(RESULT)
+      END
+!||====================================================================
+!||    create_set_clause      ../starter/source/model/sets/create_set_clause.F
+!||--- called by ------------------------------------------------------
+!||    hm_set                 ../starter/source/model/sets/hm_set.F
+!||--- calls      -----------------------------------------------------
+!||    insert_clause_in_set   ../starter/source/model/sets/insert_clause_in_set.F
+!||--- uses       -----------------------------------------------------
+!||    set_mod                ../starter/share/modules1/set_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_SET_CLAUSE(SET,
+     .                             SETL,SETL_SIZE,
+     .                             CLAUSE,
+     .                             IXS       ,IXS10    ,                      IXQ    ,
+     .                             IXC       ,IXTG     ,IXT       ,IXP       ,IXR    ,
+     .                                                                        SH4TREE,
+     .                             SH3TREE   ,KNOD2ELS ,NOD2ELS   ,KNOD2ELC  ,NOD2ELC,
+     .                             KNOD2ELTG ,NOD2ELTG ,IPARTC    ,IPARTG    ,IPARTS ,
+     .                             IPART     ,OPT_A    ,OPT_O     ,KNOD2ELQ  ,NOD2ELQ,
+     .                             X         ,KEYSET   ,OPT_E     ,DELBUF    ,IPARTQ ,
+     .                             NUMELQ    )
+C-----------------------------------------------
+C   ROUTINE DESCRIPTION :
+C   ===================
+C   Create SET of SET Clause
+C--------------------------------------------------------------------------------------
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME          DESCRIPTION                         
+C
+C     SET           (SET structure) SET ARRAY
+C     SETL          List of SETs from Clause 
+C     SETL_SIZE     Number of SETs from Clause 
+C     CLAUSE        (SET structure) clause to fill.
+C
+C     IXS - KXSP, IGEO : not need in this case, but kept for compatibility.
+C============================================================================
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE SETDEF_MOD
+      USE SET_SCRATCH_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARFIELD
+      USE SET_MOD , ONLY : SET_ADD
+      use element_mod , only : nixs,nixq,nixc,nixt,nixp,nixr,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+#include      "param_c.inc"
+#include      "sphcom.inc"
+#include      "scr17_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER SETL_SIZE,NUMELQ
+      INTEGER  OPT_A,OPT_O,OPT_E
+      INTEGER, DIMENSION(NSETS),    INTENT(IN) :: SETL
+      TYPE (SET_),DIMENSION(NSETS), INTENT(IN) :: SET
+      TYPE (SET_) :: CLAUSE
+      TYPE (SET_SCRATCH) ::  DELBUF
+C
+      INTEGER IXS(NIXS,*),IXS10(6,*),
+     .        IXQ(NIXQ,*),IXC(NIXC,*),IXTG(NIXTG,*),IXT(NIXT,*),
+     .        IXP(NIXP,*),IXR(NIXR,*),
+     .        SH4TREE(*),SH3TREE(*),KNOD2ELS(*),KNOD2ELC(*),KNOD2ELTG(*),
+     .        KNOD2ELQ(*),NOD2ELS(*),NOD2ELC(*),NOD2ELTG(*),NOD2ELQ(*),
+     .        IPARTS(*),IPARTC(*),IPARTG(*),IPART(LIPART1,*),IPARTQ(NUMELQ)
+      my_real X(3,*)
+      CHARACTER(LEN=NCHARFIELD) :: KEYSET
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+       INTEGER I,IGS
+C-----------------------------------------------
+       DO I=1,SETL_SIZE
+          IGS = SETL(I)
+
+          ! Each from list SET is add in the clause with SET_ADD
+          ! The goal is to merge all entities from SET in the clause.
+          ! Call to insert_clause_in_set can be used for that...
+          CALL INSERT_CLAUSE_IN_SET(CLAUSE    ,SET(IGS) ,SET_ADD,
+     .                              IXS       ,IXS10    ,                    IXQ    ,
+     .                              IXC       ,IXTG     ,IXT     ,IXP       ,IXR    ,
+     .                                                                       SH4TREE,
+     .                              SH3TREE   ,KNOD2ELS ,NOD2ELS ,KNOD2ELC  ,NOD2ELC,
+     .                              KNOD2ELTG ,NOD2ELTG ,IPARTC  ,IPARTG    ,IPARTS ,
+     .                              IPART     ,OPT_A    ,OPT_O   ,KNOD2ELQ  ,NOD2ELQ,
+     .                              X         ,KEYSET   ,OPT_E   ,DELBUF    ,IPARTQ)
+C
+       ENDDO
+C-----------------------------------------------
+       END
+
+

@@ -1,0 +1,392 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_mat26            ../starter/source/materials/mat/mat026/hm_read_mat26.F
+!||--- called by ------------------------------------------------------
+!||    hm_read_mat              ../starter/source/materials/mat/hm_read_mat.F90
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                   ../starter/source/output/message/message.F
+!||    hm_get_floatv            ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_get_floatv_dim        ../starter/source/devtools/hm_reader/hm_get_floatv_dim.F
+!||    hm_get_string            ../starter/source/devtools/hm_reader/hm_get_string.F
+!||    hm_option_is_encrypted   ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||    init_mat_keyword         ../starter/source/materials/mat/init_mat_keyword.F
+!||    mrdse2                   ../starter/source/materials/mat/mat026/mrdse2.F
+!||    mrdse3                   ../starter/source/materials/mat/mat026/mrdse3.F
+!||--- uses       -----------------------------------------------------
+!||    elbuftag_mod             ../starter/share/modules1/elbuftag_mod.F
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    submodel_mod             ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_READ_MAT26(
+     .              MTAG     ,PM      ,MAT_ID   ,TITR  ,IPM     ,
+     .              JTHE     ,BUFMAT  ,MFI      ,IDF   ,LSUBMODEL,
+     .              UNITAB   ,MATPARAM)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFTAG_MOD            
+      USE MESSAGE_MOD
+      USE SUBMODEL_MOD
+      USE MATPARAM_DEF_MOD          
+      USE UNITAB_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "scr17_c.inc"
+#include      "units_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(INOUT) :: JTHE,MFI,IDF
+      CHARACTER(LEN=NCHARTITLE) ,INTENT(IN) :: TITR
+      INTEGER, INTENT(IN) :: MAT_ID
+      INTEGER, DIMENSION(NPROPMI) ,INTENT(INOUT) :: IPM
+      my_real, DIMENSION(NPROPM)  ,INTENT(INOUT) :: PM
+      TYPE(UNIT_TYPE_), INTENT(IN) :: UNITAB
+      TYPE(SUBMODEL_DATA), DIMENSION(NSUBMOD),INTENT(IN) :: LSUBMODEL
+      TYPE(MLAW_TAG_), INTENT(INOUT) :: MTAG
+      my_real ,DIMENSION(*), INTENT(INOUT) :: BUFMAT
+      TYPE(MATPARAM_STRUCT_) ,INTENT(INOUT) :: MATPARAM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I1, MAT, NR, NT, IDR, IDT, IDP, IDE, IDQ,ILAW
+      my_real
+     .   YOUNG, ANU, CA, CB, CN, EPSM, SIGM, E0, CC, EPS0, CM, TMELT,
+     .   TMAX, G, C1, XNR, XNT, T0, P0, DPDR,
+     .   XKL, XLAMB, ATOM, SIG, XKMAX, RHO0, DYDZ,RHOR,EPS0_UNIT
+
+      CHARACTER(ncharline) ::  FILE, VIDE
+!
+      LOGICAL :: IS_AVAILABLE,IS_ENCRYPTED
+C=======================================================================
+      ILAW = 26
+      IS_ENCRYPTED   = .FALSE.
+      IS_AVAILABLE = .FALSE.
+!-----------------------
+      CALL HM_OPTION_IS_ENCRYPTED(IS_ENCRYPTED)
+!-----------------------
+      VIDE=
+     .'                                                                '
+!     LINE 1
+      CALL HM_GET_FLOATV('MAT_RHO'      ,RHO0       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('Refer_Rho'    ,RHOR       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!     LINE 2
+      CALL HM_GET_FLOATV('MAT_E'        ,YOUNG      ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_NU'       ,ANU        ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!     LINE 3
+      CALL HM_GET_FLOATV('MAT_SIGY'     ,CA         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_BETA'     ,CB         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_HARD'     ,CN         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_EPS'      ,EPSM       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_SIG'      ,SIGM       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!     LINE 4
+      CALL HM_GET_FLOATV('MAT_E0'       ,E0         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!     LINE 5
+      CALL HM_GET_STRING('SSAM301'      ,FILE       ,ncharline ,IS_AVAILABLE)
+!     LINE 6
+      CALL HM_GET_FLOATV('MAT_SRC'      ,CC         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_SRP'      ,EPS0       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_M'        ,CM         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_TMELT'    ,TMELT      ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_TMAX'     ,TMAX       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!     DEFAULT UNITS
+      CALL HM_GET_FLOATV_DIM('MAT_SRP'  ,EPS0_UNIT  ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!
+      IF (CN == ZERO .OR. CN == ONE) CN = ONEP0001
+      IF (EPSM == ZERO) EPSM = INFINITY
+      IF (SIGM == ZERO) SIGM = INFINITY
+      IF (CC == ZERO)   EPS0 = ONE*EPS0_UNIT
+      IF (CM == ZERO)   CM   = ONE  ! dimensionless
+      IF (TMELT == ZERO)TMELT = INFINITY
+      IF (TMAX == ZERO) TMAX  = INFINITY
+!
+      G=YOUNG/(TWO*(ONE+ANU))
+      C1=YOUNG/(THREE*(ONE-TWO*ANU))
+      IF (RHOR == ZERO) RHOR=RHO0
+      PM(1) = RHOR
+      PM(89)= RHO0
+      PM(20)= YOUNG
+      PM(21)= ANU
+      PM(22)= G
+      PM(23)= E0
+      PM(31)= ZERO
+      PM(32)= C1
+      PM(38)= CA
+      PM(39)= CB
+      PM(40)= CN
+      PM(41)= EPSM
+      PM(42)= SIGM
+      PM(43)= CC
+      PM(44)= EPS0
+      PM(45)= CM
+      PM(46)= TMELT
+      PM(47)= TMAX
+      PM(80)= TMELT
+C--------------------------------------
+C     SESAME
+C--------------------------------------
+!-------------
+!     SESAM301
+!-------------
+C
+      IF(LEN(TRIM(FILE))==0)THEN
+        CALL ANCMSG(MSGID=19,MSGTYPE=MSGERROR,ANMODE=ANINFO,I1=MAT_ID,C1='MATERIAL',C2='MATERIAL',C3=TITR,C4=TRIM(FILE))
+      ELSE
+        OPEN(UNIT=31,FILE=FILE,STATUS='OLD',FORM='FORMATTED',ERR=998)
+      ENDIF
+C
+      READ(31,*) I1,MAT
+      READ(31,'(2E15.0)') XNR,XNT
+      REWIND(31)
+      NR = NINT(XNR)
+      NT = NINT(XNT)
+      PM(25)=NR
+      PM(26)=NT
+      PM(27)=IDF
+      IDR = IDF
+      IDT = IDR + NR
+      IDP = IDT + NT
+      IDE = IDP + NR * NT
+      IDF = IDE + NR * NT
+      MFI = MFI + IDF - IDR
+C
+      BUFMAT(IDR:IDF-1) = ZERO
+C
+      CALL MRDSE2(BUFMAT(IDR),NR,
+     +     BUFMAT(IDT),NT,BUFMAT(IDP),BUFMAT(IDE))
+      CLOSE(31)
+      PM(25)=NR
+      PM(26)=NT
+C
+       CALL MINTP_RE(BUFMAT(IDR),NR,
+     +     BUFMAT(IDT),NT,BUFMAT(IDE),RHO0,T0,E0/RHO0,DYDZ)
+       CALL MINTP_RT(BUFMAT(IDR),NR,
+     +     BUFMAT(IDT),NT,BUFMAT(IDP),RHO0,T0,P0,DPDR)
+C
+      WRITE(IOUT,1100) TRIM(TITR),MAT_ID,ILAW
+      WRITE(IOUT,1000)
+      IF (IS_ENCRYPTED) THEN
+        WRITE(IOUT,'(5X,A,//)')'CONFIDENTIAL DATA'
+      ELSE
+        WRITE(IOUT,1200) RHO0,RHOR
+        WRITE(IOUT,1300) YOUNG,ANU,G
+        WRITE(IOUT,1400) CA,CB,CN,EPSM,SIGM
+        WRITE(IOUT,1500) FILE(1:LEN(TRIM(FILE))),P0,T0,E0
+        WRITE(IOUT,1600) CC,EPS0,CM,TMELT,TMAX
+      ENDIF
+C
+      IF (EPS0 == ZERO) THEN
+         CALL ANCMSG(MSGID=298,
+     .               MSGTYPE=MSGERROR,
+     .               ANMODE=ANINFO,
+     .               I1=26,
+     .               I2=MAT_ID,
+     .               C1=TITR)
+      ENDIF
+C
+      SIG  = ZERO
+      XKMAX = INFINITY
+      FILE = VIDE
+!-------------
+!     SESAM504
+!-------------
+!     LINE 7
+      CALL HM_GET_STRING('SSAM504'      ,FILE       ,ncharline ,IS_AVAILABLE)
+!     LINE 8
+      CALL HM_GET_FLOATV('K_Lor'        ,XKL        ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_Lamda'    ,XLAMB      ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_A'        ,ATOM       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_K'        ,XKMAX      ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!
+      IF (FILE /= VIDE) JTHE = 1
+      IF (XKMAX ==ZERO) XKMAX = INFINITY
+!
+      IF (JTHE /= 0) THEN
+        IF(LEN(TRIM(FILE))==0)THEN
+          CALL ANCMSG(MSGID=19,MSGTYPE=MSGERROR,ANMODE=ANINFO,I1=MAT_ID,C1='MATERIAL',C2='MATERIAL',C3=TITR,C4=TRIM(FILE))
+        ELSE      
+          OPEN(UNIT=31,FILE=FILE,STATUS='OLD',FORM='FORMATTED',ERR=998)
+        ENDIF
+        READ(31,*) I1,MAT
+        READ(31,'(2E15.0)') XNR,XNT
+        REWIND(31)
+        NR = NINT(XNR)
+        NT = NINT(XNT)
+        PM(28)=NR
+        PM(29)=NT
+        PM(30)=IDF
+        IDR = IDF
+        IDT = IDR + NR
+        IDQ = IDT + NT
+        IDF = IDQ + NR * NT
+        MFI = MFI + IDF - IDR
+C
+        BUFMAT(IDR:IDF-1) = ZERO
+C
+        CALL MRDSE3(BUFMAT(IDR),NR,BUFMAT(IDT),NT,BUFMAT(IDQ))
+        CLOSE(31)
+        PM(35)=XKL
+        PM(36)=XLAMB
+        PM(37)=ATOM
+!
+!!        PM(69)=INFINITY
+!
+!!        WRITE(IOUT,1700) TRIM(FILE),XKL,XLAMB,ATOM,XKMAX
+        WRITE(IOUT,1700) FILE(1:LEN(TRIM(FILE))),XKL,XLAMB,ATOM,XKMAX
+      ENDIF ! IF (JTHE /= 0)
+!-------------
+!     SESAM502
+!-------------
+!     LINE 9
+      CALL HM_GET_STRING('SSAM502'      ,FILE       ,ncharline ,IS_AVAILABLE)
+!     LINE 10
+      CALL HM_GET_FLOATV('Sigma_k'      ,SIG        ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+!
+      IF (SIG > ZERO) THEN
+        IF(LEN(TRIM(FILE))==0)THEN
+          CALL ANCMSG(MSGID=19,MSGTYPE=MSGERROR,ANMODE=ANINFO,I1=MAT_ID,C1='MATERIAL',C2='MATERIAL',C3=TITR,C4=TRIM(FILE))
+        ELSE      
+          OPEN(UNIT=31,FILE=FILE,STATUS='OLD',FORM='FORMATTED',ERR=998)
+        ENDIF
+        READ(31,*)I1,MAT
+        READ(31,'(2E15.0)')XNR,XNT
+        REWIND(31)
+        NR = NINT(XNR)
+        NT = NINT(XNT)
+        PM(48)=NR
+        PM(49)=NT
+        PM(50)=IDF
+        IDR = IDF
+        IDT = IDR + NR
+        IDQ = IDT + NT
+        IDF = IDQ + NR * NT 
+        MFI = MFI + IDF - IDR
+C
+        BUFMAT(IDR:IDF-1) = ZERO
+C 
+        CALL MRDSE3(BUFMAT(IDR),NR,BUFMAT(IDT),NT,BUFMAT(IDQ))
+        CLOSE(31)
+       ENDIF
+!!       IF (JTHE /= 0 .AND. .not. IS_ENCRYPTED) WRITE(IOUT,1800)TRIM(FILE),SIG
+       IF (JTHE /= 0 .AND. .not. IS_ENCRYPTED) WRITE(IOUT,1800)FILE(1:LEN(TRIM(FILE))),SIG
+C
+      PM(51)=SIG
+      PM(52)=XKMAX
+!
+!----------------------
+      JTHE = 0 !                                 
+!----------------------
+!
+c
+C---- Definition of internal variables (Elementary storage)
+c
+      MTAG%G_PLA   = 1    
+      MTAG%G_TEMP  = 1    
+      MTAG%G_EPSD  = 1   
+c
+      MTAG%L_PLA   = 1
+      MTAG%L_TEMP  = 1
+      MTAG%L_EPSD  = 1
+      MTAG%L_SSP   = 1
+      MTAG%L_Z     = 1    ! ionization rate
+c
+      ! MATPARAM keywords
+      CALL INIT_MAT_KEYWORD(MATPARAM,"INCOMPRESSIBLE")
+
+      ! EOS/Thermo keyword for pressure treatment in elements
+      CALL INIT_MAT_KEYWORD(MATPARAM,"HYDRO_EOS")
+
+c
+      ! Properties compatibility
+      CALL INIT_MAT_KEYWORD(MATPARAM,"SOLID_ISOTROPIC")
+c-----------
+      RETURN
+c-----------       
+  998 CONTINUE
+      CALL ANCMSG(MSGID=19,
+     .            MSGTYPE=MSGERROR,
+     .            ANMODE=ANINFO,
+     .            I1=MAT_ID,
+     .            C1='MATERIAL',
+     .            C2='MATERIAL',
+     .            C3=TITR,
+     .            C4=TRIM(FILE))
+      RETURN        
+c-----------
+ 1000 FORMAT(
+     & 5X,'  JOHNSON COOK - SESAME LAW             '  ,/,
+     & 5X,'  -------------------------             ',//)
+ 1100 FORMAT(
+     & 5X,A,/,
+     & 5X,'MATERIAL NUMBER . . . . . . . . . . . .=',I10/,
+     & 5X,'MATERIAL LAW. . . . . . . . . . . . . .=',I10/)
+ 1200 FORMAT(
+     & 5X,'INITIAL DENSITY . . . . . . . . . . . .=',1PG20.13/,
+     & 5X,'REFERENCE DENSITY . . . . . . . . . . .=',1PG20.13/)
+ 1300 FORMAT(
+     & 5X,'YOUNG''S MODULUS . . . . . . . . . . . .=',E12.4/,
+     & 5X,'POISSON''S RATIO . . . . . . . . . . . .=',E12.4/,
+     & 5X,'SHEAR MODULUS . . . . . . . . . . . . .=',E12.4//)
+ 1400 FORMAT(
+     & 5X,'YIELD COEFFICIENT CA. . . . . . . . . .=',E12.4/,
+     & 5X,'YIELD COEFFICIENT CB. . . . . . . . . .=',E12.4/,
+     & 5X,'YIELD COEFFICIENT CN. . . . . . . . . .=',E12.4/,
+     & 5X,'EPS-MAX . . . . . . . . . . . . . . . .=',E12.4/,
+     & 5X,'SIG-MAX . . . . . . . . . . . . . . . .=',E12.4//)
+ 1500 FORMAT(
+     & 5X,'SESAME EOS TABLE :',A/,
+     & 5X,'INITIAL PRESSURE. . . . . . . . . . . .=',E12.4/,
+     & 5X,'INITIAL TEMPERATURE . . . . . . . . . .=',E12.4/,
+     & 5X,'INITIAL INTERNAL ENERGY PER UNIT VOLUME=',E12.4//)
+ 1600 FORMAT(
+     & 5X,'STRAIN RATE COEFFICIENT CC. . . . . . .=',E12.4/,
+     & 5X,'REFERENCE STRAIN RATE . . . . . . . . .=',E12.4/,
+     & 5X,'TEMPERATURE EXPONENT. . . . . . . . . .=',E12.4/,
+     & 5X,'MELTING TEMPERATURE DEGREE K. . . . . .=',E12.4/,
+     & 5X,'THETA-MAX . . . . . . . . . . . . . . .=',E12.4//)
+ 1700 FORMAT(
+     & 5X,'ELECTRON THERMAL CONDUCTIVITY',/,
+     & 5X,'-----------------------------',/,
+     & 5X,'SESAME IONIZATION TABLE :',A/,
+     & 5X,'LORENTZ CONDUCTIVITY COEFFICIENT. . . .=',E12.4/,
+     & 5X,'LAMBDA COEFFICIENT. . . . . . . . . . .=',E12.4/,
+     & 5X,'ATOMIC WEIGHT . . . . . . . . . . . . .=',E12.4/,
+     & 5X,'MAXIMUM CONDUCTIVITY. . . . . . . . . .=',E12.4//)
+ 1800 FORMAT(
+     & 5X,'RADIATION',/,
+     & 5X,'---------',/,
+     & 5X,'SESAME ROSSELAND OPACITY TABLE :',A/,
+     & 5X,'STEFAN-BOLTZMANN CONSTANT . . . . . . .=',E12.4//)
+c-----------
+      RETURN
+      END
+c-----------

@@ -1,0 +1,110 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    create_node_from_rbody   ../starter/source/model/sets/create_node_from_rbody.F
+!||--- called by ------------------------------------------------------
+!||    hm_set                   ../starter/source/model/sets/hm_set.F
+!||--- calls      -----------------------------------------------------
+!||    tag_node_from_rbody      ../starter/source/model/sets/tag_node_from_rbody.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE CREATE_NODE_FROM_RBODY(RBY_MSN,CLAUSE)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+      USE SETDEF_MOD
+      use my_alloc_mod
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com04_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER, INTENT(IN), DIMENSION(2,NRBODY) :: RBY_MSN
+!
+      TYPE (SET_) ::  CLAUSE
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,IND,LIMIT
+      INTEGER, ALLOCATABLE, DIMENSION(:) :: TAGNOD,CLAUSE_NODE
+      INTEGER IWORK(70000)
+      INTEGER, DIMENSION(:),ALLOCATABLE:: IDX,SORT
+C=======================================================================
+!
+      call my_alloc(TAGNOD, NUMNOD, "TAGNOD")
+      TAGNOD(:) = 0
+      call my_alloc(CLAUSE_NODE, NUMNOD, "CLAUSE_NODE")
+
+      IND=0
+!
+      ! RBODY
+      IF ( CLAUSE%NB_RBODY > 0 )
+     . CALL TAG_NODE_FROM_RBODY(
+     .                          CLAUSE%NB_RBODY ,CLAUSE%RBODY ,CLAUSE_NODE,IND,
+     .                          TAGNOD          ,RBY_MSN      )
+C-----------
+      LIMIT = NUMNOD/2
+      IF (IND < LIMIT)THEN     ! cheaper to use Order on small node groups
+        call my_alloc(IDX, 2*IND, "IDX")
+        call my_alloc(SORT, IND, "SORT")
+        SORT(1:IND) = CLAUSE_NODE(1:IND)
+        CALL MY_ORDERS(0,IWORK,SORT,IDX,IND,1)
+
+        DO I=1,IND
+          CLAUSE_NODE(I) = SORT(IDX(I))
+        ENDDO
+        CALL MY_DEALLOC(IDX)
+        CALL MY_DEALLOC(SORT)
+      ELSE
+       IND = 0
+       DO I=1,NUMNOD
+         IF (TAGNOD(I) == 1) THEN
+           IND = IND + 1
+           CLAUSE_NODE(IND) = I
+         ENDIF
+       ENDDO
+      ENDIF
+!
+! Decide whether the result is stored in an array or in the clause.
+! In certain cases it is useful to store in ARRAY.
+! Example : Clause with delete clause. Nodes must be recreated & merged...
+! ----------------------------------------------------------------------------
+      CLAUSE%NB_NODE = IND
+      IF(ALLOCATED( CLAUSE%NODE )) CALL MY_DEALLOC(CLAUSE%NODE)
+      call my_alloc(CLAUSE%NODE, IND, "CLAUSE%NODE")
+      CLAUSE%NODE(1:IND) = CLAUSE_NODE(1:IND)
+C-----------
+      CALL MY_DEALLOC(TAGNOD)
+      CALL MY_DEALLOC(CLAUSE_NODE)
+C-----------
+      RETURN
+      END

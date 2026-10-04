@@ -1,0 +1,164 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    stat_truss_spmd       ../engine/source/output/sta/stat_truss_spmd.F
+!||--- called by ------------------------------------------------------
+!||    genstat               ../engine/source/output/sta/genstat.F
+!||--- calls      -----------------------------------------------------
+!||    my_orders             ../common_source/tools/sort/my_orders.c
+!||    spmd_iget_partn_sta   ../engine/source/mpi/output/spmd_stat.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod          ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod           ../common_source/modules/elements/element_mod.F90
+!||    my_alloc_mod          ../common_source/tools/memory/my_alloc.F90
+!||    my_dealloc_mod        ../common_source/tools/memory/my_dealloc.F90
+!||====================================================================
+      SUBROUTINE STAT_TRUSS_SPMD(ITAB   ,IPART     ,IXT   ,IPARTT,IPART_STATE,
+     .                           NODTAG ,STAT_INDXT,LENGT ,IPARG ,ELBUF_TAB  ,
+     .                           IDEL      )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE ELBUFDEF_MOD
+      USE MY_ALLOC_MOD
+      use element_mod , only : nixt
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "param_c.inc"
+#include      "scr16_c.inc"
+#include      "scr17_c.inc"
+#include      "spmd_c.inc"
+#include      "task_c.inc"
+#include      "units_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER ITAB(*),IPART(LIPART1,*),IXT(NIXT,*),IPARTT(*),
+     .        IPART_STATE(*),NODTAG(*), STAT_INDXT(*),IPARG(NPARG,*)
+      INTEGER LENGT,IDEL
+      TYPE (ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER I,N,JJ,IPRT,IPRT0,K,II
+      INTEGER NG,NEL,NFT,LFT,LLT,ITY,IOFF
+      INTEGER WORK(70000)
+      INTEGER,DIMENSION(:),ALLOCATABLE :: IADD
+      INTEGER,DIMENSION(:,:),ALLOCATABLE :: IADG
+      INTEGER,DIMENSION(:),ALLOCATABLE :: NP
+      INTEGER,DIMENSION(:),ALLOCATABLE :: NPGLOB
+      INTEGER,DIMENSION(:,:),ALLOCATABLE :: CLEF
+      TYPE(G_BUFEL_)  ,POINTER :: GBUF     
+C-----------------------------------------------
+      call my_alloc(IADD, NPART+1, "IADD")
+      call my_alloc(IADG, NSPMD, NPART, "IADG")
+      call my_alloc(NP, 5*NUMELT, "NP")
+      call my_alloc(NPGLOB, 7*LENGT, "NPGLOB")
+      call my_alloc(CLEF, 2, NUMELTRG, "CLEF")
+C-----------------------------------------------
+C     TRUSS
+C-----------------------------------------------
+      IADD = 0
+      NPGLOB(1:7*LENGT) = 0
+C
+      JJ = 0
+      II = 0
+      DO NG=1,NGROUP
+        ITY = IPARG(5,NG)
+        IF (ITY == 4) THEN
+          NEL = IPARG(2,NG)
+          NFT = IPARG(3,NG)
+          GBUF => ELBUF_TAB(NG)%GBUF   
+          LFT=1
+          LLT=NEL
+c
+          DO I=LFT,LLT
+            N = I + NFT
+            IPRT=IPARTT(N)
+            IF (IPART_STATE(IPRT) /= 0) THEN
+c
+            NP(JJ+1) = IXT(NIXT,N)
+            NP(JJ+2) = ITAB(IXT(2,N))
+            NP(JJ+3) = ITAB(IXT(3,N))
+            NP(JJ+4) = IPRT
+            NP(JJ+5) = IABS(NINT(GBUF%OFF(I)))
+c
+            II = II + 1
+c
+            JJ = JJ + 5
+c
+            STAT_NUMELT = STAT_NUMELT + 1
+c
+            NODTAG(IXT(2,N))=1
+            NODTAG(IXT(3,N))=1
+            ENDIF ! IF (IPART_STATE(IPRT) == 0)
+          ENDDO ! DO I=LFT,LLT
+        ENDIF ! IF (ITY == 4)
+      ENDDO ! DO NG=1,NGROUP
+C----
+      STAT_NUMELT_G = 0
+      CALL SPMD_IGET_PARTN_STA(5,STAT_NUMELT,STAT_NUMELT_G,LENGT,NP,
+     .             IADG,NPGLOB,STAT_INDXT)
+C----
+      IF (ISPMD == 0) THEN
+        DO N=1,STAT_NUMELT_G
+          STAT_INDXT(N)=N
+          CLEF(1,N)=NPGLOB(5*(N-1)+5)
+          CLEF(2,N)=NPGLOB(5*(N-1)+1)
+        ENDDO
+        CALL MY_ORDERS(0,WORK,CLEF,STAT_INDXT,STAT_NUMELT_G,2)
+C----
+        IPRT0=0
+        DO N=1,STAT_NUMELT_G
+          K=STAT_INDXT(N)
+          JJ=5*(K-1)
+          IPRT=NPGLOB(JJ+4)
+          IOFF=NPGLOB(JJ+5)
+          IF (IDEL==0 .OR. (IDEL==1 .AND. IOFF >= 1)) THEN
+            IF (IPRT /= IPRT0) THEN
+              WRITE(IUGEO,'(A,I10)')'/TRUSS/',IPART(4,IPRT)
+              WRITE(IUGEO,'(A)')
+     .      '#TRUSS_ID       NOD1      NOD2'
+              IPRT0=IPRT
+            ENDIF
+            WRITE(IUGEO,'(3I10)') NPGLOB(JJ+1),NPGLOB(JJ+2),NPGLOB(JJ+3)
+          ENDIF !IF (IDEL)
+        ENDDO ! DO N=1,STAT_NUMELT_G
+      ENDIF ! IF (ISPMD == 0)
+C-----------------------------------------------
+      call my_dealloc(IADD)
+      call my_dealloc(IADG)
+      call my_dealloc(NP)
+      call my_dealloc(NPGLOB)
+      call my_dealloc(CLEF)
+      RETURN
+      END

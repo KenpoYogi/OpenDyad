@@ -1,0 +1,153 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    spmd_i18kine_msf_com_poff   ../engine/source/mpi/interfaces/spmd_i18kine_msf_com_poff.F
+!||--- called by ------------------------------------------------------
+!||    i18main_kine_1              ../engine/source/interfaces/int18/i18main_kine.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    spmd_mod                    ../engine/source/mpi/spmd_mod.F90
+!||    tri7box                     ../engine/share/modules/tri7box.F
+!||====================================================================
+      SUBROUTINE SPMD_I18KINE_MSF_COM_POFF(MTF,IAD_ELEM,FR_ELEM,ITAB)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE TRI7BOX
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_MOD
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "task_c.inc"
+#include      "com01_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IAD_ELEM(2,*),FR_ELEM(*),ITAB(*)
+      my_real
+     *    MTF(14,*)
+C-----------------------------------------------
+C   L o c a l  V a r i a b l e s
+C-----------------------------------------------
+#ifdef MPI
+      INTEGER STATUS(MPI_STATUS_SIZE),
+     *        REQ_SI(NSPMD),REQ_RI(NSPMD)
+      INTEGER P, LENRV, IADS(NSPMD+1), IADR(NSPMD+1), IERROR, 
+     * SIZ,LOC_PROC,MSGTYP,J,L,NOD,NB,MSGOFF
+      my_real ,
+     *  DIMENSION(:), ALLOCATABLE :: BBUFS,BBUFR
+      DATA MSGOFF/154/
+C--------------------------------------------------------------------
+      LENRV = (IAD_ELEM(1,NSPMD+1)-IAD_ELEM(1,1))*9
+      ALLOCATE (BBUFS(LENRV),BBUFR(LENRV))
+      LOC_PROC=ISPMD+1
+C Preparation of recv
+      IADR(1) = 1
+      L=1
+      DO P=1,NSPMD
+        IADR(P) = L
+        SIZ = (IAD_ELEM(1,P+1)-IAD_ELEM(1,P))*9
+        IF(SIZ/=0)THEN
+          MSGTYP = MSGOFF 
+          CALL SPMD_IRECV(
+     S      BBUFR(L:L+SIZ-1),SIZ,IT_SPMD(P),MSGTYP,REQ_RI(P))
+            L = L + SIZ
+        ENDIF
+      END DO
+      IADR(NSPMD+1) = L
+
+C   echange messages
+C
+      L=1
+      DO P=1,NSPMD
+         IADS(P)=L
+         DO J=IAD_ELEM(1,P),IAD_ELEM(1,P+1)-1
+            NOD = FR_ELEM(J)
+            BBUFS(L  ) = MTF(1,NOD)
+            BBUFS(L+1) = MTF(2,NOD)
+            BBUFS(L+2) = MTF(3,NOD)
+            BBUFS(L+3) = MTF(4,NOD)
+            BBUFS(L+4) = MTF(5,NOD)
+            BBUFS(L+5) = MTF(6,NOD)
+            BBUFS(L+6) = MTF(7,NOD)
+            BBUFS(L+7) = MTF(8,NOD)
+            BBUFS(L+8) = MTF(9,NOD)
+            L = L + 9
+         ENDDO
+      ENDDO
+      IADS(NSPMD+1)=L
+
+       DO P=1,NSPMD
+       IF(IAD_ELEM(1,P+1)-IAD_ELEM(1,P)>0)THEN
+          MSGTYP = MSGOFF 
+          SIZ = IADS(1+P)-IADS(P)
+          L = IADS(P)
+          CALL SPMD_ISEND(
+     S      BBUFS(L:L+SIZ-1),SIZ,IT_SPMD(P),MSGTYP,REQ_SI(P))
+       ENDIF
+      ENDDO
+
+C--------------------------------------------------------------------
+C Recv
+
+      DO P = 1, NSPMD
+C   test if msg requires to send to complete by test interface
+        NB = IAD_ELEM(1,P+1)-IAD_ELEM(1,P)
+        IF(NB>0)THEN
+          CALL SPMD_WAIT(REQ_RI(P),STATUS)
+          L=IADR(P)
+          DO J=IAD_ELEM(1,P),IAD_ELEM(1,P+1)-1
+              NOD = FR_ELEM(J)
+              MTF(1,NOD)=MTF(1,NOD)+BBUFR(L)
+              MTF(2,NOD)=MTF(2,NOD)+BBUFR(L+1)
+              MTF(3,NOD)=MTF(3,NOD)+BBUFR(L+2)
+              MTF(4,NOD)=MTF(4,NOD)+BBUFR(L+3)
+              MTF(5,NOD)=MTF(5,NOD)+BBUFR(L+4)
+              MTF(6,NOD)=MTF(6,NOD)+BBUFR(L+5)
+              MTF(7,NOD)=MTF(7,NOD)+BBUFR(L+6)
+              MTF(8,NOD)=MTF(8,NOD)+BBUFR(L+7)
+              MTF(9,NOD)=MTF(9,NOD)+BBUFR(L+8)
+              L=L+9
+          ENDDO
+        ENDIF
+      ENDDO
+C End of send
+      DO P = 1, NSPMD
+          SIZ=IADS(P+1)-IADS(P)
+          IF(SIZ>0) THEN
+            CALL SPMD_WAIT(REQ_SI(P),STATUS)
+          ENDIF
+      ENDDO
+
+#endif 
+      RETURN
+      END

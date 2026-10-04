@@ -1,0 +1,115 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    frefvbag      ../engine/source/input/frefvbag.F
+!||--- called by ------------------------------------------------------
+!||    freform       ../engine/source/input/freform.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg        ../engine/source/output/message/message.F
+!||    arret         ../engine/source/system/arret.F
+!||    wriusc2       ../engine/source/input/wriusc2.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod   ../engine/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE FREFVBAG(IKAD,KEY0,KFVBAG)
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IKAD(0:*),KFVBAG
+      CHARACTER KEY0(*)*5
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "units_c.inc"
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IKEY, II, FVID, NSTEP, N1, N2, NBC, N3
+      my_real
+     .        VAL1, VAL2, VAL3
+      CHARACTER KEY2*5
+C
+      IKEY=KFVBAG
+      II=0
+      IF (IKAD(IKEY)==IKAD(IKEY+1)) RETURN
+  100 CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+      READ(IUSC2,'(7X,A5,37X,I5)') KEY2, NBC
+      IF (KEY2=='REMES') THEN
+C /FVMBAG/REMESH
+         WRITE(IIN,'(I10)') 1
+C
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) FVID, NSTEP
+         WRITE(IIN,'(2I10)') FVID, NSTEP
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) VAL1, VAL2, VAL3
+         WRITE(IIN,'(1P3G20.13)') VAL1, VAL2, VAL3
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) VAL1, VAL2, VAL3
+         WRITE(IIN,'(1P3G20.13)') VAL1, VAL2, VAL3
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) VAL1, VAL2, VAL3
+         WRITE(IIN,'(1P3G20.13)') VAL1, VAL2, VAL3
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) VAL1, VAL2, VAL3
+         WRITE(IIN,'(1P3G20.13)') VAL1, VAL2, VAL3
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) N1, N2, N3
+         WRITE(IIN,'(3I10)') N1, N2, N3
+C
+      ELSEIF (KEY2=='MODIF') THEN
+C /FVMBAG/MODIF
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990) FVID
+         WRITE(IIN,'(I10)') FVID
+         II=II+1
+         CALL WRIUSC2(IKAD(IKEY)+II,1,KEY0(IKEY))
+         READ(IUSC2,*,ERR=9990,END=9990)  N1, VAL1, VAL2, N2
+         WRITE(IIN,'(I10,1P2G20.13,I10)') N1, VAL1, VAL2, N2
+      ENDIF
+      II=II+1
+      IF (IKAD(IKEY)+II/=IKAD(IKEY+1)) GO TO 100
+C      
+      RETURN
+C
+ 9990 CONTINUE
+      CALL ANCMSG(MSGID=73,ANMODE=ANINFO,
+     .            C1=KEY0(IKEY))
+      CALL ARRET(0)
+      END

@@ -1,0 +1,243 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    mpi_tools_mod   ../engine/share/modules/mpi_tools_mod.F
+!||--- called by ------------------------------------------------------
+!||    resol           ../engine/source/engine/resol.F
+!||====================================================================
+      MODULE MPI_TOOLS_MOD 
+C-----------------------------------------------
+C   m y _ r e a l
+C-----------------------------------------------
+#include      "my_real.inc"
+C-----------------------------------------------
+C   D e r i v e d   T y p e   D e f i n i t i o n s
+C-----------------------------------------------
+      TYPE MPI_MIN_REAL_STRUCT 
+          my_real :: VAL
+          INTEGER, DIMENSION(:), POINTER  :: TAB
+          INTEGER :: LENGTH_TAB
+          INTEGER, DIMENSION(:,:), POINTER :: BUFFER_TAB
+          my_real, DIMENSION(:), POINTER :: BUFFER_VAL
+          INTEGER, DIMENSION(:), POINTER :: RQ_SEND_VAL
+          INTEGER, DIMENSION(:), POINTER :: RQ_SEND_TAB
+          INTEGER, DIMENSION(:), POINTER :: RQ_RECV_VAL
+          INTEGER, DIMENSION(:), POINTER :: RQ_RECV_TAB
+      END TYPE MPI_MIN_REAL_STRUCT 
+
+      CONTAINS
+
+C
+C Find the minimum value over all processor
+C  - Asynchronous MPI communications: these routines are relevant only
+C  for cases where a lot of computations is done between the two calls.
+C 
+C  TAB = ISPMD 
+C  VAL = ...
+C  CALL MPI_MIN_REAL_BEGIN(VAL,TAB,1,MY_STRUCT)
+C  ! a lot of computations
+C  CALL MPI_MIN_REAL_END(VAL2,TAB2,1,MY_STRUCT)
+C  ! VAL2 is the min of VAL over the processors
+C  ! TAB2 is the TAB of the processor that has the minimum value of VAL
+
+!||====================================================================
+!||    mpi_min_real_begin    ../engine/share/modules/mpi_tools_mod.F
+!||--- called by ------------------------------------------------------
+!||    resol                 ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    message_mod           ../engine/share/message_module/message_mod.F
+!||    my_alloc_mod          ../common_source/tools/memory/my_alloc.F90
+!||    spmd_comm_world_mod   ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+      SUBROUTINE MPI_MIN_REAL_BEGIN(VAL,TAB,STAB,MY_STRUCT) 
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+#include      "implicit_f.inc"
+#include      "r4r8_p.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real, INTENT(IN) :: VAL  ! value to be minimized
+      INTEGER, INTENT(IN) :: STAB !size of integer tab
+      INTEGER, INTENT(IN) :: TAB(STAB) !Tab of integer to send
+      TYPE(MPI_MIN_REAL_STRUCT),  INTENT(INOUT) :: MY_STRUCT 
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER P,IERROR
+      INTEGER MSGTYP
+#ifdef MPI
+
+!     Loop on send and Recv : NSPMD*NSPMD communications
+!     Since there is not collective asynchronous communication
+!     with msmpi.
+
+      call my_alloc(MY_STRUCT%TAB, STAB, "MY_STRUCT%TAB", stat=IERROR)
+      call my_alloc(MY_STRUCT%BUFFER_TAB, STAB, NSPMD, "MY_STRUCT%BUFFER_TAB", stat=IERROR)
+      call my_alloc(MY_STRUCT%BUFFER_VAL, NSPMD, "MY_STRUCT%BUFFER_VAL", stat=IERROR)
+      call my_alloc(MY_STRUCT%RQ_SEND_VAL, NSPMD, "MY_STRUCT%RQ_SEND_VAL", stat=IERROR)
+      call my_alloc(MY_STRUCT%RQ_RECV_VAL, NSPMD, "MY_STRUCT%RQ_RECV_VAL", stat=IERROR)
+      call my_alloc(MY_STRUCT%RQ_SEND_TAB, NSPMD, "MY_STRUCT%RQ_SEND_TAB", stat=IERROR)
+      call my_alloc(MY_STRUCT%RQ_RECV_TAB, NSPMD, "MY_STRUCT%RQ_RECV_TAB", stat=IERROR)
+
+      MY_STRUCT%LENGTH_TAB = STAB
+      MY_STRUCT%VAL = VAL 
+      MY_STRUCT%TAB(1:STAB) = TAB(1:STAB)
+      MY_STRUCT%BUFFER_VAL(ISPMD+1) = VAL 
+      MY_STRUCT%BUFFER_TAB(1:STAB,ISPMD+1) = TAB(1:STAB)
+
+
+      DO P = 1, NSPMD
+        IF( P /= ISPMD +1 ) THEN
+             MSGTYP = 17000 
+             CALL MPI_IRECV(
+     1        MY_STRUCT%BUFFER_VAL(P) ,1,REAL,IT_SPMD(P),MSGTYP,
+     2         SPMD_COMM_WORLD,MY_STRUCT%RQ_RECV_VAL(P),IERROR)
+
+             MSGTYP = 17001 
+             CALL MPI_IRECV(
+     1        MY_STRUCT%BUFFER_TAB(1,P),MY_STRUCT%LENGTH_TAB,MPI_INTEGER,IT_SPMD(P),MSGTYP,
+     2         SPMD_COMM_WORLD,MY_STRUCT%RQ_RECV_TAB(P),IERROR)
+        ENDIF
+      ENDDO
+      DO P = 1, NSPMD
+        IF( P /= ISPMD +1 ) THEN
+             MSGTYP = 17000 
+             CALL MPI_ISEND(
+     1        MY_STRUCT%VAL ,1,REAL,IT_SPMD(P),MSGTYP,
+     2         SPMD_COMM_WORLD,MY_STRUCT%RQ_SEND_VAL(P),IERROR)
+
+             MSGTYP = 17001 
+             CALL MPI_ISEND(
+     1        MY_STRUCT%TAB,MY_STRUCT%LENGTH_TAB,MPI_INTEGER,IT_SPMD(P),MSGTYP,
+     2         SPMD_COMM_WORLD,MY_STRUCT%RQ_SEND_TAB(P),IERROR)
+         ENDIF
+      ENDDO
+
+#endif
+      RETURN
+      END SUBROUTINE MPI_MIN_REAL_BEGIN
+
+!||====================================================================
+!||    mpi_min_real_end      ../engine/share/modules/mpi_tools_mod.F
+!||--- called by ------------------------------------------------------
+!||    resol                 ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||--- uses       -----------------------------------------------------
+!||    message_mod           ../engine/share/message_module/message_mod.F
+!||    my_dealloc_mod        ../common_source/tools/memory/my_dealloc.F90
+!||    spmd_comm_world_mod   ../engine/source/mpi/spmd_comm_world.F90
+!||====================================================================
+      SUBROUTINE MPI_MIN_REAL_END(VAL,TAB,STAB,MY_STRUCT) 
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MESSAGE_MOD
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+        USE SPMD_COMM_WORLD_MOD, ONLY : SPMD_COMM_WORLD
+        use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+#include      "r4r8_p.inc"
+C-----------------------------------------------
+C   M e s s a g e   P a s s i n g
+C-----------------------------------------------
+#include "spmd.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "task_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      my_real, INTENT(INOUT) :: VAL  ! value to be minimized
+      INTEGER, INTENT(IN) :: STAB !size of integer tab
+      INTEGER, INTENT(INOUT) :: TAB(STAB) !Tab of integer to send
+      TYPE(MPI_MIN_REAL_STRUCT),  INTENT(INOUT) :: MY_STRUCT 
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER P,PMIN,IERROR
+#ifdef MPI
+      INTEGER STATUS (MPI_STATUS_SIZE)
+
+       ! WAIT SEND & RECV
+      DO P=1,NSPMD
+        IF(ISPMD + 1 /= P) THEN
+          CALL MPI_WAIT(MY_STRUCT%RQ_SEND_VAL(P),STATUS,IERROR)
+          CALL MPI_WAIT(MY_STRUCT%RQ_SEND_TAB(P),STATUS,IERROR)
+          CALL MPI_WAIT(MY_STRUCT%RQ_RECV_VAL(P),STATUS,IERROR)
+          CALL MPI_WAIT(MY_STRUCT%RQ_RECV_TAB(P),STATUS,IERROR)
+        ENDIF
+      ENDDO
+
+      
+      ! Find the minimum value of VAL and the processor that has it
+      PMIN = 1
+      VAL = MY_STRUCT%BUFFER_VAL(1) 
+      DO P=2,NSPMD
+        IF(VAL > MY_STRUCT%BUFFER_VAL(P)) THEN 
+          VAL = MY_STRUCT%BUFFER_VAL(P)
+          PMIN = P
+        ENDIF
+      ENDDO
+
+      ! TAB <- TAB of the processor that has the mini. value of VAL
+      TAB(1:STAB) = MY_STRUCT%BUFFER_TAB(1:STAB,PMIN)
+
+      call my_dealloc(MY_STRUCT%TAB)
+      call my_dealloc(MY_STRUCT%BUFFER_TAB)
+      call my_dealloc(MY_STRUCT%BUFFER_VAL)
+      call my_dealloc(MY_STRUCT%RQ_SEND_VAL)
+      call my_dealloc(MY_STRUCT%RQ_RECV_VAL)
+      call my_dealloc(MY_STRUCT%RQ_SEND_TAB)
+      call my_dealloc(MY_STRUCT%RQ_RECV_TAB)
+
+#endif
+      RETURN
+      END SUBROUTINE MPI_MIN_REAL_END
+
+
+
+      END MODULE MPI_TOOLS_MOD 
+

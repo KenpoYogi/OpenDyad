@@ -1,0 +1,1195 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+
+!||====================================================================
+!||    nloc_dmg_init      ../starter/source/materials/fail/nloc_dmg_init.F
+!||--- called by ------------------------------------------------------
+!||    initia             ../starter/source/elements/initia/initia.F
+!||--- calls      -----------------------------------------------------
+!||    ancmsg             ../starter/source/output/message/message.F
+!||--- uses       -----------------------------------------------------
+!||    message_mod        ../starter/share/message_module/message_mod.F
+!||====================================================================
+      SUBROUTINE NLOC_DMG_INIT(ELBUF_TAB,NLOC_DMG ,IPARG    ,IXC      ,
+     .                         IXS      ,IXTG     ,AREA     ,DTELEM   ,
+     .                         NUMEL    ,IPM      ,X        ,XREFS    ,
+     .                         XREFC    ,XREFTG   ,MATPARAM )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE MY_ALLOC_MOD
+      USE ELBUFDEF_MOD            
+      USE MESSAGE_MOD
+      USE NLOCAL_REG_MOD
+      USE INOUTFILE_MOD
+      USE MATPARAM_DEF_MOD
+      use element_mod , only : nixs,nixc,nixtg
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+      use my_dealloc_mod, only : my_dealloc
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "param_c.inc"
+#include      "com01_c.inc"
+#include      "com04_c.inc"
+#include      "scr15_c.inc"
+#include      "units_c.inc"
+#include      "r2r_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER NUMEL
+      INTEGER IPARG(NPARG,NGROUP),IXS(NIXS,*),IXC(NIXC,*),IXTG(NIXTG,*)
+      INTEGER IPM(NPROPMI,*)
+      TYPE(ELBUF_STRUCT_), TARGET, DIMENSION(NGROUP) :: ELBUF_TAB
+      TYPE (NLOCAL_STR_) , TARGET                    :: NLOC_DMG 
+      my_real, 
+     .         DIMENSION(NUMELC+NUMELTG),INTENT(IN)  :: AREA 
+      my_real,
+     .         DIMENSION(NUMEL), INTENT(INOUT)       :: DTELEM
+      my_real
+     .   X(3,*),XREFC(4,3,*),XREFTG(3,3,*),XREFS(8,3,*)
+      TYPE (MATPARAM_STRUCT_), DIMENSION(NUMMAT), INTENT(IN) :: MATPARAM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      CHARACTER FILNAM*109, KEYA*80
+      CHARACTER(len=2148) :: TMP_NAME
+      LOGICAL :: ENG_FILE
+      INTEGER I,J,K,NG,NEL,NFT,ITY,NPTT,ILOC,INOD,NNOD,NDEPAR,IMAT,
+     .        L_NLOC,POS,NDD,ISOLID,N,NUMELS_NL,IGTYP,NUMELC_NL,NDDMAX,
+     .        NUMELTG_NL,NPTR,NPTS,IR,IS,ISOLNOD,IO_ERR1,LEN_TMP_NAME,
+     .        IDEB,MATSIZE,ERROR,NELEN_MAX,POSN
+      INTEGER, DIMENSION(8) :: IDXND,NODE_ID
+      INTEGER, DIMENSION(:,:), ALLOCATABLE :: TAGNOD,SOLNOD
+      INTEGER, DIMENSION(:),   ALLOCATABLE :: INDX,IDXI,NMAT,NDDL,
+     .   POSI,ITRI,INDEX,TAGTET,TAGPENT,ISLNOD,NELEN,ITRIN,IDELEM,
+     .   IADDN
+      my_real
+     .   DENS, DTMIN, LEN, SSPNL,NTH1, NTH2,
+     .   Z01(11,11), WF1(11,11), ZN1(12,11),DAMP,WS,LE_MIN,
+     .   DTSCA_AMS,DTSCA_CST_AMS,LE_MAX,SSP, YOUNG, NU,
+     .   DTMINI_AMS,DTMINI_CST_AMS,DTMINI, SHEAR, BULK, RHO
+      my_real, DIMENSION(:,:), ALLOCATABLE ::  
+     .   WARN_LENGHT
+      my_real, DIMENSION(:)  , ALLOCATABLE ::  
+     .   VOLN, VOLU, VOLNOD, VOLSORT
+      my_real ,DIMENSION(:)  , POINTER     :: 
+     .   VOL, THCK
+      TYPE(BUF_NLOC_), POINTER             :: BUFNL
+      TYPE(BUF_NLOCTS_), POINTER           :: BUFNLTS
+      my_real, DIMENSION(:,:), POINTER     :: 
+     .   MASSTH
+      LOGICAL, DIMENSION(8) :: BOOL
+      ! Damping ratio ETA 
+      ! ETA = 0     : Undamped
+      ! 0 < ETA < 1 : Underdamped
+      ! ETA = 1     : Critically damped
+      ! ETA > 1     : Overdamped
+      my_real, PARAMETER                   :: ETA = 0.2D0
+      ! Position of integration points in the 2D shell thickness
+      DATA  Z01/
+     1 0.       ,0.       ,0.       ,0.       ,0.       ,
+     1 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     2 -.5      ,0.5      ,0.       ,0.       ,0.       ,
+     2 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     3 -.5      ,0.       ,0.5      ,0.       ,0.       ,
+     3 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     4 -.5      ,-.1666667,0.1666667,0.5      ,0.       ,
+     4 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     5 -.5      ,-.25     ,0.       ,0.25     ,0.5      ,
+     5 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     6 -.5      ,-.3      ,-.1      ,0.1      ,0.3      ,
+     6 0.5      ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     7 -.5      ,-.3333333,-.1666667,0.0      ,0.1666667,
+     7 0.3333333,0.5      ,0.       ,0.       ,0.       ,0.       ,
+     8 -.5      ,-.3571429,-.2142857,-.0714286,0.0714286,
+     8 0.2142857,0.3571429,0.5      ,0.       ,0.       ,0.       ,
+     9 -.5      ,-.375    ,-.25     ,-.125    ,0.0      ,
+     9 0.125    ,0.25     ,0.375    ,0.5      ,0.       ,0.       ,
+     A -.5      ,-.3888889,-.2777778,-.1666667,-.0555555,
+     A 0.0555555,0.1666667,0.2777778,0.3888889,0.5      ,0.       ,
+     B -.5      ,-.4      ,-.3      ,-.2      ,-.1      ,
+     B 0.       ,0.1      ,0.2      ,0.3      ,0.4      ,0.5      /
+      ! Weights of integration in the 2D shell thickness 
+      DATA  WF1/
+     1 1.       ,0.       ,0.       ,0.       ,0.       ,
+     1 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     2 0.5      ,0.5      ,0.       ,0.       ,0.       ,
+     2 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     3 0.25     ,0.5      ,0.25     ,0.       ,0.       ,
+     3 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     4 0.1666667,0.3333333,0.3333333,0.1666667,0.       ,
+     4 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     5 0.125    ,0.25     ,0.25     ,0.25     ,0.125    ,
+     5 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     6 0.1      ,0.2      ,0.2      ,0.2      ,0.2      ,
+     6 0.1      ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     7 0.0833333,0.1666667,0.1666667,0.1666667,0.1666667,
+     7 0.1666667,0.0833333,0.       ,0.       ,0.       ,0.       ,
+     8 0.0714286,0.1428571,0.1428571,0.1428571,0.1428571,
+     8 0.1428571,0.1428571,0.0714286,0.       ,0.       ,0.       ,
+     9 0.0625   ,0.125    ,0.125    ,0.125    ,0.125    ,
+     9 0.125    ,0.125    ,0.125    ,0.0625   ,0.       ,0.       ,
+     A 0.0555556,0.1111111,0.1111111,0.1111111,0.1111111,
+     A 0.1111111,0.1111111,0.1111111,0.1111111,0.0555556,0.       ,
+     B 0.05     ,0.1      ,0.1      ,0.1      ,0.1      ,
+     B 0.1      ,0.1      ,0.1      ,0.1      ,0.1      ,0.05     /
+      ! Position of nodes in the 2D shell thickness
+      DATA  ZN1/
+     1 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     1 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     2 -.5      ,0.5      ,0.       ,0.       ,0.       ,0.       ,
+     2 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     3 -.5      ,-.25     ,0.25     ,0.5      ,0.       ,0.       ,
+     3 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     4 -.5      ,-.3333333,0.       ,0.3333333,0.5      ,0.       ,
+     4 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     5 -.5      ,-.375    ,-0.125   ,0.125    ,0.375    ,0.5      ,
+     5 0.       ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     6 -.5      ,-.4      ,-.2      ,0.0      ,0.2      ,0.4      ,
+     6 0.5      ,0.       ,0.       ,0.       ,0.       ,0.       ,
+     7 -.5      ,-.4166667,-.25     ,-.0833333,0.0833333,0.25     ,
+     7 0.4166667,0.5      ,0.       ,0.       ,0.       ,0.       ,
+     8 -.5      ,-.4285715,-.2857143,-.1428572,0.0      ,0.1428572,
+     8 0.2857143,0.4285715,0.5      ,0.       ,0.       ,0.       ,     
+     9 -.5      ,-.4375   ,-.3125   ,-.1875   ,-.0625   ,0.0625   ,
+     9 0.1875   ,0.3125   ,0.4375   ,0.5      ,0.       ,0.       ,
+     A -.5      ,-.4444444,-.3333333,-.2222222,-.1111111,0.       ,
+     A 0.1111111,0.2222222,0.3333333,0.4444444,0.5      ,0.       ,
+     B -.5      ,-.45     ,-.35     ,-.25     ,-.15     ,-.05     ,
+     B 0.05     ,0.15     ,0.25     ,0.35     ,0.45     ,0.5      /
+      my_real
+     .  W_GAUSS(9,9),A_GAUSS(9,9),Z_GAUSS(10,9)
+      ! Weights of integration points in the thickshell thickness
+      DATA W_GAUSS / 
+     1 2.               ,0.               ,0.               ,
+     1 0.               ,0.               ,0.               ,
+     1 0.               ,0.               ,0.               ,
+     2 1.               ,1.               ,0.               ,
+     2 0.               ,0.               ,0.               ,
+     2 0.               ,0.               ,0.               ,
+     3 0.555555555555556,0.888888888888889,0.555555555555556,
+     3 0.               ,0.               ,0.               ,
+     3 0.               ,0.               ,0.               ,
+     4 0.347854845137454,0.652145154862546,0.652145154862546,
+     4 0.347854845137454,0.               ,0.               ,
+     4 0.               ,0.               ,0.               ,
+     5 0.236926885056189,0.478628670499366,0.568888888888889,
+     5 0.478628670499366,0.236926885056189,0.               ,
+     5 0.               ,0.               ,0.               ,
+     6 0.171324492379170,0.360761573048139,0.467913934572691,
+     6 0.467913934572691,0.360761573048139,0.171324492379170,
+     6 0.               ,0.               ,0.               ,
+     7 0.129484966168870,0.279705391489277,0.381830050505119,
+     7 0.417959183673469,0.381830050505119,0.279705391489277,
+     7 0.129484966168870,0.               ,0.               ,
+     8 0.101228536290376,0.222381034453374,0.313706645877887,
+     8 0.362683783378362,0.362683783378362,0.313706645877887,
+     8 0.222381034453374,0.101228536290376,0.               ,
+     9 0.081274388361574,0.180648160694857,0.260610696402935,
+     9 0.312347077040003,0.330239355001260,0.312347077040003,
+     9 0.260610696402935,0.180648160694857,0.081274388361574/
+      ! Position of integration points in the thickshell thickness
+      DATA A_GAUSS / 
+     1 0.               ,0.               ,0.               ,
+     1 0.               ,0.               ,0.               ,
+     1 0.               ,0.               ,0.               ,
+     2 -.577350269189626,0.577350269189626,0.               ,
+     2 0.               ,0.               ,0.               ,
+     2 0.               ,0.               ,0.               ,
+     3 -.774596669241483,0.               ,0.774596669241483,
+     3 0.               ,0.               ,0.               ,
+     3 0.               ,0.               ,0.               ,
+     4 -.861136311594053,-.339981043584856,0.339981043584856,
+     4 0.861136311594053,0.               ,0.               ,
+     4 0.               ,0.               ,0.               ,
+     5 -.906179845938664,-.538469310105683,0.               ,
+     5 0.538469310105683,0.906179845938664,0.               ,
+     5 0.               ,0.               ,0.               ,
+     6 -.932469514203152,-.661209386466265,-.238619186083197,
+     6 0.238619186083197,0.661209386466265,0.932469514203152,
+     6 0.               ,0.               ,0.               ,
+     7 -.949107912342759,-.741531185599394,-.405845151377397,
+     7 0.               ,0.405845151377397,0.741531185599394,
+     7 0.949107912342759,0.               ,0.               ,
+     8 -.960289856497536,-.796666477413627,-.525532409916329,
+     8 -.183434642495650,0.183434642495650,0.525532409916329,
+     8 0.796666477413627,0.960289856497536,0.               ,
+     9 -.968160239507626,-.836031107326636,-.613371432700590,
+     9 -.324253423403809,0.               ,0.324253423403809,
+     9 0.613371432700590,0.836031107326636,0.968160239507626/
+      ! Position of nodes in the thickshell thickness
+      DATA Z_GAUSS / 
+     1 0.               ,0.               ,0.               ,
+     1 0.               ,0.               ,0.               ,
+     1 0.               ,0.               ,0.               ,
+     1 0.               ,
+     2 -1.              ,0.               ,1.               ,
+     2 0.               ,0.               ,0.               ,
+     2 0.               ,0.               ,0.               ,
+     2 0.               ,
+     3 -1.              ,-.549193338482966,0.549193338482966,
+     3 1.               ,0.               ,0.               ,
+     3 0.               ,0.               ,0.               ,
+     3 0.               ,
+     4 -1.              ,-.600558677589454,0.               ,
+     4 0.600558677589454,1.               ,0.               ,
+     4 0.               ,0.               ,0.               ,
+     4 0.               ,
+     5 -1.              ,-.812359691877328,-.264578928334038,
+     5 0.264578928334038,0.812359691877328,1.               ,
+     5 0.               ,0.               ,0.               ,
+     5 0.               ,
+     6 -1.              ,-.796839450334708,-.449914286274731,
+     6 0.               ,0.449914286274731,0.796839450334708,
+     6 1.               ,0.               ,0.               ,
+     6 0.               ,
+     7 -1.              ,-.898215824685518,-.584846546513270,
+     7 -.226843756241524,0.226843756241524,0.584846546513270,
+     7 0.898215824685518,1.               ,0.               ,
+     7 0.               ,
+     8 -1.              ,-.878478166955581,-.661099443664978,
+     8 -.354483526205989,0.               ,0.354483526205989,
+     8 0.661099443664978,0.878478166955581,1.               ,
+     8 0.               ,
+     9 -1.              ,-.936320479015252,-.735741735638020,
+     9 -.491001129763160,-.157505717044458,0.157505717044458,
+     9 0.491001129763160,0.735741735638020,0.936320479015252,
+     9 1.               /
+C=======================================================================
+      ! If the non-local method is not used
+      IF (NLOC_DMG%IMOD == 0) THEN
+        NLOC_DMG%NNOD       = 0
+        NLOC_DMG%L_NLOC     = 0
+        NLOC_DMG%NUMELS_NL  = 0
+        NLOC_DMG%NUMELC_NL  = 0
+        NLOC_DMG%NUMELTG_NL = 0
+        NLOC_DMG%NDDMAX     = 0
+        IF (.NOT.ALLOCATED(NLOC_DMG%DENS)) THEN
+          call my_alloc(NLOC_DMG%DENS, 0, "NLOC_DMG%DENS")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%DAMP)) THEN
+          call my_alloc(NLOC_DMG%DAMP, 0, "NLOC_DMG%DAMP")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%LEN)) THEN
+          call my_alloc(NLOC_DMG%LEN, 0, "NLOC_DMG%LEN")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%LE_MAX)) THEN
+          call my_alloc(NLOC_DMG%LE_MAX, 0, "NLOC_DMG%LE_MAX")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%SSPNL)) THEN
+          call my_alloc(NLOC_DMG%SSPNL, 0, "NLOC_DMG%SSPNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%INDX)) THEN
+          call my_alloc(NLOC_DMG%INDX, 0, "NLOC_DMG%INDX")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%POSI)) THEN
+          call my_alloc(NLOC_DMG%POSI, 0, "NLOC_DMG%POSI")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IDXI)) THEN
+          call my_alloc(NLOC_DMG%IDXI, 0, "NLOC_DMG%IDXI")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%ADDCNE)) THEN
+          call my_alloc(NLOC_DMG%ADDCNE, 0, "NLOC_DMG%ADDCNE")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%CNE)) THEN
+          call my_alloc(NLOC_DMG%CNE, 0, "NLOC_DMG%CNE")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IADS)) THEN
+          call my_alloc(NLOC_DMG%IADS, 0, 0, "NLOC_DMG%IADS")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IADC)) THEN
+          call my_alloc(NLOC_DMG%IADC, 0, 0, "NLOC_DMG%IADC")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IADTG)) THEN
+          call my_alloc(NLOC_DMG%IADTG, 0, 0, "NLOC_DMG%IADTG")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%MASS)) THEN
+          call my_alloc(NLOC_DMG%MASS, 0, "NLOC_DMG%MASS")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%MASS0)) THEN
+          call my_alloc(NLOC_DMG%MASS0, 0, "NLOC_DMG%MASS0")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%FNL)) THEN
+          call my_alloc(NLOC_DMG%FNL, 0, 0, "NLOC_DMG%FNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%VNL)) THEN
+          call my_alloc(NLOC_DMG%VNL, 0, "NLOC_DMG%VNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%VNL_OLD)) THEN
+          call my_alloc(NLOC_DMG%VNL_OLD, 0, "NLOC_DMG%VNL_OLD")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%DNL)) THEN
+          call my_alloc(NLOC_DMG%DNL, 0, "NLOC_DMG%DNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%UNL)) THEN
+          call my_alloc(NLOC_DMG%UNL, 0, "NLOC_DMG%UNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%STIFNL)) THEN
+          call my_alloc(NLOC_DMG%STIFNL, 0, 0, "NLOC_DMG%STIFNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%FSKY)) THEN
+          call my_alloc(NLOC_DMG%FSKY, 0, 0, "NLOC_DMG%FSKY")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%STSKY)) THEN
+          call my_alloc(NLOC_DMG%STSKY, 0, 0, "NLOC_DMG%STSKY")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IAD_ELEM)) THEN
+          call my_alloc(NLOC_DMG%IAD_ELEM, 0, "NLOC_DMG%IAD_ELEM")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IAD_SIZE)) THEN
+          call my_alloc(NLOC_DMG%IAD_SIZE, 0, "NLOC_DMG%IAD_SIZE")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%FR_ELEM)) THEN
+          call my_alloc(NLOC_DMG%FR_ELEM, 0, "NLOC_DMG%FR_ELEM")
+        ENDIF
+c        
+      ! If non-local method is used
+      ELSE
+c
+        ! Writing header
+        WRITE(ISTDO,'(A)') ' .. NON-LOCAL STRUCTURE INITIALIZATION'
+c
+        ! Allocation of tables
+        call my_alloc(TAGNOD, NUMNOD, 3, "TAGNOD")
+        call my_alloc(INDX, NUMNOD, "NLOC_DMG_INIT/INDX")
+        call my_alloc(IDXI, NUMNOD, "IDXI")
+        call my_alloc(NDDL, NUMNOD, "NDDL")
+        call my_alloc(NMAT, NUMNOD, "NMAT")
+        call my_alloc(POSI, NUMNOD+1, "POSI")
+        call my_alloc(ISLNOD, NUMELS, "ISLNOD")
+        call my_alloc(SOLNOD, 8, NUMELS, "SOLNOD")
+        call my_alloc(VOLU, NUMELS+NUMELC+NUMELTG, "VOLU")
+        call my_alloc(VOLNOD, NUMELS+NUMELC+NUMELTG, "VOLNOD")
+        call my_alloc(TAGTET, NUMELS, "TAGTET")
+        call my_alloc(TAGPENT, NUMELS, "TAGPENT")
+        call my_alloc(NELEN, NUMNOD, "NELEN")
+        call my_alloc(INDEX, NUMELS+NUMELC+NUMELTG, "INDEX")
+        call my_alloc(ITRI, NUMELS+NUMELC+NUMELTG, "ITRI")
+C
+        IF (NSUBDOM > 0) THEN
+C--       multidomains - original nummat is used
+          MATSIZE = NUMMAT0
+        ELSE
+          MATSIZE = NUMMAT
+        ENDIF
+        CALL MY_ALLOC(WARN_LENGHT,MATSIZE,3,"WARN_LENGHT")
+c   
+        ! Initialization of variables  
+        VOLU(1:NUMELS+NUMELC+NUMELTG) = ZERO
+        VOLNOD(1:NUMELS+NUMELC+NUMELTG) = ZERO
+        INDEX(1:NUMELS+NUMELC+NUMELTG) = 0
+        ITRI(1:NUMELS+NUMELC+NUMELTG) = 0
+        TAGNOD(1:NUMNOD,1:3) = 0
+        TAGTET(1:NUMELS)  = 0
+        TAGPENT(1:NUMELS) = 0
+        NELEN(1:NUMNOD) = 0
+        NUMELS_NL  = 0
+        NUMELC_NL  = 0
+        NUMELTG_NL = 0
+        NDDMAX     = 0
+        WARN_LENGHT(1:MATSIZE,1:3) = ZERO
+c     
+        ! Computation of the volume of elements 
+        DO NG=1,NGROUP
+          ! Flag for non-local regularization
+          ILOC  = IPARG(78,NG)
+          ! Property
+          IGTYP = IPARG(38,NG)
+          ! Number of elements in the group
+          NEL   = IPARG(2,NG)
+          IF (ILOC > 0) THEN
+            ! First element of the group
+            NFT = IPARG(3,NG)
+            ! Type of elements
+            ITY = IPARG(5,NG)
+            ! Formulation of the elements (under-integrated,fully integrated,...)
+            ISOLID = IPARG(23,NG)
+            ! For brick elements
+            IF (ITY == 1) THEN
+              ! Non-supported property
+              IF ((IGTYP /= 14).AND.(IGTYP /= 6).AND.(IGTYP /= 20).AND.(IGTYP /= 21)) THEN 
+                CALL ANCMSG(MSGID=1661,MSGTYPE=MSGERROR,
+     .                   ANMODE=ANINFO_BLIND,I1=IGTYP)               
+              ENDIF
+              ! To detect tetra elements
+              ISOLNOD = IPARG(28,NG)
+              ! Volume of the element
+              VOL => ELBUF_TAB(NG)%GBUF%VOL(1:NEL)
+              ! Index and sorting table
+              DO K = 1,NEL
+                INDEX(NUMELS_NL+K) = K + NFT
+                ITRI(K+NFT) = IXS(11,K+NFT)
+                VOLU(K+NFT) = VOL(K)
+              ENDDO 
+              ! Counting non-local solid elements
+              NUMELS_NL = NUMELS_NL + NEL
+              ! Number of layers
+              NPTT = ELBUF_TAB(NG)%NLAY
+              ! Material Law ID
+              IMAT = IXS(1,1+NFT)
+              ! Tetra 4 element
+              IF (ISOLNOD == 4) THEN 
+                ! Loop over elements
+                DO I=1,NEL
+                  ! Tag tetra element
+                  TAGTET(I+NFT) = 1
+                  ! Loop over tetra nodes
+                  DO J=1,4
+                    ! Number of the nodes
+                    IF (J == 1) K = 2
+                    IF (J == 2) K = 4
+                    IF (J == 3) K = 7
+                    IF (J == 4) K = 6
+                    INOD = IXS(K,I+NFT)
+                    ! Count the elements attached to the node
+                    NELEN(INOD) = NELEN(INOD) + 1
+                    ! Tag the node as non-local
+                    TAGNOD(INOD,1) = 1
+                    ! Tag the number of additional d.o.fs
+                    TAGNOD(INOD,2) = 1
+                    ! If already written and different => error
+                    IF ((TAGNOD(INOD,3) /= 0).AND.(TAGNOD(INOD,3) /= IMAT)) THEN
+                      CALL ANCMSG(MSGID=1656,MSGTYPE=MSGERROR,
+     .                 ANMODE=ANINFO_BLIND_1,I1=INOD,I2=IMAT,I3=TAGNOD(INOD,3))                  
+                    ENDIF
+                    ! Tag the material law id of the node
+                    TAGNOD(INOD,3) = IMAT
+                    ! Nodal volume contribution of current element
+                    VOLNOD(I+NFT) = FOURTH*VOL(I)
+                  ENDDO      
+                ENDDO
+              ! Penta 6 element
+              ELSEIF (ISOLNOD == 6) THEN     
+                ! Loop over elements
+                DO I=1,NEL
+                  ! Tag penta element
+                  TAGPENT(I+NFT) = 1
+                  ! Loop over penta nodes
+                  DO J=1,6
+                    ! Number of the nodes
+                    K = J + 1
+                    IF (J == 4) K = 6
+                    IF (J == 5) K = 7
+                    IF (J == 6) K = 8
+                    INOD = IXS(K,I+NFT)  
+                    ! Count the elements attached to the node
+                    NELEN(INOD) = NELEN(INOD) + 1
+                    ! Tag the node as non-local
+                    TAGNOD(INOD,1) = 1
+                    ! Tag the number of additional d.o.fs
+                    TAGNOD(INOD,2) = NPTT
+                    ! If already written and different => error
+                    IF ((TAGNOD(INOD,3) /= 0).AND.(TAGNOD(INOD,3) /= IMAT)) THEN
+                      CALL ANCMSG(MSGID=1656,MSGTYPE=MSGERROR,
+     .                   ANMODE=ANINFO_BLIND_1,I1=INOD,I2=IMAT,I3=TAGNOD(INOD,3))                  
+                    ENDIF
+                    ! Tag the material law id of the node
+                    TAGNOD(INOD,3) = IMAT       
+                    ! Nodal volume contribution of current element
+                    VOLNOD(I+NFT) = ONE_OVER_6*VOL(I)                 
+                  ENDDO            
+                ENDDO
+              ! Brick element
+              ELSEIF (ISOLNOD == 8) THEN
+                ! Loop over elements
+                DO I = 1,NEL
+                  ! Reset counters
+                  ISLNOD(I+NFT) = 0 
+                  SOLNOD(1:8,I+NFT) = 0
+                  ! Loop over brick nodes to save nodes IDs
+                  DO J=1,8
+                    NODE_ID(J) = IXS(1+J,I+NFT)
+                  ENDDO
+                  ! Sort and find only effective nodes IDs (to detect degenerated bricks)
+                  CALL MYQSORT_INT(8,NODE_ID,IDXND,ERROR)
+                  BOOL(1:8) = .FALSE.
+                  BOOL(IDXND(1)) = .TRUE.
+                  DO J=2,8
+                    IF (NODE_ID(J) /= NODE_ID(J-1)) THEN
+                      BOOL(IDXND(J))=.TRUE.
+                    ENDIF
+                  ENDDO
+                  ! Store effective nodes to compute masses
+                  DO J = 1,8
+                    IF (BOOL(J)) THEN 
+                      ISLNOD(I+NFT) = ISLNOD(I+NFT) + 1
+                      SOLNOD(ISLNOD(I+NFT),I+NFT) = IXS(1+J,I+NFT)
+                    ENDIF 
+                  ENDDO
+                  IF (ISLNOD(I+NFT) < 8) THEN
+                    CALL ANCMSG(MSGID=3106,
+     .                          MSGTYPE=MSGERROR,
+     .                          ANMODE=ANINFO_BLIND_1,
+     .                          I1=IXS(11,I+NFT), 
+     .                          I2=IPM(1,IMAT),  
+     .                          PRMOD=MSG_CUMU)
+                  ENDIF
+                  ! Loop over brick nodes
+                  DO J = 1,ISLNOD(I+NFT)
+                    ! Number of the nodes
+                    INOD = SOLNOD(J,I+NFT)
+                    ! Count the elements attached to the node
+                    NELEN(INOD) = NELEN(INOD) + 1
+                    ! Tag the node as non-local
+                    TAGNOD(INOD,1) = 1 
+                    ! Tag the number of additional d.o.fs
+                    IF (IGTYP == 20 .OR. IGTYP == 21) THEN 
+                      TAGNOD(INOD,2) = NPTT
+                    ELSE
+                      TAGNOD(INOD,2) = 1
+                    ENDIF 
+                    ! If already written and different => error
+                    IF ((TAGNOD(INOD,3) /= 0).AND.(TAGNOD(INOD,3) /= IMAT)) THEN
+                      CALL ANCMSG(MSGID=1656,MSGTYPE=MSGERROR,
+     .                 ANMODE=ANINFO_BLIND_1,I1=INOD,I2=IMAT,I3=TAGNOD(INOD,3))                  
+                    ENDIF
+                    ! Tag the material law id of the node
+                    TAGNOD(INOD,3) = IMAT  
+                    ! Nodal volume contribution of current element
+                    VOLNOD(I+NFT) = (ONE/ISLNOD(I+NFT))*VOL(I)               
+                  ENDDO      
+                ENDDO
+              ELSE
+                ! Quadratic formulations not supported
+                CALL ANCMSG(MSGID=1659,MSGTYPE=MSGERROR,
+     .                     ANMODE=ANINFO_BLIND)                 
+              ENDIF
+            ! For 4-nodes shell elements
+            ELSEIF (ITY == 3) THEN
+              ! Non-supported property
+              IF ((IGTYP /= 1).AND.(IGTYP /= 9)) THEN 
+                CALL ANCMSG(MSGID=1662,MSGTYPE=MSGERROR,
+     .                   ANMODE=ANINFO_BLIND,I1=IGTYP)               
+              ENDIF
+              ! Beginning value in index table
+              IDEB = NUMELS
+              ! Index and sorting table
+              DO K = 1,NEL
+                INDEX(IDEB+NUMELC_NL+K) = K + NFT
+                ITRI(IDEB+K+NFT)        = IXC(7,K+NFT)
+              ENDDO              
+              ! Counting non-local shell elements
+              NUMELC_NL = NUMELC_NL + NEL
+              ! Number of integration points in the thickness
+              NPTT = IPARG(6,NG)
+              ! Material law ID
+              IMAT = IXC(1,1+NFT)
+              ! Thickness of the shell element
+              THCK => ELBUF_TAB(NG)%GBUF%THK(1:NEL) 
+              ! Loop over elements
+              DO I = 1,NEL
+                ! Loop over shell element nodes
+                DO J = 1,4
+                  ! Node number
+                  K = J + 1
+                  INOD = IXC(K,I+NFT)
+                  ! Count the elements attached to the node
+                  NELEN(INOD) = NELEN(INOD) + 1
+                  ! Tag the node as non-local
+                  TAGNOD(INOD,1) = 1
+                  ! If already written and different => error
+                  IF ((TAGNOD(INOD,2) /= 0).AND.(TAGNOD(INOD,2) /= NPTT)) THEN
+                    CALL ANCMSG(MSGID=1657,MSGTYPE=MSGERROR,
+     .               ANMODE=ANINFO_BLIND_1,I1=INOD,I2=NPTT,I3=TAGNOD(INOD,2))                  
+                  ENDIF
+                  ! Tag the number of additional d.o.fs (= NPTT)
+                  TAGNOD(INOD,2) = NPTT
+                  ! If already written and different => error
+                  IF ((TAGNOD(INOD,3) /= 0).AND.(TAGNOD(INOD,3) /= IMAT)) THEN
+                    CALL ANCMSG(MSGID=1656,MSGTYPE=MSGERROR,
+     .               ANMODE=ANINFO_BLIND_1,I1=INOD,I2=IMAT,I3=TAGNOD(INOD,3))                  
+                  ENDIF
+                  ! Tag the material law ID
+                  TAGNOD(INOD,3)  = IMAT
+                  ! Nodal volume contribution of current element
+                  VOLNOD(IDEB+I+NFT) = FOURTH * AREA(NFT+I) * THCK(I)
+                ENDDO      
+              ENDDO  
+            ! For 3-nodes shell elements
+            ELSEIF (ITY == 7) THEN
+              ! Non-supported property
+              IF ((IGTYP /= 1).AND.(IGTYP /= 9)) THEN 
+                CALL ANCMSG(MSGID=1662,MSGTYPE=MSGERROR,
+     .                   ANMODE=ANINFO_BLIND,I1=IGTYP)               
+              ENDIF
+              ! Beginning value in index table
+              IDEB = NUMELS+NUMELC
+              ! Index and sorting table
+              DO K = 1,NEL
+                INDEX(IDEB+NUMELTG_NL+K) = K + NFT
+                ITRI(IDEB+K+NFT)         = IXTG(6,K+NFT)
+              ENDDO 
+              ! Counting non-local triangle shell elements
+              NUMELTG_NL = NUMELTG_NL + NEL
+              ! Number of integration point in the shell thickness
+              NPTT = IPARG(6,NG)
+              ! Material law ID
+              IMAT = IXTG(1,1+NFT)
+              ! Thickness of the shell
+              THCK => ELBUF_TAB(NG)%GBUF%THK(1:NEL) 
+              ! Loop over elements
+              DO I = 1,NEL
+                ! Loop over the nodes of the shell 
+                DO J = 1,3
+                  ! Number of the node
+                  K = J + 1
+                  INOD = IXTG(K,I+NFT)
+                  ! Count the elements attached to the node
+                  NELEN(INOD) = NELEN(INOD) + 1
+                  ! Tag the node as non-local
+                  TAGNOD(INOD,1) = 1
+                  ! If already written and different => error
+                  IF ((TAGNOD(INOD,2) /= ZERO).AND.(TAGNOD(INOD,2) /= NPTT)) THEN
+                    CALL ANCMSG(MSGID=1657,MSGTYPE=MSGERROR,
+     .               ANMODE=ANINFO_BLIND_1,I1=INOD,I2=NPTT,I3=TAGNOD(INOD,2))                  
+                  ENDIF
+                  ! Tag the number of additional d.o.fs (= NPTT)
+                  TAGNOD(INOD,2) = NPTT
+                  ! If already written and different => error
+                  IF ((TAGNOD(INOD,3) /= ZERO).AND.(TAGNOD(INOD,3) /= IMAT)) THEN
+                    CALL ANCMSG(MSGID=1656,MSGTYPE=MSGERROR,
+     .               ANMODE=ANINFO_BLIND_1,I1=INOD,I2=IMAT,I3=TAGNOD(INOD,3))                  
+                  ENDIF
+                  ! Tag the material law ID
+                  TAGNOD(INOD,3) = IMAT
+                  ! Nodal volume contribution of current element
+                  VOLNOD(IDEB+I+NFT) = THIRD * AREA(NUMELC+NFT+I) * THCK(I)
+                ENDDO      
+              ENDDO
+            ! For all other types of elements
+            ELSE
+              CALL ANCMSG(MSGID=1658,MSGTYPE=MSGERROR,
+     .                   ANMODE=ANINFO_BLIND,I1=ITY)   
+            ENDIF
+          ENDIF
+        ENDDO
+C
+        ! Printing out error messages
+        CALL ANCMSG(MSGID=3106,
+     .              MSGTYPE=MSGERROR,
+     .              ANMODE=ANINFO_BLIND_1,
+     .              PRMOD=MSG_PRINT)
+C
+        ! Checking if a DT option is set in the engine file
+        DTMINI_AMS     = ZERO
+        DTMINI_CST_AMS = ZERO
+        FILNAM = ROOTNAM(1:ROOTLEN)//'_0001.rad'
+        LEN_TMP_NAME = INFILE_NAME_LEN+ROOTLEN+9
+        TMP_NAME = INFILE_NAME(1:INFILE_NAME_LEN)//FILNAM(1:ROOTLEN+9)
+        INQUIRE(FILE = TMP_NAME,EXIST = ENG_FILE)
+        IF (ENG_FILE) THEN 
+          ! Opening the engine file
+          OPEN(UNIT=71,FILE=TMP_NAME(1:LEN_TMP_NAME),
+     .       ACCESS='SEQUENTIAL',STATUS='OLD',IOSTAT=IO_ERR1)
+          ! Reading keywords
+ 10       READ(71,'(A)',END=20) KEYA
+          !/DT/AMS
+          IF(KEYA(1:7)=='/DT/AMS') THEN
+ 30         READ(71,'(A)') KEYA
+            IF ((KEYA(1:1)=='#').OR.(KEYA(1:1)=='$')) THEN
+              GOTO 30
+            ELSE
+              BACKSPACE(71)
+            ENDIF
+            READ(71,*) DTSCA_AMS,DTMINI_AMS
+            IF (DTSCA_AMS == ZERO) DTSCA_AMS = ZEP9    
+          ENDIF
+          !/DT/CST_AMS
+          IF(KEYA(1:11)=='/DT/CST_AMS') THEN
+ 40         READ(71,'(A)') KEYA
+            IF ((KEYA(1:1)=='#').OR.(KEYA(1:1)=='$')) THEN
+              GOTO 40
+            ELSE
+              BACKSPACE(71)
+            ENDIF
+            READ(71,*) DTSCA_CST_AMS,DTMINI_CST_AMS
+            IF (DTSCA_CST_AMS == ZERO) DTSCA_CST_AMS = ZEP9    
+          ENDIF
+          ! Back to read the keywords
+          GOTO 10
+ 20       CONTINUE
+          ! Closing the file
+          CLOSE(71)
+        ELSE
+          ! No engine file has been found
+          CALL ANCMSG(MSGID=1730,
+     .                MSGTYPE=MSGWARNING,
+     .                ANMODE=ANINFO_BLIND_2,
+     .                C1=ROOTNAM(1:ROOTLEN)//'_0001.rad')   
+        ENDIF
+        ! Maximum of the minimal timesteps
+        DTMINI = MAX(DTMINI_AMS,DTMINI_CST_AMS)
+C     
+        ! Data on non-local nodes
+        NNOD   = 0 ! Total number of non-local nodes
+        L_NLOC = 0 ! Length of the non-local vectors
+        INDX(1:NUMNOD)   = 0 ! Index of non-local nodes
+        NDDL(1:NUMNOD)   = 0 ! Number of additional d.o.fs for non-local nodes
+        POSI(1:NUMNOD+1) = 0 ! Position of the first degree of freedom for non-local nodes
+        NMAT(1:NUMNOD)   = 0 ! Material of the non-local nodes
+        IDXI(1:NUMNOD)   = 0 ! Inversed of the index table
+        DO I=1,NUMNOD
+          IF (TAGNOD(I,1) == 1) THEN
+            NNOD       = NNOD + 1
+            INDX(NNOD) = I
+            NDDL(NNOD) = TAGNOD(I,2)
+            NMAT(NNOD) = TAGNOD(I,3)
+            POSI(NNOD) = L_NLOC + 1
+            IDXI(I)    = NNOD
+            L_NLOC     = L_NLOC + TAGNOD(I,2)
+          ENDIF
+        ENDDO
+        POSI(NNOD + 1) = L_NLOC + 1 ! Last value of the position
+C
+        ! Sorting tables
+        !   -> Sorting solid elements
+        IF ((NUMELS>0).AND.(NUMELS_NL>0))   CALL QUICKSORT_I2(ITRI, INDEX, 1, NUMELS_NL)
+        !   -> Sorting shell elements
+        IF ((NUMELC>0).AND.(NUMELC_NL>0))   CALL QUICKSORT_I2(ITRI, INDEX, NUMELS+1, NUMELS+NUMELC_NL)
+        !   -> Sorting triangle elements
+        IF ((NUMELTG>0).AND.(NUMELTG_NL>0)) CALL QUICKSORT_I2(ITRI, INDEX, NUMELS+NUMELC+1, NUMELS+NUMELC+NUMELTG_NL)
+C
+        ! Sorting table for PARITH/ON nodal volume computation
+        call my_alloc(IADDN, NNOD, "IADDN")
+        IADDN(1:NNOD) = 0
+        POSN = 0
+        ! -> Address of the first element attached to the node
+        DO I = 1,NUMNOD
+          IF (TAGNOD(I,1) == 1) THEN
+            N = IDXI(I) 
+            IADDN(N) = POSN + 1 
+            POSN = POSN + NELEN(I)
+          ENDIF
+        ENDDO 
+        ! -> Size of the element connectivity table
+        NELEN_MAX = SUM(NELEN(1:NUMNOD))
+        call my_alloc(IDELEM, NELEN_MAX, "IDELEM")
+        IDELEM(1:NELEN_MAX) = 0
+        ! -> Reshape the counter table of attached elements
+        IF (ALLOCATED(NELEN)) CALL MY_DEALLOC(NELEN)
+        call my_alloc(NELEN, NNOD, "NELEN")
+        NELEN(1:NNOD) = 0
+C
+        ! Assembling the volume per node always in the same order
+        ! and automatic computation of the non-local density, and the non-local damping
+        DO J = 1, NUMELS_NL+NUMELC_NL+NUMELTG_NL
+          ! Solid elements
+          IF (J<=NUMELS_NL) THEN 
+            ! Number of the element
+            I = INDEX(J)
+            ! Material number
+            IMAT   = IXS(1,I)
+            ! Soundspeed
+            SHEAR = MATPARAM(IMAT)%SHEAR
+            BULK  = MATPARAM(IMAT)%BULK
+            RHO   = MATPARAM(IMAT)%RHO0
+            SSP   = SQRT((BULK + FOUR_OVER_3*SHEAR)/RHO)
+            ! Element characteristic length
+            LE_MIN = (VOLU(I))**THIRD
+            IF (TAGTET(I)>0) THEN 
+              ! Loop over element nodes
+              DO K = 1,4
+                IF (K == 1) N = IDXI(IXS(2,I))
+                IF (K == 2) N = IDXI(IXS(4,I))
+                IF (K == 3) N = IDXI(IXS(7,I))
+                IF (K == 4) N = IDXI(IXS(6,I))
+                ! Update the number of elements attached to the node
+                NELEN(N) = NELEN(N) + 1
+                ! Save the corresponding element internal number
+                IDELEM(IADDN(N)+NELEN(N)-1) = I
+              ENDDO 
+            ELSEIF (TAGPENT(I)>0) THEN 
+              ! Loop over element nodes
+              DO K = 1,6
+                N = IDXI(IXS(K+1,I))
+                IF (K == 4) N = IDXI(IXS(6,I))
+                IF (K == 5) N = IDXI(IXS(7,I))
+                IF (K == 6) N = IDXI(IXS(8,I))
+                ! Update the number of elements attached to the node
+                NELEN(N) = NELEN(N) + 1
+                ! Save the corresponding element internal number
+                IDELEM(IADDN(N)+NELEN(N)-1) = I
+              ENDDO     
+            ELSE
+              ! Loop over element nodes
+              DO K = 1,ISLNOD(I)
+                N = IDXI(SOLNOD(K,I))
+                ! Update the number of elements attached to the node
+                NELEN(N) = NELEN(N) + 1
+                ! Save the corresponding element internal number
+                IDELEM(IADDN(N)+NELEN(N)-1) = I
+              ENDDO 
+            ENDIF
+          ! Shell elements
+          ELSEIF (J<=NUMELS_NL+NUMELC_NL) THEN
+            ! Number of the element 
+            I = INDEX(NUMELS+J-NUMELS_NL)
+            ! Loop over nodes of the element
+            DO K = 1,4
+              N = IDXI(IXC(K+1,I))
+              ! Update the number of elements attached to the node
+              NELEN(N) = NELEN(N) + 1
+              ! Save the corresponding VOLNOD index (shell offset = NUMELS)
+              IDELEM(IADDN(N)+NELEN(N)-1) = NUMELS + I
+            ENDDO 
+            ! Material number
+            IMAT   = IXC(1,I)
+            ! Soundspeed
+            YOUNG  = MATPARAM(IMAT)%YOUNG
+            NU     = MATPARAM(IMAT)%NU
+            RHO    = MATPARAM(IMAT)%RHO0
+            SSP    = SQRT((YOUNG/(ONE - NU**2))/RHO)
+            ! Element characteristic length
+            LE_MIN = SQRT(AREA(I))       
+          ! Triangle elements
+          ELSEIF (J<=NUMELS_NL+NUMELC_NL+NUMELTG_NL) THEN
+            ! Number of the element
+            I = INDEX(NUMELS+NUMELC+J-NUMELS_NL-NUMELC_NL)
+            ! Loop over nodes of the element
+            DO K = 1,3
+              N = IDXI(IXTG(K+1,I))
+              ! Update the number of elements attached to the node
+              NELEN(N) = NELEN(N) + 1
+              ! Save the corresponding VOLNOD index (triangle offset = NUMELS+NUMELC)
+              IDELEM(IADDN(N)+NELEN(N)-1) = NUMELS + NUMELC + I
+            ENDDO
+            ! Material number
+            IMAT   = IXTG(1,I)
+            ! Soundspeed
+            YOUNG  = MATPARAM(IMAT)%YOUNG
+            NU     = MATPARAM(IMAT)%NU
+            RHO    = MATPARAM(IMAT)%RHO0
+            SSP    = SQRT((YOUNG/(ONE - NU**2))/RHO)
+            ! Element characteristic length
+            LE_MIN = SQRT((FOUR/SQRT(THREE))*AREA(NUMELC + I))      
+          ENDIF
+          ! Recovering the non-local internal length
+          LEN    = NLOC_DMG%LEN(IMAT)
+          ! Computing the theoretical maximal length
+          LE_MAX = NLOC_DMG%LE_MAX(IMAT)
+          IF (LE_MAX == ZERO) THEN 
+            NLOC_DMG%LE_MAX(IMAT) = LE_MIN
+            LE_MAX = LE_MIN
+          ENDIF 
+          ! Computation of the minimal timestep
+          DTMIN = MAX(LE_MAX/SSP,DTMINI)
+          ! Computation of the non-local density
+          DENS = CSTA*(((LEN/MAX(LE_MAX,EM20))**2 + (ONE/TWELVE))*(DTMIN**2))
+          IF (LE_MIN > LE_MAX) THEN 
+            WARN_LENGHT(IMAT,1) = ONE
+            WARN_LENGHT(IMAT,2) = LE_MAX
+            WARN_LENGHT(IMAT,3) = LE_MIN
+          ENDIF
+          ! Computation of non-local damping
+          IF ((DENS < NLOC_DMG%DENS(IMAT)).OR.(NLOC_DMG%DENS(IMAT) == ZERO)) THEN 
+            ! Computation of the damping parameter (homogeneous to a time value)
+            DAMP = (TWO*ETA/LE_MAX)*SQRT(DENS*((LEN**2)*(PI**2) + LE_MAX**2))
+            ! Saving non-local parameters (storing the maximal value)
+            NLOC_DMG%DENS(IMAT) = MAX(DENS,ZERO)
+            NLOC_DMG%DAMP(IMAT) = MAX(DAMP,ZERO)
+          ENDIF
+          ! Computation of the initial non-local sound-speed
+          SSPNL = SQRT((LEN**2 + (LE_MAX**2)/PI**2)/DENS)
+          IF ((SSPNL < NLOC_DMG%SSPNL(IMAT)).OR.(NLOC_DMG%SSPNL(IMAT) == ZERO)) THEN
+            NLOC_DMG%SSPNL(IMAT) = MAX(SSPNL,ZERO)
+          ENDIF
+        ENDDO
+c
+        ! Parith/on assembly of the nodal volume
+        call my_alloc(VOLN, NNOD, "VOLN")
+        VOLN(1:NNOD) = ZERO
+        call my_alloc(ITRIN, MAXVAL(NELEN(1:NNOD)), "ITRIN")
+! TODO: non-default lower bound, convert manually
+! TODO: non-default lower bound, convert manually
+        call my_alloc(VOLSORT, MAXVAL(NELEN(1:NNOD)), "VOLSORT")
+! TODO: non-default lower bound, convert manually
+! TODO: non-default lower bound, convert manually
+        ! Loop over non-local nodes
+        DO N = 1,NNOD
+          ! Copy element nodal volume contribution of each attached elements
+          VOLSORT(1:NELEN(N)) = VOLNOD(IDELEM(IADDN(N):IADDN(N)+NELEN(N)-1))
+          ! Sort by increasing volume value
+          CALL MYQSORT(NELEN(N),VOLSORT(1:NELEN(N)),ITRIN(1:NELEN(N)),ERROR)
+          ! Loop over attached elements
+          DO K = 1, NELEN(N)
+            ! Add the sorted element nodal volume contribution
+            VOLN(N) = VOLN(N) + VOLSORT(K)
+          ENDDO
+        ENDDO 
+c
+        ! Checking non-local length consistency with mesh size
+        DO I = 1, MATSIZE
+          IF (WARN_LENGHT(I,1) > ZERO) THEN
+            CALL ANCMSG(MSGID=1812,MSGTYPE=MSGWARNING,
+     .         ANMODE=ANINFO_BLIND_1,I1=IPM(1,I),R1=NLOC_DMG%LEN(I),
+     .                R2=WARN_LENGHT(I,2),R3=WARN_LENGHT(I,3))
+          ENDIF
+        ENDDO
+c
+        ! Printing out non-local parameters
+        WRITE(IOUT,1800)
+        DO I = 1, MATSIZE
+          IF (NLOC_DMG%DENS(I) > ZERO) THEN 
+            WRITE(IOUT,1900) IPM(1,I),NLOC_DMG%LEN(I),NLOC_DMG%LE_MAX(I),NLOC_DMG%DENS(I),NLOC_DMG%DAMP(I)
+          ENDIF
+        ENDDO
+c       
+        ! Maximal number of additional d.o.fs
+        NDDMAX = MAXVAL(NDDL(1:NNOD))
+c
+        ! Saving non-local parameters
+        NLOC_DMG%NNOD       = NNOD
+        NLOC_DMG%L_NLOC     = L_NLOC
+        NLOC_DMG%NUMELS_NL  = NUMELS_NL
+        NLOC_DMG%NUMELC_NL  = NUMELC_NL
+        NLOC_DMG%NUMELTG_NL = NUMELTG_NL
+        NLOC_DMG%NDDMAX     = NDDMAX
+c
+        ! Allocation of non-local tables
+        CALL MY_ALLOC(NLOC_DMG%INDX,NNOD,"NLOC_DMG%INDX")
+        CALL MY_ALLOC(NLOC_DMG%POSI,NNOD+1,"NLOC_DMG%POSI")
+        CALL MY_ALLOC(NLOC_DMG%IDXI,NUMNOD,"NLOC_DMG%IDXI")
+        CALL MY_ALLOC(NLOC_DMG%MASS,L_NLOC,"NLOC_DMG%MASS")
+        CALL MY_ALLOC(NLOC_DMG%MASS0,L_NLOC,"NLOC_DMG%MASS0")
+        CALL MY_ALLOC(NLOC_DMG%VNL,L_NLOC,"NLOC_DMG%VNL")
+        CALL MY_ALLOC(NLOC_DMG%VNL_OLD,L_NLOC,"NLOC_DMG%VNL_OLD")
+        CALL MY_ALLOC(NLOC_DMG%DNL,L_NLOC,"NLOC_DMG%DNL")
+        CALL MY_ALLOC(NLOC_DMG%UNL,L_NLOC,"NLOC_DMG%UNL")
+        IF (.NOT.ALLOCATED(NLOC_DMG%STIFNL)) THEN
+          call my_alloc(NLOC_DMG%STIFNL, L_NLOC, 1, "NLOC_DMG%STIFNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%FNL)) THEN
+          call my_alloc(NLOC_DMG%FNL, L_NLOC, 1, "NLOC_DMG%FNL")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%FSKY)) THEN
+          call my_alloc(NLOC_DMG%FSKY, 0, 0, "NLOC_DMG%FSKY")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%STSKY)) THEN
+          call my_alloc(NLOC_DMG%STSKY, 0, 0, "NLOC_DMG%STSKY")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IAD_SIZE)) THEN
+          call my_alloc(NLOC_DMG%IAD_SIZE, 0, "NLOC_DMG%IAD_SIZE")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%IAD_ELEM)) THEN
+          call my_alloc(NLOC_DMG%IAD_ELEM, 0, "NLOC_DMG%IAD_ELEM")
+        ENDIF
+        IF (.NOT.ALLOCATED(NLOC_DMG%FR_ELEM)) THEN
+          call my_alloc(NLOC_DMG%FR_ELEM, 0, "NLOC_DMG%FR_ELEM")
+        ENDIF
+c
+        ! Initializing non-local tables
+        NLOC_DMG%INDX(1:NNOD)       = INDX(1:NNOD)
+        NLOC_DMG%POSI(1:NNOD+1)     = POSI(1:NNOD+1)
+        NLOC_DMG%IDXI(1:NUMNOD)     = IDXI(1:NUMNOD)
+        NLOC_DMG%FNL(1:L_NLOC,1)    = ZERO
+        NLOC_DMG%VNL(1:L_NLOC)      = ZERO
+        NLOC_DMG%VNL_OLD(1:L_NLOC)  = ZERO
+        NLOC_DMG%DNL(1:L_NLOC)      = ZERO
+        NLOC_DMG%UNL(1:L_NLOC)      = ZERO
+        NLOC_DMG%STIFNL(1:L_NLOC,1) = ZERO
+c 
+        ! Computing non-local masses
+        DO I=1,NNOD
+          NDD  = NDDL(I)
+          POS  = POSI(I)
+          DENS = NLOC_DMG%DENS(NMAT(I))
+          DO J = POS,POS+NDD-1
+            ! For brick elements
+            IF (ITY == 1) THEN
+              IF (NDD > 1) THEN 
+                NLOC_DMG%MASS(J)  = HALF*W_GAUSS(J-POS+1,NDD)*VOLN(I)*DENS
+                NLOC_DMG%MASS0(J) = HALF*W_GAUSS(J-POS+1,NDD)*VOLN(I)*DENS
+              ELSE 
+                NLOC_DMG%MASS(J)  = VOLN(I)*DENS
+                NLOC_DMG%MASS0(J) = VOLN(I)*DENS
+              ENDIF
+            ! For shell and triangle elements
+            ELSEIF ((ITY == 3).OR.(ITY == 7)) THEN 
+              NLOC_DMG%MASS(J)  = WF1(J-POS+1,NDD)*VOLN(I)*DENS
+              NLOC_DMG%MASS0(J) = WF1(J-POS+1,NDD)*VOLN(I)*DENS
+            ENDIF
+          ENDDO
+        ENDDO
+c        
+        ! Computing non-local masses in the thickness for shell elements only
+        DO NG=1,NGROUP
+          ! Non-local flag
+          ILOC  = IPARG(78,NG)
+          ! Type of elements
+          ITY   = IPARG(5,NG)
+          ! First element position
+          NFT   = IPARG(3,NG)
+          ! If the elements are non-local and are shells or triangles
+          IF ((ILOC > 0).AND.((ITY == 3).OR.(ITY == 7))) THEN
+            ! Number of the material
+            IF (ITY == 3) THEN 
+              IMAT  = IXC(1,1+NFT)
+              NDEPAR = 0
+            ELSEIF (ITY == 7) THEN
+              IMAT  = IXTG(1,1+NFT)
+              NDEPAR = NUMELC
+            ENDIF
+            ! Non-local density
+            DENS = NLOC_DMG%DENS(IMAT)
+            ! Number of the elements inside the group
+            NEL  = IPARG(2,NG)
+            ! Number of integration points in the R direction
+            NPTR = ELBUF_TAB(NG)%NPTR
+            ! Number of integration points in the S direction
+            NPTS = ELBUF_TAB(NG)%NPTS
+            ! Weight of integration in the plane of the shell
+            WS   = ONE/(NPTS*NPTR)
+            ! Number of integration points in the shell thickness
+            NPTT = IPARG(6,NG) 
+            ! Thickness of the shells
+            THCK => ELBUF_TAB(NG)%GBUF%THK(1:NEL)
+            ! Non-local in the thickness only if NPTT>1
+            IF (NPTT>1) THEN
+              ! Loop over integration points in the shell surface
+              DO IR = 1, NPTR
+                DO IS = 1, NPTS
+                  BUFNL => ELBUF_TAB(NG)%NLOC(IR,IS)       
+                  MASSTH => BUFNL%MASSTH   
+                  ! Loop over integration points in the shell thickness
+                  DO K = 1, NPTT
+                    IF ((NPTT==2).AND.(K==2)) THEN
+                      NTH1 = (Z01(K,NPTT)   - ZN1(K,NPTT))/
+     .                   (ZN1(K-1,NPTT) - ZN1(K,NPTT))  
+                      NTH2 = (Z01(K,NPTT) - ZN1(K-1,NPTT))/
+     .                       (ZN1(K,NPTT) - ZN1(K-1,NPTT))  
+                    ELSE
+                      NTH1 = (Z01(K,NPTT)   - ZN1(K+1,NPTT))/
+     .                       (ZN1(K,NPTT)   - ZN1(K+1,NPTT))  
+                      NTH2 = (Z01(K,NPTT)   - ZN1(K,NPTT))/
+     .                       (ZN1(K+1,NPTT) - ZN1(K,NPTT))  
+                    ENDIF
+                    ! Loop over elements
+                    DO I=1,NEL                                   
+                      IF ((NPTT==2).AND.(K==2)) THEN
+                        MASSTH(I,K-1) = MASSTH(I,K-1) + 
+     .                       (NTH1**2 + NTH1*NTH2)*DENS*AREA(NDEPAR+NFT+I)*THCK(I)*WS*WF1(K,NPTT)
+                        MASSTH(I,K)   = MASSTH(I,K)   + 
+     .                       (NTH2**2 + NTH1*NTH2)*DENS*AREA(NDEPAR+NFT+I)*THCK(I)*WS*WF1(K,NPTT)
+                      ELSE
+                        MASSTH(I,K)   = MASSTH(I,K)   + 
+     .                       (NTH1**2 + NTH1*NTH2)*DENS*AREA(NDEPAR+NFT+I)*THCK(I)*WS*WF1(K,NPTT)
+                        MASSTH(I,K+1) = MASSTH(I,K+1) + 
+     .                       (NTH2**2 + NTH1*NTH2)*DENS*AREA(NDEPAR+NFT+I)*THCK(I)*WS*WF1(K,NPTT)
+                      ENDIF
+                    ENDDO
+                  ENDDO
+                ENDDO
+              ENDDO
+            ENDIF
+          ELSEIF ((ILOC > 0).AND.((ITY == 1).AND.(ELBUF_TAB(NG)%NLAY > 1))) THEN
+            ! Number of the material
+            IMAT = IXS(1,1+NFT)
+            ! Non-local density
+            DENS = NLOC_DMG%DENS(IMAT)
+            ! Number of the elements inside the group
+            NEL  = IPARG(2,NG)
+            ! Number of integration points in the R direction
+            NPTR = ELBUF_TAB(NG)%NPTR
+            ! Number of integration points in the S direction
+            NPTS = ELBUF_TAB(NG)%NPTS
+            ! Number of integration points in the shell thickness
+            NPTT = ELBUF_TAB(NG)%NLAY
+            ! Volume of the element
+            VOL => ELBUF_TAB(NG)%GBUF%VOL(1:NEL)
+            ! Non-local in the thickness only if NPTT>1
+            ! -> Loop over integration points in the shell surface
+            DO IR = 1, NPTR
+              DO IS = 1, NPTS
+                BUFNLTS => ELBUF_TAB(NG)%NLOCTS(IR,IS)       
+                MASSTH  => BUFNLTS%MASSTH   
+                ! Loop over integration points in the shell thickness
+                DO K = 1, NPTT
+                  NTH1 = (A_GAUSS(K,NPTT)   - Z_GAUSS(K+1,NPTT))/
+     .                   (Z_GAUSS(K,NPTT)   - Z_GAUSS(K+1,NPTT))  
+                  NTH2 = (A_GAUSS(K,NPTT)   - Z_GAUSS(K,NPTT))/
+     .                   (Z_GAUSS(K+1,NPTT) - Z_GAUSS(K,NPTT))
+                  ! Loop over elements
+                  DO I=1,NEL                                   
+                    MASSTH(I,K)   = MASSTH(I,K)   + 
+     .                   (NTH1**2 + NTH1*NTH2)*DENS*VOL(I)*HALF*W_GAUSS(K,NPTT)
+     .                   *HALF*W_GAUSS(IR,NPTR)*HALF*W_GAUSS(IS,NPTS)
+                    MASSTH(I,K+1) = MASSTH(I,K+1) + 
+     .                   (NTH2**2 + NTH1*NTH2)*DENS*VOL(I)*HALF*W_GAUSS(K,NPTT)
+     .                   *HALF*W_GAUSS(IR,NPTR)*HALF*W_GAUSS(IS,NPTS)
+                  ENDDO
+                ENDDO
+              ENDDO
+            ENDDO
+          ENDIF
+        ENDDO
+c
+        ! Initialization of non-local fields and variables
+    !     IF (ISIGI /= 0) THEN 
+    !       WRITE(ISTDO,'(A)') ' .. NON-LOCAL FIELDS INITIALIZATION'
+    !       CALL NLOCAL_INIT_STA(ELBUF_TAB,NLOC_DMG ,IPARG    ,IXC      ,
+    !  .                         IXS      ,IXTG     ,AREA     ,X        ,
+    !  .                         XREFS    ,XREFC    ,XREFTG   ,IPM      ,
+    !  .                         BUFMAT   ) 
+    !     ENDIF
+c
+       ENDIF
+c
+       ! Tables deallocation
+       IF (ALLOCATED(TAGNOD))  CALL MY_DEALLOC(TAGNOD)
+       IF (ALLOCATED(INDX))    CALL MY_DEALLOC(INDX)
+       IF (ALLOCATED(IDXI))    CALL MY_DEALLOC(IDXI)
+       IF (ALLOCATED(NDDL))    CALL MY_DEALLOC(NDDL)
+       IF (ALLOCATED(NMAT))    CALL MY_DEALLOC(NMAT)
+       IF (ALLOCATED(POSI))    CALL MY_DEALLOC(POSI)
+       IF (ALLOCATED(INDEX))   CALL MY_DEALLOC(INDEX)
+       IF (ALLOCATED(ITRI))    CALL MY_DEALLOC(ITRI)
+       IF (ALLOCATED(TAGTET))  CALL MY_DEALLOC(TAGTET)
+       IF (ALLOCATED(TAGPENT)) CALL MY_DEALLOC(TAGPENT)
+       IF (ALLOCATED(ISLNOD))  CALL MY_DEALLOC(ISLNOD)
+       IF (ALLOCATED(SOLNOD))  CALL MY_DEALLOC(SOLNOD)
+       IF (ALLOCATED(VOLN))    CALL MY_DEALLOC(VOLN)
+       IF (ALLOCATED(VOLU))    CALL MY_DEALLOC(VOLU)
+       IF (ALLOCATED(WARN_LENGHT))  CALL MY_DEALLOC(WARN_LENGHT)
+       IF (ALLOCATED(NELEN))   CALL MY_DEALLOC(NELEN)
+       IF (ALLOCATED(IDELEM))  CALL MY_DEALLOC(IDELEM)
+       IF (ALLOCATED(IADDN))   CALL MY_DEALLOC(IADDN)
+       IF (ALLOCATED(ITRIN)) call my_dealloc(ITRIN)
+       IF (ALLOCATED(VOLSORT)) call my_dealloc(VOLSORT)
+       IF (ALLOCATED(VOLNOD))  CALL MY_DEALLOC(VOLNOD)
+c
+c-----------
+ 1800 FORMAT(
+     . 5X,' NON-LOCAL PARAMETERS '/
+     . 5X,'----------------------'/
+     . 5X,' MATERIAL ID',5X, '      LENGTH',5X, 'CONV. LE_MAX',5X,'     DENSITY',5X,'     DAMPING'/
+     . 5X,'            ',5X, '            ',5X, '            ',5X,'  (AUTO-SET)',5X,'  (AUTO-SET)'/)
+ 1900 FORMAT(
+     . 5X,I12,5X,ES12.4,5X,ES12.4,5X,ES12.4,5X,ES12.4/)
+      RETURN
+      END

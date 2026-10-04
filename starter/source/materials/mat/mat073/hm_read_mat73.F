@@ -1,0 +1,287 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    hm_read_mat73            ../starter/source/materials/mat/mat073/hm_read_mat73.F
+!||--- called by ------------------------------------------------------
+!||    hm_read_mat              ../starter/source/materials/mat/hm_read_mat.F90
+!||--- calls      -----------------------------------------------------
+!||    ancmsg                   ../starter/source/output/message/message.F
+!||    hm_get_floatv            ../starter/source/devtools/hm_reader/hm_get_floatv.F
+!||    hm_get_floatv_dim        ../starter/source/devtools/hm_reader/hm_get_floatv_dim.F
+!||    hm_get_intv              ../starter/source/devtools/hm_reader/hm_get_intv.F
+!||    hm_option_is_encrypted   ../starter/source/devtools/hm_reader/hm_option_is_encrypted.F
+!||    init_mat_keyword         ../starter/source/materials/mat/init_mat_keyword.F
+!||--- uses       -----------------------------------------------------
+!||    elbuftag_mod             ../starter/share/modules1/elbuftag_mod.F
+!||    message_mod              ../starter/share/message_module/message_mod.F
+!||    submodel_mod             ../starter/share/modules1/submodel_mod.F
+!||====================================================================
+      SUBROUTINE HM_READ_MAT73(UPARAM  ,MAXUPARAM,NUPARAM  ,ISRATE   ,IMATVIS  ,
+     .                         NUVAR   ,IFUNC    ,MAXFUNC  ,NFUNC    ,PARMAT   , 
+     .                         UNITAB  ,MAT_ID   ,TITR     ,MTAG     ,LSUBMODEL,
+     .                         ITABLE  ,MAXTABL  ,NTABLE   ,PM       ,IPM      ,
+     .                         MATPARAM)
+C-----------------------------------------------
+C   D e s c r i p t i o n
+C-----------------------------------------------
+C   READ MAT LAW43 WITH HM READER ( TO BE COMPLETED )
+C
+C   DUMMY ARGUMENTS DESCRIPTION:
+C   ===================
+C
+C     NAME            DESCRIPTION                         
+C
+C     PM              MATERIAL ARRAY(REAL)
+C     UNITAB          UNITS ARRAY
+C     MAT_ID          MATERIAL ID(INTEGER)
+C     TITR            MATERIAL TITLE
+C     LSUBMODEL       SUBMODEL STRUCTURE   
+C
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE UNITAB_MOD
+      USE ELBUFTAG_MOD            
+      USE MESSAGE_MOD      
+      USE SUBMODEL_MOD
+      USE MATPARAM_DEF_MOD
+      USE NAMES_AND_TITLES_MOD , ONLY : NCHARTITLE
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "units_c.inc"
+#include      "param_c.inc"
+C-----------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      TYPE (UNIT_TYPE_),INTENT(IN) ::UNITAB 
+      my_real, INTENT(INOUT)                :: PM(NPROPM),PARMAT(100),UPARAM(MAXUPARAM)
+      INTEGER, INTENT(INOUT)                :: IPM(NPROPMI),ISRATE,IFUNC(MAXFUNC),NFUNC,MAXFUNC,MAXUPARAM,NUPARAM, NUVAR,IMATVIS
+     .                                         ,NTABLE,ITABLE(MAXTABL)
+      TYPE(MLAW_TAG_),INTENT(INOUT)         :: MTAG
+      INTEGER,INTENT(IN)                    :: MAT_ID,MAXTABL
+      CHARACTER(LEN=NCHARTITLE) ,INTENT(IN)       :: TITR
+      TYPE(SUBMODEL_DATA),INTENT(IN)        :: LSUBMODEL(*)
+      TYPE(MATPARAM_STRUCT_) ,INTENT(INOUT) :: MATPARAM
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER IR0,ILAW
+      MY_REAL 
+     .         E,NU,G,C1,EPSMAX,EPSR1,EPSR2,
+     .         R0,R45,R90,R,H,FISOKIN,
+     .         EINF,CE,T0, RHOCP,X2FAC,YFAC,FAC_PRES,FAC_FREQ
+      INTEGER IFUNCE, OPTE
+      my_real :: RHO0, RHOR
+      LOGICAL :: IS_AVAILABLE,IS_ENCRYPTED
+C-----------------------------------------------
+C   S o u r c e   L i n e s 
+C-----------------------------------------------      
+      IS_ENCRYPTED = .FALSE.
+      IS_AVAILABLE = .FALSE.
+      MTAG%G_PLA  = 1
+      MTAG%G_SEQ  = 1
+      MTAG%L_SEQ  = 1
+      MTAG%L_PLA  = 1
+      ISRATE=0
+      IMATVIS=0
+      ILAW=73
+ 
+ 
+      CALL HM_OPTION_IS_ENCRYPTED(IS_ENCRYPTED)
+      !line+1
+      CALL HM_GET_FLOATV('MAT_RHO'    ,RHO0        ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      !line-2
+      CALL HM_GET_FLOATV('MAT_E'      ,E           ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_NU'     ,NU          ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      !line-3
+      CALL HM_GET_INTV  ('Yr_fun'     ,IFUNCE      ,IS_AVAILABLE, LSUBMODEL)
+      CALL HM_GET_FLOATV('MAT_EFIB'   ,EINF        ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_C'      ,CE          ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      !line-4
+      CALL HM_GET_FLOATV('MAT_R00'    ,R0          ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_R45'    ,R45         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_R90'    ,R90         ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_CHARD'  ,FISOKIN     ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_INTV  ('MAT_Iyield' ,IR0         ,IS_AVAILABLE, LSUBMODEL)
+      !line-5
+      CALL HM_GET_FLOATV('MAT_EPS'    ,EPSMAX      ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_EPST1'  ,EPSR1       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_EPST2'  ,EPSR2       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      !line-6
+      CALL HM_GET_INTV  ('FUN_A1'      ,ITABLE(1)   ,IS_AVAILABLE, LSUBMODEL)
+      CALL HM_GET_FLOATV('MAT_FScale'  ,YFAC        ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_PScale'  ,X2FAC       ,IS_AVAILABLE, LSUBMODEL, UNITAB) 
+      !line-7
+      CALL HM_GET_FLOATV('T_Initial'   ,T0          ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV('MAT_SPHEAT'  ,RHOCP       ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      !unit
+      CALL HM_GET_FLOATV_DIM('MAT_FScale'  ,FAC_PRES    ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      CALL HM_GET_FLOATV_DIM('MAT_PScale'  ,FAC_FREQ    ,IS_AVAILABLE, LSUBMODEL, UNITAB)
+      !========== DEFAULT VALUES=============!              
+      RHOR=RHO0
+      IF(RHOR==ZERO)RHOR=RHO0
+      PM(1) =RHOR
+      PM(89)=RHO0
+!!
+      IF(YFAC == ZERO)YFAC=FAC_PRES
+      IF(X2FAC == ZERO)X2FAC=FAC_FREQ
+C          
+C tab(1st entry = plastic strain, 2nd entry = strain rate, 3rd entry = temperature)
+C
+      IF(R0 == ZERO) R0    = ONE
+      IF(R45 == ZERO) R45   = ONE
+      IF(R90 == ZERO) R90   = ONE
+      IF(EPSR1 == ZERO)EPSR1=INFINITY
+      IF(EPSR2 == ZERO)EPSR2=TWO*INFINITY
+      IF(T0 == ZERO) T0=TWOHUNDRED93
+C
+      IF(EPSR1 >= EPSR2)THEN
+         CALL ANCMSG(MSGID=1044,
+     .                MSGTYPE=MSGERROR,
+     .                ANMODE=ANINFO_BLIND_1,
+     .                I1=MAT_ID,
+     .                C1=TITR)
+       
+      ENDIF
+      NTABLE=1
+      UPARAM(1)=FISOKIN
+      UPARAM(2)=E
+      UPARAM(3)=E/(ONE-NU*NU)
+      UPARAM(4)=NU*UPARAM(3)
+      G=HALF*E/(1.+NU)
+      UPARAM(5)=G
+      UPARAM(6)=NU
+      R=(R0+R45+R45+R90)*FOURTH
+      H=R/(ONE+R)
+C-----------A1,A2,A3,A12--------
+      UPARAM(7)=H*(ONE+ONE/R0)
+      UPARAM(8)=H*(ONE+ONE/R90)
+      UPARAM(9)=H*TWO
+      UPARAM(10)=(R45*TWO + ONE)*(UPARAM(7)+UPARAM(8)-UPARAM(9))
+      IF (IR0 > 0) THEN
+       UPARAM(8)=UPARAM(8)/UPARAM(7)
+       UPARAM(9)=UPARAM(9)/UPARAM(7)
+       UPARAM(10)=UPARAM(10)/UPARAM(7)
+       UPARAM(7)=ONE
+      END IF
+      UPARAM(11)=ONE/X2FAC
+      UPARAM(12)=YFAC
+      UPARAM(13)=EPSMAX
+      UPARAM(14)=EPSR1
+      UPARAM(15)=EPSR2
+      UPARAM(16)=TWO*G
+      UPARAM(17)=THREE*G
+      C1=E/3./(ONE - TWO*NU)
+      UPARAM(18)=C1
+      UPARAM(19)=C1+ FOUR_OVER_3*G
+      UPARAM(20)=T0
+      IF(RHOCP==ZERO)THEN
+        UPARAM(21)=ZERO
+      ELSE
+        UPARAM(21)=ONE/RHOCP
+      END IF
+c--------------------------------
+      OPTE = 0
+      IF (IFUNCE > 0 )OPTE = 1
+      NFUNC = 1
+      IFUNC(NFUNC) = IFUNCE
+      UPARAM(22) = NFUNC
+      UPARAM(23) = OPTE
+      UPARAM(24) = EINF
+      UPARAM(25) = CE
+c--------------------------------
+      NUPARAM   =25
+C
+      PARMAT(1)=C1
+      PARMAT(2)=E
+      PARMAT(3)=NU
+      NUVAR = 7
+CC     Formulation for solid elements time step computation.
+      PARMAT(16) = 2
+      PARMAT(17) =  (ONE - TWO*NU)/(ONE - NU) ! == TWO*G/(C1+FOUR_OVER_3*G)
+C
+      CALL INIT_MAT_KEYWORD(MATPARAM,"ELASTO_PLASTIC")
+      CALL INIT_MAT_KEYWORD(MATPARAM,"HILL")
+      CALL INIT_MAT_KEYWORD(MATPARAM,"INCREMENTAL")
+      CALL INIT_MAT_KEYWORD(MATPARAM,"LARGE_STRAIN") 
+      ! MATPARAM keywords
+      CALL INIT_MAT_KEYWORD(MATPARAM,"ORTHOTROPIC")
+C
+      ! Properties compatibility  
+      CALL INIT_MAT_KEYWORD(MATPARAM,"SHELL_ORTHOTROPIC")   
+C      
+      WRITE(IOUT,1001) TRIM(TITR),MAT_ID,73
+      WRITE(IOUT,1000)  
+      IF(IS_ENCRYPTED)THEN
+        WRITE(IOUT,'(5X,A,//)')'CONFIDENTIAL DATA'
+      ELSE 
+        WRITE(IOUT,1002)RHO0  
+        WRITE(IOUT,1100)E,NU,G,R0,R45,R90,FISOKIN
+        IF (IR0 >0) WRITE(IOUT,1110)
+        WRITE(IOUT,1300)EPSMAX,EPSR1,EPSR2
+        WRITE(IOUT,1200)ITABLE(1),X2FAC,YFAC
+        WRITE(IOUT,1400)T0,RHOCP,IFUNCE,EINF,CE
+        WRITE(IOUT,*)' '
+      ENDIF
+C
+      RETURN 
+ 1001 FORMAT(
+     & 5X,A,/,
+     & 5X,'MATERIAL NUMBER . . . . . . . . . . . .=',I10/,
+     & 5X,'MATERIAL LAW. . . . . . . . . . . . . .=',I10/)
+ 1002 FORMAT(
+     & 5X,'INITIAL DENSITY . . . . . . . . . . . .=',1PG20.13/) 
+ 1000 FORMAT(
+     & 5X,47H  THERMAL TABULATED HILL ORTHOTROPIC PLASTICITY,/,
+     & 5X,47H  ---------------------------------------------,//)
+ 1100 FORMAT(
+     & 5X,'YOUNG MODULUS . . . . . . . . . . . . .=',1PG20.13/
+     & 5X,'POISSON RATIO . . . . . . . . . . . . .=',1PG20.13/
+     & 5X,'SHEAR MODULUS . . . . . . . . . . . . .=',1PG20.13/
+     & 5X,'LANKFORD COEFFICIENT R00. . . . . . . .=',1PG20.13/
+     & 5X,'LANKFORD COEFFICIENT R45. . . . . . . .=',1PG20.13/
+     & 5X,'LANKFORD COEFFICIENT R90. . . . . . . .=',1PG20.13/
+     & 5X,'ISO-KINEMATIC HARDENNING FACTOR. . . . =',1PG20.13)
+ 1110 FORMAT(
+     & 5X,'YIELD STRESS IS SUPPOSSD IN ORTHOTROPIC DIR. 1 '/)
+ 1200 FORMAT(
+     & 5X,'YIELD STRESS TABLE NUMBER . . . . . . .=',I10/
+     & 5X,'2ND ENTRY (STRAIN RATE) SCALE FACTOR. .=',1PG20.13/
+     & 5X,'YIELD SCALE FACTOR. . . . . . . . . . .=',1PG20.13)
+ 1300 FORMAT(
+     & 5X,'MAXIMUM PLASTIC STRAIN. . . . . . . . .=',1PG20.13/
+     & 5X,'TENSILE FAILURE STRAIN 1. . . . . . . .=',1PG20.13/
+     & 5X,'TENSILE FAILURE STRAIN 2. . . . . . . .=',1PG20.13)
+ 1400 FORMAT(
+     & 5X,'INITIAL TEMPERATURE . . . . . . . . . .=',1PG20.13/
+     & 5X,'HEAT CAPACITY PER VOLUME UNIT . . . . .=',1PG20.13/
+     & 5X,'YOUNG MODULUS SCALE FACTOR FUNCTION . .=',I10/
+     & 5X,'YOUNG MODULUS EINF. . . . . . . . . . .=',1PG20.13/
+     & 5X,'PARAMETER CE. . . . . . . . . . . . . .=',1PG20.13)
+      END

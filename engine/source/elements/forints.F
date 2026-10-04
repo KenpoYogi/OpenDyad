@@ -1,0 +1,137 @@
+Copyright>        OpenRadioss
+Copyright>        Copyright (C) 2026 Siemens
+Copyright>
+Copyright>        This program is free software: you can redistribute it and/or modify
+Copyright>        it under the terms of the GNU Affero General Public License as published by
+Copyright>        the Free Software Foundation, either version 3 of the License, or
+Copyright>        (at your option) any later version.
+Copyright>
+Copyright>        This program is distributed in the hope that it will be useful,
+Copyright>        but WITHOUT ANY WARRANTY; without even the implied warranty of
+Copyright>        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+Copyright>        GNU Affero General Public License for more details.
+Copyright>
+Copyright>        You should have received a copy of the GNU Affero General Public License
+Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Copyright>
+Copyright>
+Copyright>        Commercial Alternative: Simcenter Radioss Software
+Copyright>
+Copyright>        As an alternative to this open-source version, Siemens also offers Simcenter(TM) Radioss(R)
+Copyright>        software under a commercial license.  Contact Siemens to discuss further if the
+Copyright>        commercial version may interest you: 
+Copyright>        https://www.siemens.com/en-us/products/simcenter/mechanical-simulation/radioss/.
+!||====================================================================
+!||    forints        ../engine/source/elements/forints.F
+!||--- called by ------------------------------------------------------
+!||    resol          ../engine/source/engine/resol.F
+!||--- calls      -----------------------------------------------------
+!||    initbuf        ../engine/share/resol/initbuf.F
+!||    startimeg      ../engine/source/system/timer.F
+!||    stoptimeg      ../engine/source/system/timer.F
+!||    xforc3         ../engine/source/elements/xelem/xforc3.F
+!||--- uses       -----------------------------------------------------
+!||    elbufdef_mod   ../common_source/modules/mat_elem/elbufdef_mod.F90
+!||    element_mod    ../common_source/modules/elements/element_mod.F90
+!||    initbuf_mod    ../engine/share/resol/initbuf.F
+!||====================================================================
+      SUBROUTINE FORINTS(
+     1    PM        ,GEO       ,X         ,A         ,AR ,
+     2    V         ,VR        ,MS        ,IN        ,W         ,
+     3    ELBUF                ,VAL2      ,VEUL      ,FV        ,
+     4    STIFN     ,STIFR     ,FSKY      ,TF        ,BUFMAT    ,
+     5    PARTSAV              ,FANI      ,FSAV      ,
+     6    SKEW      ,DT2T      ,
+     7    IADS      ,IPARG     ,NPC       ,IXS       ,
+     8    NELTST    ,ITYPTST   ,IPART     ,IPARTS    ,ITAB      ,
+     9    FSKYI     ,BUFGEO    ,KXX       ,IXX       ,ISKY      ,
+     A    IPARTX    ,GRESAV    ,GRTH      ,
+     B    IGRTH     ,ELBUF_TAB )
+C-----------------------------------------------
+C   M o d u l e s
+C-----------------------------------------------
+      USE INITBUF_MOD
+      USE ELBUFDEF_MOD
+      use element_mod , only : nixs
+C-----------------------------------------------
+C   I m p l i c i t   T y p e s
+C-----------------------------------------------
+#include      "implicit_f.inc"
+C-----------------------------------------------
+C   C o m m o n   B l o c k s
+C-----------------------------------------------
+#include      "com01_c.inc"
+#include      "param_c.inc"
+#include      "vect01_c.inc"
+#include      "scr17_c.inc"
+#include      "task_c.inc"
+#include      "parit_c.inc"
+#include      "scr23_c.inc"
+C-----------------------------------------------------------------
+C   D u m m y   A r g u m e n t s
+C-----------------------------------------------
+      INTEGER IXS(NIXS,*),IPART(LIPART1,*) ,IPARTS(*) ,
+     .   NPC(*), IPARG(NPARG,*),IADS(8,*),NELTST,ITYPTST,
+     .   KXX(NIXX,*), IXX(*), ITAB(*),
+     .   IPARTX(*), ISKY(*),GRTH(*),IGRTH(*)
+C     REAL
+      my_real
+     .   X(3,*)    ,V(3,*)   ,VR(3,*),
+     .   MS(*)   ,IN(*)   ,PM(NPROPM,*),SKEW(LSKEW,*),GEO(NPROPG,*),
+     .   BUFMAT(*) ,W(3,*)    ,VEUL(*),TF(*)  ,
+     .   FSAV(NTHVKI,*)       ,ELBUF(*) ,
+     .   FV(*)     ,A(3,*)    ,AR(3,*)     ,VAL2(*)  ,
+     .   FANI(3,*) ,PARTSAV(*),STIFN(*) ,STIFR(*),
+     .   FSKY(*) ,
+     .   DT2T,FSKYI(LSKYI,NFSKYI) ,BUFGEO(*),GRESAV(*)
+C
+      TYPE(ELBUF_STRUCT_), DIMENSION(NGROUP), TARGET :: ELBUF_TAB
+C-----------------------------------------------
+C   L o c a l   V a r i a b l e s
+C-----------------------------------------------
+      INTEGER NG, NVC, 
+     . NELEM, OFFSET,
+     . NSG, NEL
+C-----------------------------------------------
+C
+      DO 240 NG=1,NGROUP
+          IF(IPARG(8,NG)==1.OR.IPARG(5,NG)/=100)GOTO 240
+          IF (IDDW>0) CALL STARTIMEG(NG)
+          DO NELEM = 1,IPARG(2,NG),NVSIZ
+C---
+C
+            OFFSET = NELEM - 1
+C
+           CALL INITBUF(IPARG    ,NG      ,
+     2        MTN     ,NEL     ,NFT     ,IAD     ,ITY     ,
+     3        NPT     ,JALE    ,ISMSTR  ,JEUL    ,JTUR    ,
+     4        JTHE    ,JLAG    ,JMULT   ,JHBE    ,JIVF    ,
+     5        NVAUX   ,JPOR    ,JCVT    ,JCLOSE  ,JPLASOL ,
+     6        IREP    ,IINT    ,IGTYP   ,ISRAT   ,ISROT   ,
+     7        ICSEN   ,ISORTH  ,ISORTHG ,IFAILURE,JSMS    )
+C
+            NSG   =IPARG(10,NG)
+            NVC   =IPARG(19,NG)
+            JHBE  =IPARG(23,NG)
+            IGRE  =IPARG(51,NG)
+C
+            LFT=1
+            LLT=MIN(NVSIZ,NEL-NELEM+1)
+C           Multi-Purpous element groups are constituted,
+C           but Multi-purpose element is not supposed to be vectorized ..
+             CALL XFORC3(
+     1   NFT,          NEL,          GEO,          PM,
+     2   ITAB,         KXX,          IXX,          X,
+     3   V,            VR,           A,            AR,
+     4   ELBUF(IAD),   NPC,          TF,           SKEW,
+     5   DT2T,         NELTST,       ITYPTST,      STIFN,
+     6   STIFR,        MS,           IN,           FSKYI,
+     7   ISKY,         PARTSAV,      IPARTX,       BUFMAT,
+     8   BUFGEO,       GRESAV,       GRTH,         IGRTH,
+     9   ELBUF_TAB(NG),IGRE)
+            IF (IDDW>0) CALL STOPTIMEG(NG)
+         END DO
+ 240  CONTINUE
+C----------------------------------
+      RETURN
+      END
