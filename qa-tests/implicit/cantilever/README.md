@@ -66,6 +66,9 @@ edit `make_cantilever.py` and run it again; the checker reads the same values.
 
 The tip displacement is read from `cantilever_0001.sty` (`/OUTP/VECT/DISP`).
 Time history is in `cantileverT01` for nodes 53, 103, 153 and 201 to 205.
+Convert it to CSV with `th_to_csv`, and convert the animation files
+(`cantileverA001`, ...) to VTK with `anim_to_vtk`. The sources are in `tools/`;
+build them with `tools/build_output_converters.*`.
 
 ## Reading the listing
 

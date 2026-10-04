@@ -16,7 +16,8 @@ The layout follows the upstream delivery workflow
 
 Usage: python make_bundle.py --os win64|linux64 [--out DIR]
 Run after build_windows_mumps.bat + build_windows_compat.bat (win64), or after
-build_linux_mumps.sh + build_linux_gf_mumps.sh + build_linux.sh (linux64).
+build_linux_mumps.sh + build_linux_gf_mumps.sh + build_linux.sh (linux64), and
+after tools/build_output_converters.bat or .sh (anim_to_vtk, th_to_csv).
 """
 import argparse
 import datetime
@@ -33,9 +34,10 @@ ROOT = Path(__file__).resolve().parents[2]
 TOP = "OpenRadioss"
 
 EXECUTABLES = {
-    "win64": ["starter_win64.exe", "engine_win64.exe", "engine_win64_impi.exe"],
+    "win64": ["starter_win64.exe", "engine_win64.exe", "engine_win64_impi.exe",
+              "anim_to_vtk_win64.exe", "th_to_csv_win64.exe"],
     "linux64": ["starter_linux64_gf", "engine_linux64_gf", "engine_linux64_gf_ompi",
-                "engine_linux64_ifx_impi"],
+                "engine_linux64_ifx_impi", "anim_to_vtk_linux64_gf", "th_to_csv_linux64_gf"],
 }
 # Intel runtime shipped in extlib/intelOneAPI_runtime/<os>, as (oneAPI component, subfolder, patterns).
 # MKL loads its CPU-specific kernels at run time, so they do not show up as imports.
@@ -79,6 +81,7 @@ def stage_licenses(osname, stage, oneapi):
     copy(mumps, lic / "mumps_license.txt")
     if osname == "linux64":
         copy(ROOT / "engine" / "extlib" / "scalapack-2.2.0" / "LICENSE", lic / "scalapack_license.txt")
+    copy(ROOT / "tools" / "anim_to_vtk" / "LICENSE.md", lic / "output_converters_license.txt")
     # Intel runtime and statically linked MKL / OpenMP.
     for d in (oneapi / "mkl" / "latest" / "share" / "doc" / "mkl" / "licensing",
               oneapi / "mkl" / "latest" / "licensing"):
@@ -122,6 +125,10 @@ def readme(osname, exes, oneapi):
         "engine_linux64_gf": "Engine, GNU, OpenMP only (explicit; no implicit)",
         "engine_linux64_gf_ompi": "Engine, GNU + OpenMPI 4 + MUMPS (explicit and implicit)",
         "engine_linux64_ifx_impi": "Engine, Intel + Intel MPI + MUMPS (explicit and implicit)",
+        "anim_to_vtk_win64.exe": "Animation file (A001...) to legacy VTK for ParaView",
+        "th_to_csv_win64.exe": "Time history file (T01) to CSV",
+        "anim_to_vtk_linux64_gf": "Animation file (A001...) to legacy VTK for ParaView",
+        "th_to_csv_linux64_gf": "Time history file (T01) to CSV",
     }
     lines += [f"  {e:<26} {desc.get(e, '')}" for e in exes]
     lines.append("")
@@ -143,6 +150,11 @@ def readme(osname, exes, oneapi):
             "  starter_win64.exe -i model_0000.rad -np N",
             "  engine_win64.exe -i model_0001.rad                  (explicit, OpenMP)",
             "  mpiexec -n N engine_win64_impi.exe -i model_0001.rad",
+            "",
+            "Convert results:",
+            "  anim_to_vtk_win64.exe modelA001 > model_001.vtk     (one file per A00n)",
+            "  th_to_csv_win64.exe modelT01                        (writes modelT01.csv)",
+            "  Add /TH/TITLE to the Engine deck to get full column names in the CSV.",
             "",
             "Self-test (implicit, MUMPS): qa-tests\\implicit\\cantilever\\run_cantilever.bat",
             "  (needs Python 3; prints PASS when the tip deflection matches 2.000 mm)",
@@ -169,6 +181,11 @@ def readme(osname, exes, oneapi):
             "  engine_linux64_gf -i model_0001.rad                         (explicit, OpenMP)",
             "  mpiexec -n N engine_linux64_gf_ompi -i model_0001.rad",
             "  mpiexec -n N engine_linux64_ifx_impi -i model_0001.rad",
+            "",
+            "Convert results:",
+            "  anim_to_vtk_linux64_gf modelA001 > model_001.vtk    (one file per A00n)",
+            "  th_to_csv_linux64_gf modelT01                       (writes modelT01.csv)",
+            "  Add /TH/TITLE to the Engine deck to get full column names in the CSV.",
             "",
             "Self-test (implicit, MUMPS):",
             "  bash qa-tests/implicit/cantilever/run_cantilever.sh engine_linux64_gf_ompi",

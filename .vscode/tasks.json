@@ -38,6 +38,22 @@
       "problemMatcher": []
     },
     {
+      "label": "Build output converters (anim_to_vtk, th_to_csv)",
+      "detail": "tools/build_output_converters.*; outputs to exec/",
+      "type": "process",
+      "windows": {
+        "command": "cmd.exe",
+        "args": ["/d", "/c", "${workspaceFolder}\\tools\\build_output_converters.bat"]
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["${workspaceFolder}/tools/build_output_converters.sh"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
       "label": "Package release bundle",
       "detail": "Compiling_tools/script/make_bundle.py; writes bundles/OpenRadioss_<os>.zip",
       "type": "process",
