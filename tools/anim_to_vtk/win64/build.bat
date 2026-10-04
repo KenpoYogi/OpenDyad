@@ -5,7 +5,7 @@ if not exist ..\..\..\exec (
   mkdir ..\..\..\exec
 )
 
-cl -DWIN32 /Fe..\..\..\exec\anim_to_vtk_win64.exe ..\src\anim_to_vtk.cpp Ws2_32.lib
+cl -DWIN32 /nologo /O2 /Fe..\..\..\exec\anim_to_vtk_win64.exe ..\src\anim_to_vtk.cpp Ws2_32.lib
 
 set error_var=%errorlevel%
 if %error_var%==0 (

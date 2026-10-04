@@ -9,7 +9,7 @@ then
 fi
 
 
- g++ -DLINUX -o ../../../exec/anim_to_vtk_linux64_gf ../src/anim_to_vtk.cpp
+ g++ -DLINUX -O2 -static-libstdc++ -static-libgcc -o ../../../exec/anim_to_vtk_linux64_gf ../src/anim_to_vtk.cpp
  export BUILD_RETURN_CODE=$?
  if [ $BUILD_RETURN_CODE -ne 0 ]
  then

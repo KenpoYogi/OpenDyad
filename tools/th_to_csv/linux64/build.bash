@@ -9,7 +9,7 @@ then
 fi
 
 
- gcc -DLINUX -o ../../../exec/th_to_csv_linux64_gf ../src/th_to_csv.c
+ gcc -DLINUX -O2 -o ../../../exec/th_to_csv_linux64_gf ../src/th_to_csv.c
  export BUILD_RETURN_CODE=$?
  if [ $BUILD_RETURN_CODE -ne 0 ]
  then
