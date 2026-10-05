@@ -74,12 +74,12 @@ MUMPS, the implicit solver is compiled out of the Engine.
 | Linux x86-64 | `engine_linux64_gf_ompi` | GCC + OpenMPI 4 | `build_linux_gf_mumps.sh` |
 
 - **Run implicit models on an MPI Engine.** One process (`mpiexec -n 1`) also works. The SMP Engines don't contain the implicit solver.
-- **Limits:** double precision only. `/IMPL/BUCKL` and `/EIG` are not available.
+- **Limits:** implicit needs double precision. Single-precision executables (`build_windows_sp.bat`, `build_linux_gf_sp.sh`) run explicit models only. `/IMPL/BUCKL` and `/EIG` are not available.
 - **Verified:** linear static analysis on all three Engines, against a beam-theory reference ([self-test](qa-tests/implicit/cantilever/README.md)).
 
 The fork also adds:
 
-- **Release zips** like the upstream ones: Starter, Engines, output converters, the OpenRadioss GUI and the self-test ([`make_bundle.py`](Compiling_tools/script/make_bundle.py)).
+- **Release zips** like the upstream ones: double- and single-precision Starters and Engines, output converters, the OpenRadioss GUI and the self-test ([`make_bundle.py`](Compiling_tools/script/make_bundle.py)).
 - **Tool sources** for `anim_to_vtk`, `th_to_csv`, `openradioss_gui` and `inp2rad`, in `tools/`, recovered from [OpenCourant/Tools](https://github.com/OpenCourant/Tools). The GUI runs every job on the MPI Engine.
 - **VS Code tasks** for building, testing and packaging.
 

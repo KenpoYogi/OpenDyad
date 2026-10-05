@@ -31,7 +31,7 @@ models, the GUI, release bundles and known problems.
 | Linux x86-64 | `engine_linux64_gf_ompi` | GCC/GFortran + OpenMPI 4 | [`build_linux_gf_mumps.sh`](build_linux_gf_mumps.sh) |
 
 - **MPI engines only.** MUMPS needs MPI, so only the MPI Engines contain the implicit solver. They also run on a single process (`mpiexec -n 1`). The SMP Engines (`engine_win64.exe`, `engine_linux64_gf`) run explicit models only.
-- **Double precision only.**
+- **Double precision only** for implicit. Single-precision executables (`*_sp`) can be built too, but they run explicit models only, as upstream's did: CMake leaves the implicit solver out of single-precision Engines. See [Build](#build).
 - **Verified:** linear static analysis, against a beam-theory reference, on all three Engines with 1 and 2 MPI processes. See [Verify the build](#verify-the-build).
 - **Not verified here:** nonlinear static (`/IMPL/NONLIN`) and implicit dynamic (`/IMPL/DYNA`). They are compiled in.
 - **Not available:** `/IMPL/BUCKL` and the Engine `/EIG` option are compiled out upstream, by a macro that no build defines.
@@ -142,6 +142,10 @@ Optional extras:
 rem Output converters anim_to_vtk_win64.exe and th_to_csv_win64.exe (finds MSVC itself)
 tools\build_output_converters.bat
 
+rem Single precision, explicit only: starter_win64_sp.exe, engine_win64_sp.exe and
+rem engine_win64_impi_sp.exe (loads oneAPI itself)
+build_windows_sp.bat 16
+
 rem SMP Engine engine_win64.exe (explicit only). This script needs oneAPI loaded first.
 set "VS2026INSTALLDIR=C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools"
 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
@@ -173,6 +177,8 @@ Optional extras:
 ```bash
 bash build_linux.sh 8                   # SMP Engine engine_linux64_gf (explicit only)
 bash tools/build_output_converters.sh   # anim_to_vtk_linux64_gf and th_to_csv_linux64_gf
+bash build_linux_gf_sp.sh 8             # single precision, explicit only: starter_linux64_gf_sp,
+                                        # engine_linux64_gf_sp, engine_linux64_gf_ompi_sp
 ```
 
 ### VS Code
@@ -183,6 +189,7 @@ bash tools/build_output_converters.sh   # anim_to_vtk_linux64_gf and th_to_csv_l
 | --- | --- |
 | Build Starter + Engine (Intel MPI, MUMPS) | The default build task (Ctrl+Shift+B). Runs the Windows script, or the Linux Intel script in a Remote-WSL window. |
 | Linux: build Starter + Engine (GNU + OpenMPI, MUMPS) | Runs `build_linux_gf_mumps.sh`. |
+| Build single-precision Starter + Engines (explicit only) | Runs `build_windows_sp.bat` or `build_linux_gf_sp.sh`. |
 | Build output converters (anim_to_vtk, th_to_csv) | Builds both converters. |
 | Test implicit cantilever (MUMPS) | Runs the self-test below. |
 | Package release bundle | Writes the release zip; see [Release bundles](#release-bundles). |
@@ -308,7 +315,9 @@ Ubuntu.
 
 In this fork the GUI runs **every job on the MPI Engine**, explicit or
 implicit, through `mpiexec`/`mpirun`, also with one process:
-`engine_win64_impi` on Windows and `engine_linux64_gf_ompi` on Linux.
+`engine_win64_impi` on Windows and `engine_linux64_gf_ompi` on Linux. With the
+single precision option ticked, it uses the `_sp` Starter and the `_sp` MPI
+Engine instead. Those run explicit models only.
 
 Set **Config > MPI Path** once:
 
@@ -354,7 +363,7 @@ OpenRadioss/
 ```
 
 Build everything you want to ship first: the MUMPS builds, the optional SMP
-Engines and the converters. Executables that are missing are left out, with a
+Engines, the single-precision executables and the converters. Executables that are missing are left out, with a
 warning. `README.txt` inside each zip records the commit and the toolchain
 versions.
 
@@ -375,8 +384,9 @@ executable permissions are kept.
 | Change | Files |
 | --- | --- |
 | Fix an Engine crash at the start of every implicit run with ifx 2026.1 optimized builds. The compiler dropped a loop's zero-trip test in `DIM_KINMAX` when `NKINE=0`. | [`engine/source/implicit/ind_glob_k.F`](engine/source/implicit/ind_glob_k.F) |
+| Stop with a clear error, instead of crashing, when an implicit deck runs on an Engine built without the implicit solver (single precision). | [`engine/source/engine/resol.F`](engine/source/engine/resol.F) |
 | Pass the MUMPS flags to the per-file flag sets on Linux. Files such as `resol.F` were built without `-DMUMPS5`. | [`engine/CMake_Compilers/cmake_linux64_ifx.txt`](engine/CMake_Compilers/cmake_linux64_ifx.txt), [`cmake_linux64_ifort.txt`](engine/CMake_Compilers/cmake_linux64_ifort.txt) |
-| Build scripts for the three MPI + MUMPS Engines. | `build_windows_mumps.bat`, `build_linux_mumps.sh`, `build_linux_gf_mumps.sh` |
+| Build scripts for the three MPI + MUMPS Engines, and for the single-precision executables. | `build_windows_mumps.bat`, `build_linux_mumps.sh`, `build_linux_gf_mumps.sh`, `build_windows_sp.bat`, `build_linux_gf_sp.sh` |
 | Implicit self-test. | [`qa-tests/implicit/cantilever`](qa-tests/implicit/cantilever/README.md) |
 | Release bundle packaging. | [`Compiling_tools/script/make_bundle.py`](Compiling_tools/script/make_bundle.py) |
 | Output converters, GUI and inp2rad sources, from [OpenCourant/Tools](https://github.com/OpenCourant/Tools) (the deleted OpenRadioss/Tools repository's history). The converters are built with optimization. The GUI always uses the MPI Engine and finds OpenMPI in `lib64`. | [`tools/`](tools) |
@@ -387,6 +397,7 @@ executable permissions are kept.
 | Symptom | Cause and fix |
 | --- | --- |
 | `Fatal error: MUMPS required` on the console | The Engine has no MUMPS. Use an MPI Engine (`*_impi`, `*_ompi`), not an SMP Engine. For a source build, check that the configure step printed `MUMPS is enabled` (Intel) and that `engine/extlib/MUMPS_5.5.1` exists. |
+| `Fatal error: implicit needs a double precision Engine with MUMPS` | The deck has `/IMPL` cards but ran on a single-precision (`_sp`) Engine, for example with the GUI's single precision option ticked. Use a double-precision MPI Engine. |
 | Engine crashes (`forrtl: severe (157)` access violation) right after `SOLUTION PHASE` on implicit models only | The Engine was built without the `DIM_KINMAX` fix in `ind_glob_k.F`. Rebuild from this branch. |
 | `setvars.bat`: `Visual Studio was not found` while building | `setvars.bat` does not find Build Tools 2026. `build_windows_mumps.bat` sets `VS2026INSTALLDIR` for you. For your own scripts, set `VS2026INSTALLDIR=C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools` first. |
 | `'vars.bat' is not recognized` from `setvars.bat` | The environment variable `NoDefaultCurrentDirectoryInExePath` is set. Clear it before calling `setvars.bat`; the scripts in this repo do. |

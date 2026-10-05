@@ -16,9 +16,10 @@ The layout follows the upstream delivery workflow
     COPYRIGHT.md, LICENSE.md, README.txt
 
 Usage: python make_bundle.py --os win64|linux64 [--out DIR]
-Run after build_windows_mumps.bat + build_windows_compat.bat (win64), or after
-build_linux_mumps.sh + build_linux_gf_mumps.sh + build_linux.sh (linux64), and
-after tools/build_output_converters.bat or .sh (anim_to_vtk, th_to_csv).
+Run after build_windows_mumps.bat + build_windows_compat.bat + build_windows_sp.bat
+(win64), or after build_linux_mumps.sh + build_linux_gf_mumps.sh + build_linux.sh +
+build_linux_gf_sp.sh (linux64), and after tools/build_output_converters.bat or .sh
+(anim_to_vtk, th_to_csv). Executables that were not built are left out.
 """
 import argparse
 import datetime
@@ -36,9 +37,12 @@ TOP = "OpenRadioss"
 
 EXECUTABLES = {
     "win64": ["starter_win64.exe", "engine_win64.exe", "engine_win64_impi.exe",
+              "starter_win64_sp.exe", "engine_win64_sp.exe", "engine_win64_impi_sp.exe",
               "anim_to_vtk_win64.exe", "th_to_csv_win64.exe"],
     "linux64": ["starter_linux64_gf", "engine_linux64_gf", "engine_linux64_gf_ompi",
-                "engine_linux64_ifx_impi", "anim_to_vtk_linux64_gf", "th_to_csv_linux64_gf"],
+                "engine_linux64_ifx_impi",
+                "starter_linux64_gf_sp", "engine_linux64_gf_sp", "engine_linux64_gf_ompi_sp",
+                "anim_to_vtk_linux64_gf", "th_to_csv_linux64_gf"],
 }
 # Intel runtime shipped in extlib/intelOneAPI_runtime/<os>, as (oneAPI component, subfolder, patterns).
 # MKL loads its CPU-specific kernels at run time, so they do not show up as imports.
@@ -113,7 +117,7 @@ def readme(osname, exes, oneapi):
         if ompi:
             tools.append(ompi[0])
     lines = [
-        "OpenRadioss double-precision build with the MUMPS 5.5.1 implicit solver",
+        "OpenRadioss with the MUMPS 5.5.1 implicit solver (double precision)",
         "",
         f"Built {datetime.date.today().isoformat()} from branch {branch}, commit {commit}{dirty}.",
         *[f"  {t}" for t in tools],
@@ -128,6 +132,12 @@ def readme(osname, exes, oneapi):
         "engine_linux64_gf": "Engine, GNU, OpenMP only (explicit; no implicit)",
         "engine_linux64_gf_ompi": "Engine, GNU + OpenMPI 4 + MUMPS (explicit and implicit)",
         "engine_linux64_ifx_impi": "Engine, Intel + Intel MPI + MUMPS (explicit and implicit)",
+        "starter_win64_sp.exe": "Starter, single precision",
+        "engine_win64_sp.exe": "Engine, single precision, OpenMP only (explicit only)",
+        "engine_win64_impi_sp.exe": "Engine, single precision, Intel MPI (explicit only)",
+        "starter_linux64_gf_sp": "Starter, single precision (GNU)",
+        "engine_linux64_gf_sp": "Engine, single precision, GNU, OpenMP only (explicit only)",
+        "engine_linux64_gf_ompi_sp": "Engine, single precision, GNU + OpenMPI 4 (explicit only)",
         "anim_to_vtk_win64.exe": "Animation file (A001...) to legacy VTK for ParaView",
         "th_to_csv_win64.exe": "Time history file (T01) to CSV",
         "anim_to_vtk_linux64_gf": "Animation file (A001...) to legacy VTK for ParaView",
@@ -135,6 +145,13 @@ def readme(osname, exes, oneapi):
     }
     lines += [f"  {e:<26} {desc.get(e, '')}" for e in exes]
     lines.append("")
+    if any("_sp" in e for e in exes):
+        lines += [
+            "Single precision (_sp) runs explicit models only: the implicit solver needs",
+            "double precision. Run the _sp Starter with the _sp Engines; in the GUI, tick",
+            "the single precision option.",
+            "",
+        ]
     if osname == "win64":
         lines += [
             "Requirements: Windows 10/11 x64 with the Microsoft Visual C++ 2015-2022",
