@@ -38,6 +38,22 @@
       "problemMatcher": []
     },
     {
+      "label": "Build single-precision Starter + Engines (explicit only)",
+      "detail": "build_windows_sp.bat / build_linux_gf_sp.sh; outputs *_sp to exec/",
+      "type": "process",
+      "windows": {
+        "command": "cmd.exe",
+        "args": ["/d", "/c", "${workspaceFolder}\\build_windows_sp.bat"]
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["${workspaceFolder}/build_linux_gf_sp.sh"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
       "label": "Build output converters (anim_to_vtk, th_to_csv)",
       "detail": "tools/build_output_converters.*; outputs to exec/",
       "type": "process",
