@@ -88,7 +88,7 @@ from `OPENMPI_ROOT`, which defaults to `/usr/lib64/mpi/gcc/openmpi4`. Point it
 at an OpenMPI 4 prefix that contains `bin/mpif90`, `include/` and `lib64/` or
 `lib/`.
 
-In WSL, build in the Linux filesystem (for example `~/openradioss-261001`)
+In WSL, build in the Linux filesystem (for example `~/OpenDyad`)
 rather than under `/mnt/c`; it is much faster.
 
 ## Get the MUMPS source
@@ -261,7 +261,7 @@ Windows, from a source build:
 
 ```bat
 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
-set "OPENRADIOSS_PATH=C:\path\to\openradioss-261001"
+set "OPENRADIOSS_PATH=C:\path\to\OpenDyad"
 set "RAD_CFG_PATH=%OPENRADIOSS_PATH%\hm_cfg_files"
 set "RAD_H3D_PATH=%OPENRADIOSS_PATH%\extlib\h3d\lib\win64"
 set "KMP_STACKSIZE=400m"
@@ -277,7 +277,7 @@ needs only the compiler and MPI parts of the environment.
 Linux, GNU + OpenMPI:
 
 ```bash
-export OPENRADIOSS_PATH=~/openradioss-261001
+export OPENRADIOSS_PATH=~/OpenDyad
 export RAD_CFG_PATH=$OPENRADIOSS_PATH/hm_cfg_files
 export RAD_H3D_PATH=$OPENRADIOSS_PATH/extlib/h3d/lib/linux64
 export OMP_STACKSIZE=400m

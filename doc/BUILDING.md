@@ -8,7 +8,7 @@ libraries. This is not the original complete v82 distribution; reader compatibil
 options are still required. Origins are recorded in `EXTLIB_VERSION.json`.
 See the [validation record](BUILD_VALIDATION.md) for compilation and solver checks.
 
-Use the [current source ZIP](https://github.com/lililii124/openradioss-261001/archive/refs/heads/main.zip)
+Use the [current source ZIP](https://github.com/KenpoYogi/OpenDyad/archive/refs/heads/main.zip)
 or clone `main`. The preserved `upstream-20260929` release predates the dependency
 recovery. Extract or clone into a short path without spaces; some upstream
 compiler flags do not support paths containing spaces.
@@ -44,8 +44,8 @@ Install GCC, G++, GFortran, CMake, Make and Python 3. On Ubuntu:
 
 ```bash
 sudo apt-get install build-essential gfortran cmake python3
-git clone https://github.com/lililii124/openradioss-261001.git
-cd openradioss-261001
+git clone https://github.com/KenpoYogi/OpenDyad.git
+cd OpenDyad
 bash build_linux.sh 8
 ```
 

@@ -25,7 +25,7 @@ with Windows and Linux build dependencies from OpenCourant's `v82-hybrid` packag
 - [Implicit analysis with MUMPS](HOWTO_IMPLICIT.md)
 - [Compiler and platform guide](HOWTO.md)
 - [Solver execution guide](INSTALL.md)
-- [Download source ZIP](https://github.com/lililii124/openradioss-261001/archive/refs/heads/main.zip)
+- [Download source ZIP](https://github.com/KenpoYogi/OpenDyad/archive/refs/heads/main.zip)
 
 ### Build on Linux or WSL
 
@@ -36,8 +36,8 @@ models with an existing mesh use the normal solver path.
 Install GCC/GFortran, CMake, Make and Python 3, then run:
 
 ```bash
-git clone https://github.com/lililii124/openradioss-261001.git
-cd openradioss-261001
+git clone https://github.com/KenpoYogi/OpenDyad.git
+cd OpenDyad
 bash build_linux.sh 8
 ```
 
@@ -122,8 +122,8 @@ describes common workflows.
 
 ## Contributing
 
-Use this repository's [issues](https://github.com/lililii124/openradioss-261001/issues)
-and [pull requests](https://github.com/lililii124/openradioss-261001/pulls) for
+Use this repository's [issues](https://github.com/KenpoYogi/OpenDyad/issues)
+and [pull requests](https://github.com/KenpoYogi/OpenDyad/pulls) for
 build problems, reproducible solver issues and proposed changes.
 
 - [Coding and contribution guidance](CONTRIBUTING.md)
