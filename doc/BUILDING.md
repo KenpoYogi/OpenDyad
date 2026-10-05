@@ -33,9 +33,10 @@ produced zero-volume elements with both the rebuilt and the preserved official
 Starter. The Windows compatibility helper therefore also selects the explicit
 unsupported-keyword diagnostic.
 
-MPI, single precision, other
-compiler families and implicit-solver configurations are outside these build
-instructions; see [HOWTO.md](../HOWTO.md) for the upstream build options.
+For MPI Engines with the MUMPS implicit solver, see
+[HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md). Single precision and other compiler
+families are outside these build instructions; see [HOWTO.md](../HOWTO.md) for
+the upstream build options.
 
 ## Linux and WSL
 

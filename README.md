@@ -22,6 +22,7 @@ with Windows and Linux build dependencies from OpenCourant's `v82-hybrid` packag
 
 - [Quick start](doc/Getting_started.md)
 - [Build and run this repository](doc/BUILDING.md)
+- [Implicit analysis with MUMPS](HOWTO_IMPLICIT.md)
 - [Compiler and platform guide](HOWTO.md)
 - [Solver execution guide](INSTALL.md)
 - [Download source ZIP](https://github.com/lililii124/openradioss-261001/archive/refs/heads/main.zip)
@@ -59,6 +60,32 @@ defined mesh for ALE analyses.
 Runtime paths, compiler details, structured ALE limitations and the
 include-list compatibility behavior are documented in
 [Building and running](doc/BUILDING.md).
+
+## Implicit analysis with MUMPS
+
+This fork adds Engine builds with the [MUMPS](https://mumps-solver.org) 5.5.1
+direct solver, so implicit analyses (`/IMPLICIT`, `/IMPL/...`) run. Without
+MUMPS, the implicit solver is compiled out of the Engine.
+
+| Platform | Engine | Toolchain | Build script |
+| --- | --- | --- | --- |
+| Windows x86-64 | `engine_win64_impi` | Intel oneAPI + Intel MPI | `build_windows_mumps.bat` |
+| Linux x86-64 | `engine_linux64_ifx_impi` | Intel oneAPI + Intel MPI | `build_linux_mumps.sh` |
+| Linux x86-64 | `engine_linux64_gf_ompi` | GCC + OpenMPI 4 | `build_linux_gf_mumps.sh` |
+
+- **Run implicit models on an MPI Engine.** One process (`mpiexec -n 1`) also works. The SMP Engines don't contain the implicit solver.
+- **Limits:** double precision only. `/IMPL/BUCKL` and `/EIG` are not available.
+- **Verified:** linear static analysis on all three Engines, against a beam-theory reference ([self-test](qa-tests/implicit/cantilever/README.md)).
+
+The fork also adds:
+
+- **Release zips** like the upstream ones: Starter, Engines, output converters, the OpenRadioss GUI and the self-test ([`make_bundle.py`](Compiling_tools/script/make_bundle.py)).
+- **Tool sources** for `anim_to_vtk`, `th_to_csv`, `openradioss_gui` and `inp2rad`, in `tools/`, recovered from [OpenCourant/Tools](https://github.com/OpenCourant/Tools). The GUI runs every job on the MPI Engine.
+- **VS Code tasks** for building, testing and packaging.
+
+The [implicit analysis HOWTO](HOWTO_IMPLICIT.md) covers prerequisites, the MUMPS
+download, building, running implicit models, the GUI, release bundles and
+troubleshooting.
 
 ## Solver workflow
 
