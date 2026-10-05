@@ -154,12 +154,9 @@ class RunOpenRadioss():
     def environment(self):
 
         custom_env = os.environ.copy()  # Start with a copy of the current environment
-        try:
-            np=int (self.np)
-        except:
-            np=1
 
-        if np > 1 and self.mpi_path != "":
+        # Also for one rank: every run uses the MPI Engine (see get_engine_command).
+        if self.mpi_path != "":
             if self.arch == "win64":
                 impi_root=self.mpi_path
                 mpi_binpath = self.mpi_path + "\\bin"
@@ -175,7 +172,9 @@ class RunOpenRadioss():
                 ompi_root=self.mpi_path
                 opal_prefix = ompi_root
                 ompi_bin = ompi_root + "/bin"
-                ompi_lib = ompi_root + "/lib"
+                # Distribution packages (e.g. openSUSE) use lib64 instead of lib.
+                ompi_lib = os.pathsep.join([d for d in (ompi_root + "/lib64", ompi_root + "/lib")
+                                            if os.path.isdir(d)] or [ompi_root + "/lib"])
                 custom_env["PATH"] = os.pathsep.join([ompi_bin,custom_env["PATH"] ] )
                 custom_env["OPAL_PREFIX"] = opal_prefix
 
@@ -325,24 +324,18 @@ class RunOpenRadioss():
             mpi='_impi'
         else:
             mpi='_ompi'
-        if self.np=="1":
-            if self.precision == 'sp':
-                engine_exec = os.path.join("exec","engine_"+self.arch+"_sp"+self.bin_extension)
-            else: 
-                engine_exec = os.path.join("exec","engine_"+self.arch+self.bin_extension)
-            engine_command =  [os.path.join(self.openradioss_path, engine_exec), "-i", engine_input]
-
+        # Always the MPI Engine, also on one rank: it runs explicit and implicit
+        # decks, and the implicit solver (MUMPS) is only built into it.
+        if self.precision == 'sp':
+            engine_exec = os.path.join("exec","engine_"+self.arch+mpi+"_sp"+self.bin_extension)
         else:
-            if self.precision == 'sp':
-                engine_exec = os.path.join("exec","engine_"+self.arch+mpi+"_sp"+self.bin_extension)
-            else:
-                engine_exec = os.path.join("exec","engine_"+self.arch+mpi+self.bin_extension)
-        
-            if current_platform == "Windows":
-               engine_command = ["mpiexec","-np",self.np,os.path.join(self.openradioss_path, engine_exec), "-i", engine_input]
-            else:
-               engine_command = ["mpirun","-np",self.np,os.path.join(self.openradioss_path, engine_exec), "-i", engine_input]
-    
+            engine_exec = os.path.join("exec","engine_"+self.arch+mpi+self.bin_extension)
+
+        if current_platform == "Windows":
+           engine_command = ["mpiexec","-np",self.np,os.path.join(self.openradioss_path, engine_exec), "-i", engine_input]
+        else:
+           engine_command = ["mpirun","-np",self.np,os.path.join(self.openradioss_path, engine_exec), "-i", engine_input]
+
         return engine_command
 
 # --------------------------------------------------------------
