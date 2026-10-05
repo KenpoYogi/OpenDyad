@@ -2460,6 +2460,11 @@ C------ one routine for EIG
                   MSTOP=2
                   GOTO 300
                 END IF !IF (NEIG>0) THEN
+#else
+C               Without this stop, a single precision Engine crashed later on implicit decks.
+                WRITE(6,*) __LINE__,"Fatal error: implicit needs a double precision Engine with MUMPS"
+                CALL FLUSH(6)
+                CALL ARRET(5)
 #endif
               ELSE
                 IMPL_S0 = 0
