@@ -11,6 +11,7 @@ The layout follows the upstream delivery workflow
     extlib/intelOneAPI_runtime/win64/   Windows only: OpenMP and MKL DLLs
     hm_cfg_files/
     licenses/
+    openradioss_gui/                    GUI launcher, with inp2rad.py
     qa-tests/implicit/cantilever/       Implicit MUMPS check (run_cantilever.*)
     COPYRIGHT.md, LICENSE.md, README.txt
 
@@ -66,7 +67,8 @@ def run(cmd):
 def copy(src, dst):
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.is_dir():
-        shutil.copytree(src, dst, dirs_exist_ok=True)
+        shutil.copytree(src, dst, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     else:
         shutil.copy2(src, dst)
 
@@ -81,7 +83,8 @@ def stage_licenses(osname, stage, oneapi):
     copy(mumps, lic / "mumps_license.txt")
     if osname == "linux64":
         copy(ROOT / "engine" / "extlib" / "scalapack-2.2.0" / "LICENSE", lic / "scalapack_license.txt")
-    copy(ROOT / "tools" / "anim_to_vtk" / "LICENSE.md", lic / "output_converters_license.txt")
+    # Same MIT license for the converters, openradioss_gui and inp2rad (OpenRadioss Tools).
+    copy(ROOT / "tools" / "openradioss_gui" / "LICENSE.md", lic / "openradioss_tools_license.txt")
     # Intel runtime and statically linked MKL / OpenMP.
     for d in (oneapi / "mkl" / "latest" / "share" / "doc" / "mkl" / "licensing",
               oneapi / "mkl" / "latest" / "licensing"):
@@ -158,6 +161,14 @@ def readme(osname, exes, oneapi):
             "",
             "Self-test (implicit, MUMPS): qa-tests\\implicit\\cantilever\\run_cantilever.bat",
             "  (needs Python 3; prints PASS when the tip deflection matches 2.000 mm)",
+            "",
+            "GUI (needs Python 3 with tkinter, included in the python.org installer):",
+            "  double-click openradioss_gui\\OpenRadioss_gui.vbs, or run OpenRadioss_gui.bat.",
+            "  It runs every job, explicit or implicit, on engine_win64_impi.exe through",
+            "  mpiexec (also with one process). Set Config > MPI Path to the Intel MPI folder, e.g.",
+            "  C:\\Program Files (x86)\\Intel\\oneAPI\\mpi\\latest",
+            "  Batch mode: python openradioss_gui\\OpenRadioss_gui.py -i model_0000.rad -np N",
+            "              [-th_to_csv] [-anim_to_vtk] [-mpi_path <Intel MPI folder>]",
         ]
     else:
         lines += [
@@ -191,6 +202,14 @@ def readme(osname, exes, oneapi):
             "  bash qa-tests/implicit/cantilever/run_cantilever.sh engine_linux64_gf_ompi",
             "  bash qa-tests/implicit/cantilever/run_cantilever.sh engine_linux64_ifx_impi",
             "  (needs Python 3; prints PASS when the tip deflection matches 2.000 mm)",
+            "",
+            "GUI (needs Python 3 with tkinter: python3-tk on Debian/Ubuntu, python3xx-tk on",
+            "openSUSE): bash openradioss_gui/OpenRadioss_gui.bash",
+            "  It runs every job, explicit or implicit, on engine_linux64_gf_ompi through",
+            "  mpirun (also with one process). Set Config > MPI Path to the OpenMPI folder, e.g.",
+            "  /usr/lib64/mpi/gcc/openmpi4 or /opt/openmpi.",
+            "  Batch mode: python3 openradioss_gui/OpenRadioss_gui.py -i model_0000.rad -np N",
+            "              [-th_to_csv] [-anim_to_vtk] [-mpi_path <OpenMPI folder>]",
         ]
     lines += [
         "",
@@ -240,6 +259,9 @@ def main():
                     for f in found:
                         copy(Path(f), dst / Path(f).name)
         copy(ROOT / "hm_cfg_files", stage / "hm_cfg_files")
+        # The GUI finds exec/ and hm_cfg_files/ one level up, and imports inp2rad from its own folder.
+        copy(ROOT / "tools" / "openradioss_gui", stage / "openradioss_gui")
+        copy(ROOT / "tools" / "inp2rad" / "inp2rad" / "inp2rad.py", stage / "openradioss_gui" / "inp2rad.py")
         test = ROOT / "qa-tests" / "implicit" / "cantilever"
         for f in test.iterdir():
             if f.is_file():
@@ -262,7 +284,7 @@ def main():
                 if osname != "win64":
                     # Keep Unix permissions, and make sure executables stay executable.
                     mode = p.stat().st_mode & 0o777
-                    if p.parent.name == "exec" or p.suffix == ".sh":
+                    if p.parent.name == "exec" or p.suffix in (".sh", ".bash"):
                         mode |= 0o755
                     info.external_attr = (0o100000 | mode) << 16
                     info.create_system = 3
