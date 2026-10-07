@@ -517,7 +517,7 @@ C-----------------------------------------------
 C -----------------------------------------------
 C TH FILES
 C -----------------------------------------------
-       IF (ISPMD == 0) THEN
+       IF (ASSOCIATED(OUTPUT_PTR) .AND. ISPMD == 0) THEN
 
             ! Close the TH file
             IF (OUTPUT_PTR%TH%TH_WRITE_TYPE == 3)THEN
