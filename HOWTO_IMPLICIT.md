@@ -49,6 +49,10 @@ Tested toolchains:
 Clone or extract the source into a path **without spaces**; some upstream
 compiler flags do not support spaces.
 
+The complete component inventory of the verified Windows 11 + WSL openSUSE
+Tumbleweed machine, with exact package names and versions, is in
+[doc/ENVIRONMENT_SETUP.md](doc/ENVIRONMENT_SETUP.md).
+
 ### Windows
 
 - **Intel oneAPI** with the Fortran compiler, the DPC++/C++ compiler, MKL and Intel MPI. The Base and HPC toolkits contain all of them.

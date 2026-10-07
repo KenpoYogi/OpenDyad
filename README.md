@@ -22,6 +22,7 @@ with Windows and Linux build dependencies from OpenCourant's `v82-hybrid` packag
 
 - [Quick start](doc/Getting_started.md)
 - [Build and run this repository](doc/BUILDING.md)
+- [Development environment: Windows and WSL openSUSE Tumbleweed](doc/ENVIRONMENT_SETUP.md)
 - [Implicit analysis with MUMPS](HOWTO_IMPLICIT.md)
 - [Compiler and platform guide](HOWTO.md)
 - [Solver execution guide](INSTALL.md)
