@@ -9,7 +9,8 @@ versions of the machine the builds were verified on (October 2026), so the
 setup can be reproduced.
 
 [BUILDING.md](BUILDING.md) and [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md)
-explain how to run the builds. This page only covers what to install first.
+explain how to run the builds; `build_windows_all.bat` and `build_linux_all.sh`
+build everything in one command. This page only covers what to install first.
 
 **Contents**
 
@@ -32,7 +33,7 @@ explain how to run the builds. This page only covers what to install first.
 | `starter_linux64_ifx`, `engine_linux64_ifx_impi` | WSL | Intel oneAPI for Linux (ifx, icx, MKL, Intel MPI), MUMPS 5.5.1 source |
 | `anim_to_vtk_linux64_gf`, `th_to_csv_linux64_gf` | WSL | GCC and G++ only |
 | `OpenRadioss_linux64.zip` release bundle | WSL | Python 3, Intel oneAPI (two runtime libraries are copied from it) |
-| OpenRadioss GUI | both | Python 3 with tkinter; on WSL also WSLg for the window |
+| OpenRadioss GUI (staged in `openradioss_gui/` by the full builds) | both | Python 3 with tkinter; on WSL also WSLg for the window |
 | Implicit self-test `run_cantilever.*` | both | Python 3 and the MPI runtime of the Engine under test |
 | VS Code tasks for the Linux builds | Windows | VS Code with the Remote - WSL extension |
 
@@ -90,9 +91,11 @@ Notes:
   prompts set it yourself (see [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md#troubleshooting)).
 - CMake and Ninja are **not** on `PATH` in a plain command prompt. They become
   available once `setvars.bat` (through `vcvarsall.bat`) or
-  `VC\Auxiliary\Build\vcvars64.bat` has run. `build_windows_mumps.bat`,
-  `build_windows_sp.bat` and `tools\build_output_converters.bat` do this
-  themselves. `build_windows_compat.bat` does not: run it from a oneAPI prompt.
+  `VC\Auxiliary\Build\vcvars64.bat` has run. `build_windows_all.bat`,
+  `build_windows_mumps.bat`, `build_windows_sp.bat` and
+  `tools\build_output_converters.bat` do this themselves.
+  `build_windows_compat.bat` does not: run it from a oneAPI prompt, or through
+  `build_windows_all.bat -smp`.
 - A separate CMake or Ninja installer is not required. If you install one
   anyway, keep CMake at 3.x or 4.x; the scripts use `cmake -S/-B` and Ninja.
 - Visual Studio 2022 Build Tools also work; `setvars.bat` finds those on its
@@ -123,9 +126,9 @@ Visual Studio, there is nothing to integrate with Build Tools; skip it.
 
 Notes:
 
-- No "oneAPI command prompt" is needed for `build_windows_mumps.bat` and
-  `build_windows_sp.bat`: they call `setvars.bat intel64` when `ifx.exe` is
-  not already on `PATH`.
+- No "oneAPI command prompt" is needed for `build_windows_all.bat`,
+  `build_windows_mumps.bat` and `build_windows_sp.bat`: they call
+  `setvars.bat intel64` when `ifx.exe` is not already on `PATH`.
 - `mpiexec.exe` lives in `oneAPI\mpi\latest\bin`. The implicit self-test loads
   the MPI environment itself. The GUI needs **Config > MPI Path** set to
   `C:\Program Files (x86)\Intel\oneAPI\mpi\latest`.
@@ -256,10 +259,11 @@ sudo zypper refresh && sudo zypper dup
 
 ### 1. GNU toolchain, CMake, Ninja, Make, Python 3
 
-Why: `build_linux.sh`, `build_linux_gf_mumps.sh`, `build_linux_gf_sp.sh` and
-`tools/build_output_converters.sh` compile with GCC, G++ and GFortran through
-CMake. `make` builds LAPACK and MUMPS inside the GNU MUMPS script. `which` is
-used by OpenMPI's wrappers. Python 3 runs the same helper scripts as on Windows.
+Why: `build_linux_all.sh` and the scripts it calls (`build_linux_gf_mumps.sh`,
+`build_linux_gf_sp.sh`, `tools/build_output_converters.sh`, and `build_linux.sh`
+with `-smp`) compile with GCC, G++ and GFortran through CMake. `make` builds
+LAPACK and MUMPS inside the GNU MUMPS script. `which` is used by OpenMPI's
+wrappers. Python 3 runs the same helper scripts as on Windows.
 
 ```bash
 sudo zypper install gcc gcc-c++ gcc-fortran cmake ninja make which python3 git curl tar
@@ -320,9 +324,10 @@ The GUI needs **Config > MPI Path** set to `/usr/lib64/mpi/gcc/openmpi4`.
 
 Only needed for `starter_linux64_ifx` and `engine_linux64_ifx_impi`, built by
 `build_linux_mumps.sh`, and for `make_bundle.py --os linux64`, which copies
-`libirng.so` and `libintlc.so.5` from the compiler into the bundle. Skip this
-section if you only want the GNU executables. It takes about 5.7 GB under
-`/opt/intel/oneapi`.
+`libirng.so` and `libintlc.so.5` from the compiler into the bundle.
+`build_linux_all.sh` builds the Intel Engine when it finds oneAPI and skips it
+otherwise. Skip this section if you only want the GNU executables. It takes
+about 5.7 GB under `/opt/intel/oneapi`.
 
 Add Intel's repository, import its signing key and install the same versions
 as on Windows:
@@ -423,7 +428,7 @@ internet access the first time. Checksums are verified where a script downloads.
 
 | What | Where it lands | Who downloads it |
 | --- | --- | --- |
-| MUMPS 5.5.1 source (`ftp.mcs.anl.gov`, PETSc mirror) | `engine/extlib/MUMPS_5.5.1` | You, with `curl` and `tar`, see [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md#get-the-mumps-source). Needed by the Intel builds on both platforms. |
+| MUMPS 5.5.1 source (`ftp.mcs.anl.gov`, PETSc mirror) | `engine/extlib/MUMPS_5.5.1` | `build_windows_all.bat` and `build_linux_all.sh` (checksum verified), or you with `curl` and `tar` for the individual scripts, see [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md#get-the-mumps-source). Needed by the Intel builds on both platforms. |
 | LAPACK 3.10.1 (GitHub) | `engine/extlib/lapack-3.10.1` | `build_linux_gf_mumps.sh` |
 | ScaLAPACK 2.2.0 (GitHub) | `engine/extlib/scalapack-2.2.0` | `build_linux_gf_mumps.sh` |
 | MUMPS 5.5.1 for the GNU build | `engine/extlib/MUMPS_5.5.1_gf_ompi` | `build_linux_gf_mumps.sh` (separate copy, built with OpenMPI wrappers) |

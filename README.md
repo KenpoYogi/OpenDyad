@@ -34,29 +34,43 @@ The bundled Linux reader supports a compatibility build. It cannot generate
 `/ALE/STRUCTURED_MESH`; Starter reports an error for that keyword. Ordinary ALE
 models with an existing mesh use the normal solver path.
 
-Install GCC/GFortran, CMake, Make and Python 3, then run:
+Install GCC/GFortran, CMake, Make, Python 3 and OpenMPI 4, then run:
 
 ```bash
 git clone https://github.com/KenpoYogi/OpenDyad.git
 cd OpenDyad
-bash build_linux.sh 8
+bash build_linux_all.sh 8
 ```
 
-The build produces double-precision Starter and SMP Engine executables in
-`exec/`. The external libraries and input reader are included in `extlib/`.
+This is the default build. It produces everything the release bundle ships, in
+`exec/`: the double-precision Starter and GNU + OpenMPI Engine with MUMPS
+(explicit and implicit), the single-precision Starter and Engines (explicit
+only) and the output converters, plus the OpenRadioss GUI staged in
+`openradioss_gui/`. The first run also builds LAPACK, ScaLAPACK and MUMPS.
+When Intel oneAPI is installed, the Intel MPI Engine is built too.
+`bash build_linux.sh 8` builds only the double-precision SMP Starter and
+Engine. The external libraries and input reader are included in `extlib/`.
 
 ### Build on Windows
 
-Install Intel oneAPI with MKL, Visual Studio C++ Build Tools and a Windows SDK,
-plus CMake, Ninja and Python 3. Extract the source to a short path without spaces,
-then run from a oneAPI command prompt:
+Install Intel oneAPI with MKL and Intel MPI, Visual Studio C++ Build Tools with
+a Windows SDK, and Python 3. Extract the source to a short path without spaces,
+then run from a plain command prompt:
 
 ```bat
-build_windows_compat.bat 8
+build_windows_all.bat 8
 ```
 
-This compatibility build also rejects `/ALE/STRUCTURED_MESH`. Use an explicitly
-defined mesh for ALE analyses.
+This is the default build. It downloads MUMPS and loads the oneAPI environment
+itself, then produces everything the release bundle ships, in `exec\`: the
+double-precision Starter and Intel MPI Engine with MUMPS (explicit and
+implicit), the single-precision Starter and Engines (explicit only) and the
+output converters, plus the OpenRadioss GUI staged in `openradioss_gui\`.
+`build_windows_compat.bat 8`, from a oneAPI command prompt, builds only the
+double-precision SMP Starter and Engine.
+
+These builds also reject `/ALE/STRUCTURED_MESH`. Use an explicitly defined mesh
+for ALE analyses.
 
 Runtime paths, compiler details, structured ALE limitations and the
 include-list compatibility behavior are documented in
@@ -74,12 +88,17 @@ MUMPS, the implicit solver is compiled out of the Engine.
 | Linux x86-64 | `engine_linux64_ifx_impi` | Intel oneAPI + Intel MPI | `build_linux_mumps.sh` |
 | Linux x86-64 | `engine_linux64_gf_ompi` | GCC + OpenMPI 4 | `build_linux_gf_mumps.sh` |
 
+`build_windows_all.bat` and `build_linux_all.sh` run these scripts together with
+the single-precision and converter builds and stage the GUI, so one command
+produces everything the release bundle ships.
+
 - **Run implicit models on an MPI Engine.** One process (`mpiexec -n 1`) also works. The SMP Engines don't contain the implicit solver.
 - **Limits:** implicit needs double precision. Single-precision executables (`build_windows_sp.bat`, `build_linux_gf_sp.sh`) run explicit models only. `/IMPL/BUCKL` and `/EIG` are not available.
 - **Verified:** linear static analysis on all three Engines, against a beam-theory reference ([self-test](qa-tests/implicit/cantilever/README.md)).
 
 The fork also adds:
 
+- **One-command builds** (`build_windows_all.bat`, `build_linux_all.sh`): MPI + MUMPS Engines, single-precision executables, converters and the GUI in one go, with `-bundle` to package them.
 - **Release zips** like the upstream ones: double- and single-precision Starters and Engines, output converters, the OpenRadioss GUI and the self-test ([`make_bundle.py`](Compiling_tools/script/make_bundle.py)).
 - **Tool sources** for `anim_to_vtk`, `th_to_csv`, `openradioss_gui` and `inp2rad`, in `tools/`, recovered from [OpenCourant/Tools](https://github.com/OpenCourant/Tools). The GUI runs every job on the MPI Engine.
 - **VS Code tasks** for building, testing and packaging.

@@ -30,6 +30,10 @@ models, the GUI, release bundles and known problems.
 | Linux x86-64 | `engine_linux64_ifx_impi` | Intel oneAPI (ifx, icx, MKL) + Intel MPI | [`build_linux_mumps.sh`](build_linux_mumps.sh) |
 | Linux x86-64 | `engine_linux64_gf_ompi` | GCC/GFortran + OpenMPI 4 | [`build_linux_gf_mumps.sh`](build_linux_gf_mumps.sh) |
 
+The default full builds, [`build_windows_all.bat`](build_windows_all.bat) and
+[`build_linux_all.sh`](build_linux_all.sh), run these scripts together with the
+single-precision and converter builds, and stage the GUI. See [Build](#build).
+
 - **MPI engines only.** MUMPS needs MPI, so only the MPI Engines contain the implicit solver. They also run on a single process (`mpiexec -n 1`). The SMP Engines (`engine_win64.exe`, `engine_linux64_gf`) run explicit models only.
 - **Double precision only** for implicit. Single-precision executables (`*_sp`) can be built too, but they run explicit models only, as upstream's did: CMake leaves the implicit solver out of single-precision Engines. See [Build](#build).
 - **Verified:** linear static analysis, against a beam-theory reference, on all three Engines with 1 and 2 MPI processes. See [Verify the build](#verify-the-build).
@@ -59,7 +63,7 @@ Tumbleweed machine, with exact package names and versions, is in
 - **Visual Studio Build Tools**, with the MSVC x64 tools and a Windows SDK ("Desktop development with C++"). The Build Tools include CMake and Ninja.
 - **Python 3**. Also needed for the self-test and the GUI.
 
-You do not need a oneAPI command prompt: the build script loads the oneAPI
+You do not need a oneAPI command prompt: the build scripts load the oneAPI
 environment itself. It also handles Build Tools 2026, which oneAPI's
 `setvars.bat` does not find on its own.
 
@@ -98,7 +102,9 @@ rather than under `/mnt/c`; it is much faster.
 ## Get the MUMPS source
 
 The Intel builds compile MUMPS directly into the Engine from
-`engine/extlib/MUMPS_5.5.1`. That folder is not in Git, so download it once.
+`engine/extlib/MUMPS_5.5.1`. That folder is not in Git. The full builds
+(`build_windows_all.bat`, `build_linux_all.sh`) download and verify it for
+you; for the individual scripts, download it once by hand:
 
 Windows (`curl` and `tar` are built into Windows 10 and 11):
 
@@ -131,16 +137,56 @@ The GNU build downloads its own MUMPS, LAPACK and ScaLAPACK (see below).
 
 All scripts take an optional number of parallel jobs and write to `exec/`.
 
-### Windows
+### Everything at once (the default)
+
+One script builds everything the release bundle ships: the double-precision
+Starter and MPI Engine with MUMPS (explicit and implicit), the single-precision
+Starter and Engines (explicit only), the two output converters, and the
+OpenRadioss GUI, staged in `openradioss_gui/` at the repository root so it runs
+from the source tree.
+
+```bat
+build_windows_all.bat 16
+```
+
+```bash
+bash build_linux_all.sh 8
+```
+
+| Platform | Builds |
+| --- | --- |
+| Windows | `starter_win64.exe`, `engine_win64_impi.exe`, `starter_win64_sp.exe`, `engine_win64_sp.exe`, `engine_win64_impi_sp.exe`, `anim_to_vtk_win64.exe`, `th_to_csv_win64.exe`; `openradioss_gui\` with `inp2rad.py` |
+| Linux | `starter_linux64_gf`, `engine_linux64_gf_ompi`, `starter_linux64_gf_sp`, `engine_linux64_gf_sp`, `engine_linux64_gf_ompi_sp`, `anim_to_vtk_linux64_gf`, `th_to_csv_linux64_gf`; `openradioss_gui/` with `inp2rad.py`; plus `starter_linux64_ifx` and `engine_linux64_ifx_impi` when Intel oneAPI is installed |
+
+Both scripts download MUMPS 5.5.1 when `engine/extlib/MUMPS_5.5.1` is missing
+and check its SHA-256. The GUI step (`tools/stage_gui.py`) copies the GUI and
+`inp2rad.py` into place, byte-compiles them, and reports whether tkinter is
+installed. The Windows script loads the oneAPI environment itself.
+The Linux script builds LAPACK, ScaLAPACK and MUMPS for the GNU Engine on the
+first run, and builds the Intel Engine only when `ifx` is on `PATH` or
+`setvars.sh` exists under `ONEAPI_ROOT` (default `/opt/intel/oneapi`).
+
+Options, after the job count:
+
+| Option | Effect |
+| --- | --- |
+| `-smp` | Also build the OpenMP-only double-precision Engine, `engine_win64.exe` or `engine_linux64_gf`. It runs explicit models only; the MPI Engine already does that on one rank. |
+| `-bundle` | Package `exec/` into `bundles/OpenRadioss_<os>.zip` afterwards. See [Release bundles](#release-bundles). |
+| `-no-intel` | Linux only. Skip the Intel Engine even when oneAPI is installed. |
+| `-clean` | Delete the Starter and Engine build directories (`cbuild_*`) first. Needed after moving or renaming the source tree, because CMake refuses a cache created at another path. The LAPACK, ScaLAPACK and MUMPS builds in `engine/extlib` are kept. |
+
+The full builds call the scripts below, which can also be run on their own.
+
+### Windows, individual scripts
 
 ```bat
 build_windows_mumps.bat 16
 ```
 
 This builds `starter_win64.exe` and `engine_win64_impi.exe`, in about
-8 minutes with 28 parallel jobs.
+8 minutes with 28 parallel jobs. It needs the MUMPS source in place.
 
-Optional extras:
+The other pieces, which `build_windows_all.bat` runs for you:
 
 ```bat
 rem Output converters anim_to_vtk_win64.exe and th_to_csv_win64.exe (finds MSVC itself)
@@ -156,16 +202,17 @@ call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
 build_windows_compat.bat 16
 ```
 
-### Linux, Intel
+### Linux, Intel, individual script
 
 ```bash
 bash build_linux_mumps.sh 8
 ```
 
 Builds `starter_linux64_ifx` and `engine_linux64_ifx_impi`. The script sources
-`/opt/intel/oneapi/setvars.sh` when `ifx` is not on `PATH`.
+`/opt/intel/oneapi/setvars.sh` when `ifx` is not on `PATH`. It needs the MUMPS
+source in place.
 
-### Linux, GNU + OpenMPI
+### Linux, GNU + OpenMPI, individual scripts
 
 ```bash
 bash build_linux_gf_mumps.sh 8
@@ -176,10 +223,10 @@ OpenMPI's compiler wrappers, in `engine/extlib/`. The downloads are checksum
 verified. Later runs reuse them. The script then builds `starter_linux64_gf`
 and `engine_linux64_gf_ompi`.
 
-Optional extras:
+The other pieces, which `build_linux_all.sh` runs for you:
 
 ```bash
-bash build_linux.sh 8                   # SMP Engine engine_linux64_gf (explicit only)
+bash build_linux.sh 8                   # SMP Engine engine_linux64_gf (explicit only; -smp in the full build)
 bash tools/build_output_converters.sh   # anim_to_vtk_linux64_gf and th_to_csv_linux64_gf
 bash build_linux_gf_sp.sh 8             # single precision, explicit only: starter_linux64_gf_sp,
                                         # engine_linux64_gf_sp, engine_linux64_gf_ompi_sp
@@ -191,7 +238,8 @@ bash build_linux_gf_sp.sh 8             # single precision, explicit only: start
 
 | Task | What it does |
 | --- | --- |
-| Build Starter + Engine (Intel MPI, MUMPS) | The default build task (Ctrl+Shift+B). Runs the Windows script, or the Linux Intel script in a Remote-WSL window. |
+| Build everything (MPI + MUMPS, single precision, converters, GUI) | The default build task (Ctrl+Shift+B). Runs `build_windows_all.bat`, or `build_linux_all.sh` in a Remote-WSL window. |
+| Build Starter + Engine (Intel MPI, MUMPS) | Runs only `build_windows_mumps.bat`, or `build_linux_mumps.sh` in a Remote-WSL window. |
 | Linux: build Starter + Engine (GNU + OpenMPI, MUMPS) | Runs `build_linux_gf_mumps.sh`. |
 | Build single-precision Starter + Engines (explicit only) | Runs `build_windows_sp.bat` or `build_linux_gf_sp.sh`. |
 | Build output converters (anim_to_vtk, th_to_csv) | Builds both converters. |
@@ -344,6 +392,13 @@ The GUI expects the release-bundle layout: `exec/` and `hm_cfg_files/` one
 level above its own folder. It converts Abaqus `.inp` input through
 `inp2rad.py`, which the bundles place beside it.
 
+From a source build, the full build scripts stage the same layout in
+`openradioss_gui/` at the repository root (`python tools/stage_gui.py` does it
+on its own). Start it from there: `openradioss_gui\OpenRadioss_gui.vbs` on
+Windows, `bash openradioss_gui/OpenRadioss_gui.bash` on Linux. The copy is
+ignored by Git; edit the sources in `tools/openradioss_gui` and run the step
+again.
+
 ## Release bundles
 
 [`Compiling_tools/script/make_bundle.py`](Compiling_tools/script/make_bundle.py)
@@ -366,10 +421,11 @@ OpenRadioss/
   licenses/, LICENSE.md, COPYRIGHT.md, README.txt
 ```
 
-Build everything you want to ship first: the MUMPS builds, the optional SMP
-Engines, the single-precision executables and the converters. Executables that are missing are left out, with a
-warning. `README.txt` inside each zip records the commit and the toolchain
-versions.
+`build_windows_all.bat -bundle` and `bash build_linux_all.sh -bundle` build
+everything and then package it in one go; add `-smp` to include the OpenMP-only
+double-precision Engine. Otherwise build what you want to ship first, then run
+`make_bundle.py`. Executables that are missing are left out, with a warning.
+`README.txt` inside each zip records the commit and the toolchain versions.
 
 Requirements on the target machine:
 
@@ -391,6 +447,7 @@ executable permissions are kept.
 | Stop with a clear error, instead of crashing, when an implicit deck runs on an Engine built without the implicit solver (single precision). | [`engine/source/engine/resol.F`](engine/source/engine/resol.F) |
 | Pass the MUMPS flags to the per-file flag sets on Linux. Files such as `resol.F` were built without `-DMUMPS5`. | [`engine/CMake_Compilers/cmake_linux64_ifx.txt`](engine/CMake_Compilers/cmake_linux64_ifx.txt), [`cmake_linux64_ifort.txt`](engine/CMake_Compilers/cmake_linux64_ifort.txt) |
 | Build scripts for the three MPI + MUMPS Engines, and for the single-precision executables. | `build_windows_mumps.bat`, `build_linux_mumps.sh`, `build_linux_gf_mumps.sh`, `build_windows_sp.bat`, `build_linux_gf_sp.sh` |
+| Default full builds: MPI + MUMPS, single precision, converters and the GUI in one command, with the MUMPS download and optional packaging. | `build_windows_all.bat`, `build_linux_all.sh`, `tools/stage_gui.py` |
 | Implicit self-test. | [`qa-tests/implicit/cantilever`](qa-tests/implicit/cantilever/README.md) |
 | Release bundle packaging. | [`Compiling_tools/script/make_bundle.py`](Compiling_tools/script/make_bundle.py) |
 | Output converters, GUI and inp2rad sources, from [OpenCourant/Tools](https://github.com/OpenCourant/Tools) (the deleted OpenRadioss/Tools repository's history). The converters are built with optimization. The GUI always uses the MPI Engine and finds OpenMPI in `lib64`. | [`tools/`](tools) |
@@ -403,7 +460,7 @@ executable permissions are kept.
 | `Fatal error: MUMPS required` on the console | The Engine has no MUMPS. Use an MPI Engine (`*_impi`, `*_ompi`), not an SMP Engine. For a source build, check that the configure step printed `MUMPS is enabled` (Intel) and that `engine/extlib/MUMPS_5.5.1` exists. |
 | `Fatal error: implicit needs a double precision Engine with MUMPS` | The deck has `/IMPL` cards but ran on a single-precision (`_sp`) Engine, for example with the GUI's single precision option ticked. Use a double-precision MPI Engine. |
 | Engine crashes (`forrtl: severe (157)` access violation) right after `SOLUTION PHASE` on implicit models only | The Engine was built without the `DIM_KINMAX` fix in `ind_glob_k.F`. Rebuild from this branch. |
-| `setvars.bat`: `Visual Studio was not found` while building | `setvars.bat` does not find Build Tools 2026. `build_windows_mumps.bat` sets `VS2026INSTALLDIR` for you. For your own scripts, set `VS2026INSTALLDIR=C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools` first. |
+| `setvars.bat`: `Visual Studio was not found` while building | `setvars.bat` does not find Build Tools 2026. `build_windows_all.bat` and `build_windows_mumps.bat` set `VS2026INSTALLDIR` for you. For your own scripts, set `VS2026INSTALLDIR=C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools` first. |
 | `'vars.bat' is not recognized` from `setvars.bat` | The environment variable `NoDefaultCurrentDirectoryInExePath` is set. Clear it before calling `setvars.bat`; the scripts in this repo do. |
 | ScaLAPACK: `Compatibility with CMake < 3.5 has been removed` | CMake 4 with ScaLAPACK 2.2.0. `build_linux_gf_mumps.sh` sets `CMAKE_POLICY_VERSION_MINIMUM=3.5` in the environment, so it also reaches ScaLAPACK's nested configure. |
 | `libintlc.so.5` or `libirng.so: cannot open shared object file` | The Intel Engine on Linux needs `extlib/intelOneAPI_runtime/linux64` on `LD_LIBRARY_PATH`, or a oneAPI installation. |

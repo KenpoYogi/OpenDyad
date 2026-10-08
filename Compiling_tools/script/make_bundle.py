@@ -16,10 +16,11 @@ The layout follows the upstream delivery workflow
     COPYRIGHT.md, LICENSE.md, README.txt
 
 Usage: python make_bundle.py --os win64|linux64 [--out DIR]
-Run after build_windows_mumps.bat + build_windows_compat.bat + build_windows_sp.bat
-(win64), or after build_linux_mumps.sh + build_linux_gf_mumps.sh + build_linux.sh +
-build_linux_gf_sp.sh (linux64), and after tools/build_output_converters.bat or .sh
-(anim_to_vtk, th_to_csv). Executables that were not built are left out.
+Run after build_windows_all.bat (win64) or build_linux_all.sh (linux64), which build
+the MPI + MUMPS, single-precision and converter executables; their -bundle option runs
+this script for you. The OpenMP-only double-precision Engines (build_*_all -smp, or
+build_windows_compat.bat and build_linux.sh) are optional. Executables that were not
+built are left out.
 """
 import argparse
 import datetime

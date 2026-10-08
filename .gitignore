@@ -43,3 +43,6 @@ bundles/
 *.s
 *.backup
 .code_index.db*
+
+# Staged by tools/stage_gui.py (build_*_all): the GUI copied beside exec/ so it runs from the source tree
+/openradioss_gui/

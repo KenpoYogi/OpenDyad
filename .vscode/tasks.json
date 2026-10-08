@@ -2,8 +2,34 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Build everything (MPI + MUMPS, single precision, converters, GUI)",
+      "detail": "build_windows_all.bat / build_linux_all.sh (Linux: open the folder in Remote-WSL); downloads MUMPS when missing; outputs to exec/ and openradioss_gui/",
+      "type": "process",
+      "windows": {
+        "command": "cmd.exe",
+        "args": ["/d", "/c", "${workspaceFolder}\\build_windows_all.bat"]
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["${workspaceFolder}/build_linux_all.sh"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": {
+        "owner": "ifx",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.*)\\((\\d+)\\):\\s+(error|warning)\\s+#\\d+:\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    },
+    {
       "label": "Build Starter + Engine (Intel MPI, MUMPS)",
-      "detail": "build_windows_mumps.bat / build_linux_mumps.sh (Linux: open the folder in Remote-WSL); outputs to exec/",
+      "detail": "build_windows_mumps.bat / build_linux_mumps.sh only (Linux: open the folder in Remote-WSL); outputs to exec/",
       "type": "process",
       "windows": {
         "command": "cmd.exe",
@@ -14,7 +40,7 @@
         "args": ["${workspaceFolder}/build_linux_mumps.sh"]
       },
       "options": { "cwd": "${workspaceFolder}" },
-      "group": { "kind": "build", "isDefault": true },
+      "group": "build",
       "problemMatcher": {
         "owner": "ifx",
         "fileLocation": "absolute",
@@ -64,6 +90,22 @@
       "linux": {
         "command": "bash",
         "args": ["${workspaceFolder}/tools/build_output_converters.sh"]
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Stage the OpenRadioss GUI (openradioss_gui/)",
+      "detail": "tools/stage_gui.py; copies the GUI and inp2rad.py beside exec/ so it runs from the source tree",
+      "type": "process",
+      "windows": {
+        "command": "python",
+        "args": ["${workspaceFolder}\\tools\\stage_gui.py"]
+      },
+      "linux": {
+        "command": "python3",
+        "args": ["${workspaceFolder}/tools/stage_gui.py"]
       },
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",

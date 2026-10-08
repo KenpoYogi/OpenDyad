@@ -33,10 +33,13 @@ produced zero-volume elements with both the rebuilt and the preserved official
 Starter. The Windows compatibility helper therefore also selects the explicit
 unsupported-keyword diagnostic.
 
-For MPI Engines with the MUMPS implicit solver, see
-[HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md). Single precision and other compiler
-families are outside these build instructions; see [HOWTO.md](../HOWTO.md) for
-the upstream build options.
+The configurations above are the minimal SMP compatibility builds. The default
+full builds, `build_windows_all.bat` and `build_linux_all.sh`, also produce the
+MPI Engines with the MUMPS implicit solver, the single-precision executables,
+the output converters and the staged GUI; they are described in
+[HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md). Other compiler families are outside
+these build instructions; see [HOWTO.md](../HOWTO.md) for the upstream build
+options.
 
 ## Linux and WSL
 
@@ -52,6 +55,11 @@ bash build_linux.sh 8
 The optional argument is the number of parallel build jobs. In WSL, building in
 the Linux filesystem is usually faster than building on a mounted Windows drive.
 The executables are `exec/starter_linux64_gf` and `exec/engine_linux64_gf`.
+
+`bash build_linux_all.sh 8` is the full build: with OpenMPI 4 installed it adds
+the GNU + OpenMPI Engine with MUMPS, the single-precision executables and the
+converters (see [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md)). Pass `-smp` to
+include `engine_linux64_gf` as well.
 
 Set the runtime paths from the repository root:
 
@@ -90,7 +98,11 @@ build_windows_compat.bat 8
 ```
 
 This creates `exec\starter_win64.exe` and `exec\engine_win64.exe`, and copies
-the input-reader DLL beside the executables. Use the same oneAPI environment
+the input-reader DLL beside the executables. `build_windows_all.bat 8` is the
+full build: from a plain command prompt it loads oneAPI itself and adds the
+Intel MPI Engine with MUMPS, the single-precision executables and the
+converters (see [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md)). Pass `-smp` to
+include `engine_win64.exe` as well. Use the same oneAPI environment
 when running, so that Intel compiler and MKL runtime DLLs are available:
 
 ```bat

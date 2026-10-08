@@ -28,7 +28,8 @@ and 2 MPI ranks, for all three builds:
 
 ## Run it
 
-Build first, with one of these scripts in the repo root:
+Build first, with `build_windows_all.bat` or `build_linux_all.sh` in the repo
+root (the default full builds), or with one of the individual scripts:
 - `build_windows_mumps.bat`
 - `build_linux_mumps.sh` (Intel)
 - `build_linux_gf_mumps.sh` (GNU + OpenMPI)
