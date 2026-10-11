@@ -1,5 +1,33 @@
 # Build validation
 
+## Pristine extlib v82 readers, 2026-10-11
+
+The recovered v60/v70-era input readers were replaced by the matching v82 build
+(`20260918_f907fe76`, OpenCourant archive `upstream-v82-extlib`, SHA-256
+verified). The legacy `HM_READER_*` options are OFF; `HM_READER_NO_STRUCTURED_ALE`
+stays ON. Full builds (`build_windows_all.bat -smp -bundle`,
+`build_linux_all.sh -smp -bundle`) completed on Windows 11 (oneAPI 2026.1) and
+WSL openSUSE Tumbleweed (GCC 16, OpenMPI 4.1.8, oneAPI 2026.1), producing every
+executable listed in RELEASES.md plus both release bundles.
+
+Checks run against the new readers:
+
+- Twisted-beam smoke test (`qa-tests/miniqa/SMOKE_TEST`, with its include file,
+  so the non-legacy include listing is exercised): Starter and Engine completed
+  on Windows (`engine_win64`) and Linux (`engine_linux64_gf`).
+- Implicit cantilever self-test (MUMPS, 2 MPI ranks): PASS on `engine_win64_impi`,
+  `engine_linux64_gf_ompi` and `engine_linux64_ifx_impi`; tip deflection within
+  0.01 % of beam theory.
+- MiniQA regression subset (1.01, 1.03, 1.04, 1.05, 1.10, 1.17, 1.64, 1.68, 1.84)
+  through CTest on the Linux GNU SMP build: 9 of 9 passed against the stored
+  references.
+- `/ALE/STRUCTURED_MESH` trial with `HM_READER_NO_STRUCTURED_ALE=OFF`: the
+  generator runs (24 elements, 60 nodes reported) but every control-point syntax
+  tried produced nodes with zero or repeated coordinates and Starter error 245
+  (zero-volume elements), identically on Linux and Windows. No reference deck or
+  public documentation of `/ALE/STRUCTURED_MESH/CONTROL_POINTS` was available.
+  The option therefore stays ON and Starter rejects the keyword explicitly, as
+  OpenCourant also ships it.
 ## v82-hybrid update, 2026-10-04
 
 Starter and Engine were rebuilt from the updated source ZIP on Windows and
