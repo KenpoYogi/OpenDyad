@@ -235,7 +235,7 @@ def readme(osname, exes, oneapi):
         "deck (see qa-tests/implicit/cantilever/README.md). It needs an MPI Engine; run",
         "on one rank with mpiexec -n 1 if needed. /IMPL/BUCKL and /EIG are not available.",
         "",
-        "Limitation: this reader cannot generate /ALE/STRUCTURED_MESH; Starter rejects it.",
+        "Limitation: /ALE/STRUCTURED_MESH is rejected; its generator produces degenerate meshes.",
         "",
         "OpenRadioss is licensed under the GNU AGPL v3 (LICENSE.md). Third-party licenses",
         "are in licenses/.",
@@ -264,8 +264,9 @@ def main():
             copy(ROOT / "exec" / e, stage / "exec" / e)
         copy(ROOT / "extlib" / "h3d" / "lib" / osname, stage / "extlib" / "h3d" / "lib" / osname)
         copy(ROOT / "extlib" / "hm_reader" / osname, stage / "extlib" / "hm_reader" / osname)
-        for f in (stage / "extlib" / "hm_reader" / osname).glob("*.lib"):
-            f.unlink()  # import library, only needed to build
+        for pat in ("*.lib", "*.exp"):
+            for f in (stage / "extlib" / "hm_reader" / osname).glob(pat):
+                f.unlink()  # import/export libraries, only needed to build
         if osname == "win64" or "engine_linux64_ifx_impi" in exes:
             dst = stage / "extlib" / "intelOneAPI_runtime" / osname
             for comp, sub, patterns in RUNTIME[osname]:

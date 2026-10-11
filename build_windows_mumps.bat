@@ -35,7 +35,7 @@ if not defined I_MPI_ROOT (
 python "%source_root%Compiling_tools\script\load_extlib.py"
 if errorlevel 1 exit /b %errorlevel%
 
-cmake -S "%source_root%starter" -B "%source_root%starter\cbuild_win64" -G Ninja -DVS_BUILD=1 -Darch=win64 -Dprecision=dp -Ddebug=0 -Dstatic_link=0 -DEXEC_NAME=starter_win64 -DUSE_OPEN_READER=0 -DHM_READER_LEGACY_INCLUDE_API=ON -DHM_READER_LEGACY_PART_API=OFF -DHM_READER_NO_STRUCTURED_ALE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=ifx.exe -DCMAKE_C_COMPILER=icx.exe -DCMAKE_CXX_COMPILER=icx.exe
+cmake -S "%source_root%starter" -B "%source_root%starter\cbuild_win64" -G Ninja -DVS_BUILD=1 -Darch=win64 -Dprecision=dp -Ddebug=0 -Dstatic_link=0 -DEXEC_NAME=starter_win64 -DUSE_OPEN_READER=0 -DHM_READER_LEGACY_INCLUDE_API=OFF -DHM_READER_LEGACY_PART_API=OFF -DHM_READER_NO_STRUCTURED_ALE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_Fortran_COMPILER=ifx.exe -DCMAKE_C_COMPILER=icx.exe -DCMAKE_CXX_COMPILER=icx.exe
 if errorlevel 1 exit /b %errorlevel%
 cmake --build "%source_root%starter\cbuild_win64" --parallel "%jobs%"
 if errorlevel 1 exit /b %errorlevel%
@@ -46,6 +46,8 @@ cmake --build "%source_root%engine\cbuild_win64_impi" --parallel "%jobs%"
 if errorlevel 1 exit /b %errorlevel%
 
 copy /Y "%source_root%extlib\hm_reader\win64\hm_reader_win64.dll" "%source_root%exec\hm_reader_win64.dll" >nul
+if errorlevel 1 exit /b %errorlevel%
+copy /Y "%source_root%extlib\hm_reader\win64\libapr-1.dll" "%source_root%exec\libapr-1.dll" >nul
 if errorlevel 1 exit /b %errorlevel%
 echo Executables are in %source_root%exec
 echo Run the Engine with: mpiexec -n 1 engine_win64_impi.exe -i [Engine input file]

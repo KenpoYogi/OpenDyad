@@ -5,19 +5,19 @@
 cmake_minimum_required (VERSION 3.15)
 project (Radioss_Starter)
 
-# The recovered hm_reader binaries (see reader_components in
-# EXTLIB_VERSION.json) lack the newer selection APIs, so the legacy
-# compatibility paths default to ON. Set them to OFF only with a reader
-# from extlib v76 or later.
+# The bundled hm_reader binaries are the matching extlib v82 build (see
+# reader_components in EXTLIB_VERSION.json) and export every interface this
+# Starter calls, so the compatibility fallbacks default to OFF. Turn them ON
+# only when building against an older reader that lacks the newer APIs.
 option(HM_READER_LEGACY_INCLUDE_API
-       "Enumerate model includes through the legacy reader selection API" ON)
+       "Enumerate model includes through the legacy reader selection API" OFF)
 if(HM_READER_LEGACY_INCLUDE_API)
    set_property(SOURCE source/devtools/hm_reader/write_include_files_list.F90
                 APPEND PROPERTY COMPILE_DEFINITIONS HM_READER_LEGACY_INCLUDE_API)
 endif()
 
 option(HM_READER_LEGACY_PART_API
-       "Count elements in the selected part with the legacy reader API" ON)
+       "Count elements in the selected part with the legacy reader API" OFF)
 if(HM_READER_LEGACY_PART_API)
    set_property(SOURCE source/devtools/hm_reader/hm_is_part_with_elements.F90
                 APPEND PROPERTY COMPILE_DEFINITIONS HM_READER_LEGACY_PART_API)
@@ -257,10 +257,12 @@ endif (NOT CMAKE_BUILD_TYPE)
 
 
 
-# Default ON: the recovered Linux reader cannot generate structured ALE
-# meshes, and a Windows trial with the v70-era reader produced invalid node
-# coordinates (see reader_components in EXTLIB_VERSION.json). Set to OFF
-# only with a validated reader from extlib v76 or later.
+# Default ON, like OpenCourant: the bundled v82 readers export the structured
+# ALE generator (cpp_sale_mesh_create), but on both Linux and Windows it
+# produced degenerate meshes (nodes with zero coordinates, zero-volume
+# elements) in every trial, and no reference deck exists to validate it. An
+# explicit Starter error is safer than a silently wrong mesh. Set to OFF to
+# experiment with the generator.
 option(HM_READER_NO_STRUCTURED_ALE
        "Reject /ALE/STRUCTURED_MESH when the input reader lacks its generator" ON)
 if(HM_READER_NO_STRUCTURED_ALE)

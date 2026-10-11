@@ -1,12 +1,17 @@
 # Building and running
 
-This tree includes OpenCourant's
-[v82-hybrid dependencies](https://github.com/OpenCourant/extlib/releases/tag/v82-hybrid):
-the recovered v82 public libraries and H3D interfaces, combined with the
-previously recovered input readers. It builds without downloading external
-libraries. This is not the original complete v82 distribution; reader compatibility
-options are still required. Origins are recorded in `EXTLIB_VERSION.json`.
-See the [validation record](BUILD_VALIDATION.md) for compilation and solver checks.
+This tree includes the complete upstream extlib v82 delivery, as
+[recovered and archived by OpenCourant](https://github.com/OpenCourant/extlib/releases/tag/upstream-v82-extlib):
+the public libraries, the H3D interfaces and the matching input readers for
+linux64, linuxa64 and win64. It builds without downloading external libraries,
+and no legacy reader compatibility options are needed. The package URL and
+checksum are recorded in `EXTLIB_VERSION.json`. See the
+[validation record](BUILD_VALIDATION.md) for compilation and solver checks.
+
+One limitation remains: `/ALE/STRUCTURED_MESH` is rejected by Starter with an
+explicit error, because the readers' mesh generator produced degenerate meshes
+(zero node coordinates, zero-volume elements) in every trial on both platforms.
+ALE analyses on an explicitly defined mesh are unaffected.
 
 Use the [current source ZIP](https://github.com/KenpoYogi/OpenDyad/archive/refs/heads/main.zip)
 or clone `main`. The preserved `upstream-20260929` release predates the dependency
@@ -15,25 +20,12 @@ compiler flags do not support paths containing spaces.
 
 ## Supported build configurations
 
-| Platform | Configuration | Input reader limitation |
-| --- | --- | --- |
-| Linux x86-64 / WSL | GCC/GFortran, double precision, SMP | `/ALE/STRUCTURED_MESH` generation is unavailable; Starter stops with a diagnostic when this keyword is present |
-| Windows x86-64 | Intel oneAPI, double precision, SMP | The compatibility build rejects `/ALE/STRUCTURED_MESH`; an automatic-generation trial produced invalid node coordinates |
+| Platform | Configuration |
+| --- | --- |
+| Linux x86-64 / WSL | GCC/GFortran, double precision, SMP |
+| Windows x86-64 | Intel oneAPI, double precision, SMP |
 
-Both compatibility builds print the includes retained in the loaded reader model.
-For converted keyword decks, that list describes the converted model: filenames
-can change and includes without converted entities may be absent. The list is
-informational; it is not a complete record of the original input files.
-
-This limitation concerns automatic structured mesh generation. It does not
-disable ALE calculations on an existing mesh. An explicit 27-node, 8-element
-fluid mesh completed Starter and Engine on both platforms and is the tested
-alternative to automatic generation. The Windows automatic-generation trial
-produced zero-volume elements with both the rebuilt and the preserved official
-Starter. The Windows compatibility helper therefore also selects the explicit
-unsupported-keyword diagnostic.
-
-The configurations above are the minimal SMP compatibility builds. The default
+The configurations above are the minimal SMP builds. The default
 full builds, `build_windows_all.bat` and `build_linux_all.sh`, also produce the
 MPI Engines with the MUMPS implicit solver, the single-precision executables,
 the output converters and the staged GUI; they are described in
@@ -98,7 +90,8 @@ build_windows_compat.bat 8
 ```
 
 This creates `exec\starter_win64.exe` and `exec\engine_win64.exe`, and copies
-the input-reader DLL beside the executables. `build_windows_all.bat 8` is the
+the input-reader DLLs (`hm_reader_win64.dll` and `libapr-1.dll`) beside the
+executables. `build_windows_all.bat 8` is the
 full build: from a plain command prompt it loads oneAPI itself and adds the
 Intel MPI Engine with MUMPS, the single-precision executables and the
 converters (see [HOWTO_IMPLICIT.md](../HOWTO_IMPLICIT.md)). Pass `-smp` to
@@ -119,40 +112,45 @@ cd work\twisted_beam
 
 ## Dependencies and compatibility options
 
-The common dependencies come from
-[OpenCourant's recovered v82 tree](https://github.com/OpenCourant/extlib/tree/upstream-v82).
-They include LAPACK, METIS, zlib, MD5, Boost, ExprTk, and H3D headers and libraries.
-The input readers were recovered separately from public OpenRadioss runtime
-packages. Original notices are preserved with the corresponding files.
+All dependencies come from the upstream extlib v82 delivery, archived by
+OpenCourant as
+[`upstream-v82-extlib`](https://github.com/OpenCourant/extlib/releases/tag/upstream-v82-extlib)
+(git history on the
+[`upstream-v82`](https://github.com/OpenCourant/extlib/tree/upstream-v82) branch).
+They include LAPACK, METIS, zlib, MD5, Boost, ExprTk, the H3D headers and
+libraries, and the input readers (`hm_reader`, build `20260918_f907fe76`) for
+all three platforms. Third-party notices are under `extlib/license/`.
 
-The helper scripts select the required CMake options. For direct CMake builds:
+The readers export every interface this Starter calls, so the three
+`HM_READER_*` compatibility options in `starter/CMakeLists.txt` default to
+`OFF` and the helper scripts pass them as `OFF` explicitly. For direct CMake
+builds:
 
-| Option | Linux reader | Windows reader |
-| --- | --- | --- |
-| `USE_OPEN_READER` | `0` | `0` |
-| `HM_READER_LEGACY_INCLUDE_API` | `ON` | `ON` |
-| `HM_READER_LEGACY_PART_API` | `ON` | `OFF` |
-| `HM_READER_NO_STRUCTURED_ALE` | `ON` | `ON` |
+| Option | Default |
+| --- | --- |
+| `USE_OPEN_READER` | `0` |
+| `HM_READER_LEGACY_INCLUDE_API` | `OFF` |
+| `HM_READER_LEGACY_PART_API` | `OFF` |
+| `HM_READER_NO_STRUCTURED_ALE` | `ON` |
 
-The three `HM_READER_*` compatibility options default to `ON` in Starter, matching
-the recovered Linux reader. The Windows helper explicitly sets the part option
-to `OFF` because that reader provides the corresponding interface. The included
-OpenReader source does not yet provide every interface required by this Starter
-and is not selected by these scripts.
+Turn a legacy option `ON` only when building against an older reader that
+lacks the corresponding interface (`cpp_get_include_file_by_index`,
+`cpp_is_part_with_elements`). `HM_READER_NO_STRUCTURED_ALE` stays `ON`, as in
+OpenCourant: the v82 readers export `cpp_sale_mesh_create`, but with every
+`/ALE/STRUCTURED_MESH/CONTROL_POINTS` syntax tried, the generated nodes had
+zero or repeated coordinates and Starter reported zero-volume elements, on
+Linux and Windows alike. Set it to `OFF` only to experiment with the
+generator. The included OpenReader source does not yet provide every
+interface required by this Starter and is not selected by these scripts.
 
-### Using a newer input reader
+### Replacing the input reader
 
-The v82-hybrid package retains the older input readers. Its version number alone
-does not justify disabling reader compatibility options. For a newer reader,
-check the required interfaces and run the solver cases before changing those
-options. Update the libraries and their manifest entries, then build in a fresh
-directory. On Windows, replace the reader DLL in `exec` too, using the import
-library supplied with that DLL. The loader only checks local files; changing
-the manifest does not download a package.
-
-Check the H3D wrappers against the new SDK headers and rerun the solver cases.
-Verify generated node coordinates and element volumes before enabling automatic
-structured ALE generation. The Engine startup and SPH comment fixes can remain.
+To use a different reader build, replace the files under `extlib/hm_reader/`
+and update the manifest entries in `EXTLIB_VERSION.json`, then build in a
+fresh directory. On Windows, the build scripts copy `hm_reader_win64.dll` and
+`libapr-1.dll` into `exec`; the import library supplied with the DLL is used
+at link time. The loader only checks local files; changing the manifest does
+not download a package.
 
 ## Regression checks
 

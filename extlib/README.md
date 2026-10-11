@@ -1,26 +1,23 @@
 # Build dependencies
 
-The common libraries are taken from the final upstream OpenRadioss_extlib
-delivery, v82, commit `f2fa2cd00dd5937d96e521f163a191f2dee90148`
-(2026-09-22), whose git history is preserved on the `upstream-v82` branch
-of https://github.com/OpenCourant/extlib. Compared to the earlier
-v67-compat package this restores the rebuilt H3D writer libraries
-(linux64/linuxa64/win64), the updated H3D headers including
-`h3dpublic_import.h`, and the updated license texts.
+This directory is the official upstream OpenRadioss_extlib v82 delivery
+(2026-09-22), as recovered and archived by OpenCourant:
 
-Input readers were recovered separately from public OpenRadioss runtime
-packages; matching v82 reader binaries have not been recovered.
-`../EXTLIB_VERSION.json` records their sources and build IDs:
+- package: https://github.com/OpenCourant/extlib/releases/tag/upstream-v82-extlib
+- git history: https://github.com/OpenCourant/extlib/tree/upstream-v82
 
-| Reader | Build ID | Effective extlib era |
-|---|---|---|
-| `hm_reader/linux64/libhm_reader_linux64.so` | `20260602_fcb3b29a` | ~v60 |
-| `hm_reader/win64/hm_reader_win64.dll` | `20260710_d899773e` | ~v70 |
+It is committed to this repository in full, so a clone builds without
+downloading anything. `../EXTLIB_VERSION.json` records the package URL and
+SHA-256 for anyone who wants to verify it against the archive.
 
-Original reader and third-party notices are under each platform's
-`hm_reader/<platform>/notices` directory. Other libraries retain their
-original notices in their own directories.
+The input readers under `hm_reader/` are the matching v82 build
+(`20260918_f907fe76`) for linux64, linuxa64 and win64. They export every
+interface this Starter calls, so the legacy `HM_READER_*` options in
+`starter/CMakeLists.txt` default to OFF. `HM_READER_NO_STRUCTURED_ALE` stays
+ON: the readers' `/ALE/STRUCTURED_MESH` generator produced degenerate meshes
+in every trial on both platforms, so Starter rejects the keyword explicitly
+(OpenCourant ships the same setting). On Windows the reader also needs
+`libapr-1.dll` from the same folder; the build scripts copy both DLLs next
+to the executables.
 
-This collection is not the original v82 archive. The compatibility builds
-reject `/ALE/STRUCTURED_MESH`: the Linux reader lacks the generator, and a
-Windows trial with the v70 reader produced invalid node coordinates.
+Third-party notices are under `license/`.

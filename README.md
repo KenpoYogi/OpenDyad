@@ -16,7 +16,10 @@ include vehicle safety, lightweight structures, manufacturing, protective
 systems and coupled fluid–structure simulations.
 
 This repository preserves the upstream source snapshot dated **2026-09-29**,
-with Windows and Linux build dependencies from OpenCourant's `v82-hybrid` package.
+with the complete upstream extlib v82 build dependencies (input readers
+included) as recovered and archived by OpenCourant. Everything needed to build
+is committed; no download is required except the MUMPS source for the implicit
+solver.
 
 ## Getting started
 
@@ -29,10 +32,6 @@ with Windows and Linux build dependencies from OpenCourant's `v82-hybrid` packag
 - [Download source ZIP](https://github.com/KenpoYogi/OpenDyad/archive/refs/heads/main.zip)
 
 ### Build on Linux or WSL
-
-The bundled Linux reader supports a compatibility build. It cannot generate
-`/ALE/STRUCTURED_MESH`; Starter reports an error for that keyword. Ordinary ALE
-models with an existing mesh use the normal solver path.
 
 Install GCC/GFortran, CMake, Make, Python 3 and OpenMPI 4, then run:
 
@@ -69,12 +68,10 @@ output converters, plus the OpenRadioss GUI staged in `openradioss_gui\`.
 `build_windows_compat.bat 8`, from a oneAPI command prompt, builds only the
 double-precision SMP Starter and Engine.
 
-These builds also reject `/ALE/STRUCTURED_MESH`. Use an explicitly defined mesh
-for ALE analyses.
-
-Runtime paths, compiler details, structured ALE limitations and the
-include-list compatibility behavior are documented in
-[Building and running](doc/BUILDING.md).
+All builds reject `/ALE/STRUCTURED_MESH` with an explicit Starter error: the
+input readers' mesh generator produces degenerate meshes (see
+[Building and running](doc/BUILDING.md)). Use an explicitly defined mesh for
+ALE analyses. Runtime paths and compiler details are documented there too.
 
 ## Implicit analysis with MUMPS
 
