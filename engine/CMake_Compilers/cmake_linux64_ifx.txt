@@ -126,30 +126,30 @@ set(Fortran "${wo_linalg} -ftz  -extend-source -assume buffered_io -align array6
 if ( debug STREQUAL "1")
 
   # Debug compilation
-  set(fortran_flags "${opt_flag_debug} ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} ${ADF}")
-  set(c_flags       "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2")
-  set(cpp_flags     "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2 -std=c++11")
+  set(fortran_flags "${opt_flag_debug} ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${cppmach} ${cpprel} ${ADF}")
+  set(c_flags       "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2")
+  set(cpp_flags     "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2 -std=c++11")
 
 elseif ( debug STREQUAL "chkb" )
 
   # Debug compilation with Fortran check bounds
-  set(fortran_flags "${opt_flag_debug} -check bounds -fpe0 -ftrapuv ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} ${ADF}")
-  set(c_flags       "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2")
-  set(cpp_flags     "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2 -std=c++11")
+  set(fortran_flags "${opt_flag_debug} -check bounds -fpe0 -ftrapuv ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${cppmach} ${cpprel} ${ADF}")
+  set(c_flags       "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2")
+  set(cpp_flags     "${optc_flag_debug} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2 -std=c++11")
 
 elseif ( debug STREQUAL "asan" )
 
   # Debug compilation with Fortran check bounds
-  set(fortran_flags "${opt_flag_debug} -fsanitize=address -DSANITIZE ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} ${ADF}")
-  set(c_flags       "${optc_flag_debug} -fsanitize=address -DSANITIZE ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2")
-  set(cpp_flags     "${optc_flag_debug} -fsanitize=address -DSANITIZE ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2 -std=c++11")
+  set(fortran_flags "${opt_flag_debug} -fsanitize=address -DSANITIZE ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${cppmach} ${cpprel} ${ADF}")
+  set(c_flags       "${optc_flag_debug} -fsanitize=address -DSANITIZE ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2")
+  set(cpp_flags     "${optc_flag_debug} -fsanitize=address -DSANITIZE ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2 -std=c++11")
   set(asan_link     "-fsanitize=address")
 else ()
 
   # Optimized compilation
-  set(fortran_flags "${opt_flag} ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} ${ADF}")
-  set(c_flags       "${optc_flag} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2")
-  set(cpp_flags     "${optc_flag} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2 -std=c++11")
+  set(fortran_flags "${opt_flag} ${linalg_flags} ${precision_flag} ${Fortran} ${mpi_flag} ${cppmach} ${cpprel} ${ADF}")
+  set(c_flags       "${optc_flag} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2")
+  set(cpp_flags     "${optc_flag} ${linalg_cflags} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2 -std=c++11")
 
 endif()
 

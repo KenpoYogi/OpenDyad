@@ -161,14 +161,14 @@ set(Fortran "${wo_linalg} -ftz  -extend-source -assume buffered_io -align array6
 
 
 # Fortran
-set_source_files_properties( ${source_files}  PROPERTIES COMPILE_FLAGS " ${opt_flag} ${precision_flag} ${Fortran} ${mpi_flag} ${mumps_flags}  ${cppmach} ${cpprel} ${ADF}" )
+set_source_files_properties( ${source_files}  PROPERTIES COMPILE_FLAGS " ${opt_flag} ${precision_flag} ${Fortran} ${mpi_flag} ${cppmach} ${cpprel} ${ADF}" )
 
 # C source files
 
-set_source_files_properties(${c_source_files} PROPERTIES COMPILE_FLAGS   "${optc_flag} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2 " )
+set_source_files_properties(${c_source_files} PROPERTIES COMPILE_FLAGS   "${optc_flag} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2 " )
 
 # CXX source files
-set_source_files_properties(${cpp_source_files} PROPERTIES COMPILE_FLAGS "${optc_flag} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${mumps_flags} ${cppmach} ${cpprel} -O2  -std=c++11 " )
+set_source_files_properties(${cpp_source_files} PROPERTIES COMPILE_FLAGS "${optc_flag} ${h3d_inc} ${zlib_inc} ${md5_inc} ${precision_flag} ${mpi_flag} ${cppmach} ${cpprel} -O2  -std=c++11 " )
 
 # Linking flags
 
